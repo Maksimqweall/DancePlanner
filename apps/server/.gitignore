@@ -3,3 +3,9 @@ node_modules
 .env
 
 /generated/prisma
+
+# Build output
+dist
+
+# Uploaded files (PDF tickets, bookings, etc.)
+uploads

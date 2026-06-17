@@ -1,65 +1,78 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import 'react-native-get-random-values';
+import { create } from "zustand";
+import { api } from "../lib/api";
+import type {
+  Category,
+  Expense,
+  ExpenseStatus,
+  Summary,
+  ForecastMonth,
+} from "../lib/types";
 
-// 1. Описываем типы данных (наш фундамент)
-export type Category = 'HOTEL' | 'ENTRY_FEE' | 'TRAVEL' | 'DRESS' | 'LESSON' | 'OTHER';
-
-export interface Transaction {
-  id: string;
-  amount: number;
+export interface CreateExpenseInput {
+  title?: string;
   category: Category;
-  description: string;
-  date: string; // ISO формат (например: 2026-08-10T14:00:00Z)
-  isSynced: boolean; // Для будущей отправки на бэкенд
+  amount: number;
+  date: string; // ISO
+  description?: string;
+  status: ExpenseStatus;
+  eventId?: string | null;
+}
+
+function currentMonthKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 interface FinanceState {
-  transactions: Transaction[];
-  addTransaction: (amount: number, category: Category, description: string) => void;
-  deleteTransaction: (id: string) => void;
-  // Полезная функция для мгновенного подсчета расходов за месяц
-  getTotalSpent: () => number; 
+  expenses: Expense[];
+  summary: Summary | null;
+  forecast: ForecastMonth[];
+  monthlyLimit: number;
+  loading: boolean;
+
+  refresh: () => Promise<void>;
+  addExpense: (input: CreateExpenseInput) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  setMonthlyLimit: (limit: number) => void;
 }
 
-// 2. Создаем само хранилище с магией persist (сохранение в память)
-export const useFinanceStore = create<FinanceState>()(
-  persist(
-    (set, get) => ({
-      transactions: [],
+export const useFinanceStore = create<FinanceState>((set, get) => ({
+  expenses: [],
+  summary: null,
+  forecast: [],
+  monthlyLimit: 1000, // TODO: move to a profile/settings module
+  loading: false,
 
-      // Добавление новой траты
-      addTransaction: (amount, category, description) => {
-        const newTx: Transaction = {
-          id: crypto.randomUUID(),
-          amount,
-          category,
-          description,
-          date: new Date().toISOString(),
-          isSynced: false,
-        };
-        
-        set((state) => ({
-          transactions: [newTx, ...state.transactions], // Новые добавляем в начало списка
-        }));
-      },
-
-      // Удаление траты (если ошибся)
-      deleteTransaction: (id) => {
-        set((state) => ({
-          transactions: state.transactions.filter((tx) => tx.id !== id),
-        }));
-      },
-
-      // Считаем общую сумму всех трат
-      getTotalSpent: () => {
-        return get().transactions.reduce((sum, tx) => sum + tx.amount, 0);
-      },
-    }),
-    {
-      name: 'dance-planner-finance-storage', // Имя файла в памяти телефона
-      storage: createJSONStorage(() => AsyncStorage), // Указываем, что используем хранилище React Native
+  refresh: async () => {
+    set({ loading: true });
+    try {
+      const month = currentMonthKey();
+      const [expensesRes, summaryRes, forecastRes] = await Promise.all([
+        api.get<{ expenses: Expense[] }>("/expenses"),
+        api.get<Summary>(`/expenses/summary?month=${month}`),
+        api.get<{ forecast: ForecastMonth[] }>("/expenses/forecast"),
+      ]);
+      set({
+        expenses: expensesRes.expenses,
+        summary: summaryRes,
+        forecast: forecastRes.forecast,
+      });
+    } finally {
+      set({ loading: false });
     }
-  )
-);
+  },
+
+  addExpense: async (input) => {
+    await api.post("/expenses", input);
+    await get().refresh();
+  },
+
+  deleteExpense: async (id) => {
+    // Optimistic removal, then refresh aggregates.
+    set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) }));
+    await api.del(`/expenses/${id}`);
+    await get().refresh();
+  },
+
+  setMonthlyLimit: (limit) => set({ monthlyLimit: limit }),
+}));

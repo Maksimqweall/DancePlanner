@@ -1,44 +1,54 @@
-import { View, Text } from 'react-native';
-import { Transaction } from '../store/useFinanceStore';
+import { View, Text, TouchableOpacity } from "react-native";
+import type { Expense } from "../lib/types";
+import { CATEGORY_META, formatMoney, formatShortDate } from "../lib/display";
 
-// Маппинг цветов и иконок для разных категорий
-const categoryConfig = {
-  HOTEL: { icon: '🏨', color: 'bg-blue-500' },
-  ENTRY_FEE: { icon: '🎫', color: 'bg-purple-500' },
-  TRAVEL: { icon: '✈️', color: 'bg-amber-500' },
-  DRESS: { icon: '👗', color: 'bg-pink-500' },
-  LESSON: { icon: '💃', color: 'bg-emerald-500' },
-  OTHER: { icon: '📦', color: 'bg-gray-500' },
-};
+interface Props {
+  expense: Expense;
+  onDelete?: (id: string) => void;
+}
 
-export default function TransactionCard({ transaction }: { transaction: Transaction }) {
-  const config = categoryConfig[transaction.category] || categoryConfig.OTHER;
-  
-  // Форматируем дату в читаемый вид
-  const date = new Date(transaction.date).toLocaleDateString('ru-RU', { 
-    day: 'numeric', 
-    month: 'short' 
-  });
+export default function TransactionCard({ expense, onDelete }: Props) {
+  const meta = CATEGORY_META[expense.category] ?? CATEGORY_META.OTHER;
+  const isPlanned = expense.status === "PLANNED";
+  const title = expense.title || meta.label;
 
   return (
     <View className="flex-row items-center justify-between p-4 mb-3 bg-zinc-800 rounded-2xl">
       <View className="flex-row items-center flex-1">
-        {/* Иконка категории */}
-        <View className={`w-12 h-12 rounded-full items-center justify-center ${config.color}`}>
-          <Text className="text-xl">{config.icon}</Text>
+        <View className={`w-12 h-12 rounded-full items-center justify-center ${meta.color}`}>
+          <Text className="text-xl">{meta.icon}</Text>
         </View>
-        
-        {/* Описание и дата */}
+
         <View className="ml-4 flex-1">
-          <Text className="text-white font-semibold text-lg" numberOfLines={1}>
-            {transaction.description}
+          <Text className="text-white font-semibold text-base" numberOfLines={1}>
+            {title}
           </Text>
-          <Text className="text-zinc-400 text-sm">{date}</Text>
+          <View className="flex-row items-center">
+            <Text className="text-zinc-400 text-sm">{formatShortDate(expense.date)}</Text>
+            {expense.event ? (
+              <Text className="text-zinc-500 text-sm" numberOfLines={1}>
+                {"  ·  "}
+                {expense.event.title}
+              </Text>
+            ) : null}
+            {isPlanned ? (
+              <Text className="text-amber-400 text-xs ml-2 font-semibold">PLANNED</Text>
+            ) : null}
+          </View>
         </View>
       </View>
-      
-      {/* Сумма */}
-      <Text className="text-white font-bold text-lg ml-2">-{transaction.amount} €</Text>
+
+      <View className="items-end ml-2">
+        <Text className={`font-bold text-base ${isPlanned ? "text-amber-400" : "text-white"}`}>
+          {isPlanned ? "" : "-"}
+          {formatMoney(expense.amount)}
+        </Text>
+        {onDelete ? (
+          <TouchableOpacity onPress={() => onDelete(expense.id)} hitSlop={8}>
+            <Text className="text-zinc-500 text-xs mt-1">Delete</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }

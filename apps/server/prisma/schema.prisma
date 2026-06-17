@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ==========================================
@@ -26,6 +25,7 @@ model User {
   couplesAsFollow Couple[]   @relation("FollowPartner")
   proposalsSent   Proposal[] @relation("ProposalSender")
   expenses        Expense[]
+  ownedEvents     Event[]    @relation("EventOwner") // Projects this user owns directly (Module 1)
   
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -75,21 +75,60 @@ model Proposal {
 // ==========================================
 model Event {
   id          String      @id @default(uuid())
-  coupleId    String
+  // A project is owned either directly by a user (solo, Module 1) or by a couple.
+  ownerId     String?
+  coupleId    String?
   title       String
   date        DateTime
   endDate     DateTime?
-  type        EventType   
+  type        EventType
   location    String?
-  
+
+  // --- Module 1: Finance & Logistics (the "Project" A-to-Z) ---
+  budget       Float?       // Planned/expected spend for this project (forecasting)
+  hotelName    String?
+  hotelAddress String?
+  checkIn      DateTime?
+  checkOut     DateTime?
+
   // Аналитика (премиум фичи)
   resultPlace Int?        // Занятое место
   skatingData Json?       // Детализация (skating system), оценки судей
-  
-  couple      Couple      @relation(fields: [coupleId], references: [id])
+
+  owner       User?       @relation("EventOwner", fields: [ownerId], references: [id])
+  couple      Couple?     @relation(fields: [coupleId], references: [id])
   expenses    Expense[]
-  
+  attachments Attachment[]
+  checklist   ChecklistItem[]
+
   createdAt   DateTime    @default(now())
+}
+
+// PDF tickets, hotel/flight bookings attached to a project
+model Attachment {
+  id        String   @id @default(uuid())
+  eventId   String
+  label     String   // Human label, e.g. "Flight ticket", "Hotel booking"
+  fileName  String   // Original file name
+  fileUrl   String   // Public URL served from /uploads
+  mimeType  String
+  size      Int      // bytes
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// Prep checklist item for a project
+model ChecklistItem {
+  id        String   @id @default(uuid())
+  eventId   String
+  text      String
+  isDone    Boolean  @default(false)
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 }
 
 // ==========================================
@@ -100,15 +139,17 @@ model Expense {
   userId      String          // Кто именно платил (для разделения бюджета)
   eventId     String?         // Привязка траты к турниру или сборам
   
+  title       String?
   category    ExpenseCategory
   amount      Float
   currency    String          @default("EUR")
   date        DateTime
   description String?
-  
+  status      ExpenseStatus   @default(PAID) // PLANNED expenses drive forecasting
+
   user        User            @relation(fields: [userId], references: [id])
   event       Event?          @relation(fields: [eventId], references: [id])
-  
+
   createdAt   DateTime        @default(now())
 }
 
@@ -134,6 +175,11 @@ enum EventType {
   PRACTICE
   INDIVIDUAL
   GROUP_LESSON
+}
+
+enum ExpenseStatus {
+  PLANNED
+  PAID
 }
 
 enum ExpenseCategory {

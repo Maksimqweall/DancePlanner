@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
 
 // 1. Описываем типы данных (наш фундамент)
 export type Category = 'HOTEL' | 'ENTRY_FEE' | 'TRAVEL' | 'DRESS' | 'LESSON' | 'OTHER';
@@ -33,7 +32,7 @@ export const useFinanceStore = create<FinanceState>()(
       // Добавление новой траты
       addTransaction: (amount, category, description) => {
         const newTx: Transaction = {
-          id: uuidv4(), // Генерируем уникальный ID оффлайн
+          id: crypto.randomUUID(),
           amount,
           category,
           description,

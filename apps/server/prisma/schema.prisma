@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// МОДУЛЬ: Профили и Пары
+// ==========================================
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  
+  // Для интеграции с модулем Performance & Analytics
+  wdsfMin       String?    // WDSF MIN (Member ID Number)
+  dtvId         String?    // DTV ID номер
+  
+  // Связи
+  couplesAsLead   Couple[]   @relation("LeadPartner")
+  couplesAsFollow Couple[]   @relation("FollowPartner")
+  proposalsSent   Proposal[] @relation("ProposalSender")
+  expenses        Expense[]
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model Couple {
+  id          String     @id @default(uuid())
+  leadId      String
+  followId    String
+  isActive    Boolean    @default(true)
+  
+  lead        User       @relation("LeadPartner", fields: [leadId], references: [id])
+  follow      User       @relation("FollowPartner", fields: [followId], references: [id])
+  
+  proposals   Proposal[]
+  events      Event[]
+  
+  createdAt   DateTime   @default(now())
+}
+
+// ==========================================
+// МОДУЛЬ: Partner Sync (Синхронизация)
+// ==========================================
+model Proposal {
+  id          String         @id @default(uuid())
+  coupleId    String
+  senderId    String
+  
+  title       String
+  type        ProposalType   
+  status      ProposalStatus @default(PENDING)
+  cost        Float?         // Предлагаемая стоимость (например, 50€ за индив)
+  currency    String         @default("EUR")
+  
+  // JSON для гибких деталей: дата, геолокация, ссылка на отель, имя тренера
+  details     Json?          
+  
+  couple      Couple         @relation(fields: [coupleId], references: [id])
+  sender      User           @relation("ProposalSender", fields: [senderId], references: [id])
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// ==========================================
+// МОДУЛЬ: Smart Calendar & Analytics
+// ==========================================
+model Event {
+  id          String      @id @default(uuid())
+  coupleId    String
+  title       String
+  date        DateTime
+  endDate     DateTime?
+  type        EventType   
+  location    String?
+  
+  // Аналитика (премиум фичи)
+  resultPlace Int?        // Занятое место
+  skatingData Json?       // Детализация (skating system), оценки судей
+  
+  couple      Couple      @relation(fields: [coupleId], references: [id])
+  expenses    Expense[]
+  
+  createdAt   DateTime    @default(now())
+}
+
+// ==========================================
+// МОДУЛЬ: Finance & Logistics
+// ==========================================
+model Expense {
+  id          String          @id @default(uuid())
+  userId      String          // Кто именно платил (для разделения бюджета)
+  eventId     String?         // Привязка траты к турниру или сборам
+  
+  category    ExpenseCategory
+  amount      Float
+  currency    String          @default("EUR")
+  date        DateTime
+  description String?
+  
+  user        User            @relation(fields: [userId], references: [id])
+  event       Event?          @relation(fields: [eventId], references: [id])
+  
+  createdAt   DateTime        @default(now())
+}
+
+// --- Энумераторы (Enums) ---
+
+enum ProposalType {
+  TRAINING
+  TOURNAMENT
+  HOTEL
+  TRANSPORT
+  OTHER
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum EventType {
+  TOURNAMENT
+  CAMP
+  PRACTICE
+  INDIVIDUAL
+  GROUP_LESSON
+}
+
+enum ExpenseCategory {
+  INDIVIDUAL
+  GROUP
+  PRACTICE
+  HALL_RENT
+  COSTUME
+  FLIGHT
+  HOTEL
+  START_FEE
+  VISA
+  OTHER
+}

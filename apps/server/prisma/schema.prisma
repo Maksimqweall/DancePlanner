@@ -26,6 +26,7 @@ model User {
   proposalsSent   Proposal[] @relation("ProposalSender")
   expenses        Expense[]
   ownedEvents     Event[]    @relation("EventOwner") // Projects this user owns directly (Module 1)
+  scheduleEntries ScheduleEntry[] // Calendar sessions (Module 2)
   
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -100,6 +101,7 @@ model Event {
   expenses    Expense[]
   attachments Attachment[]
   checklist   ChecklistItem[]
+  scheduleEntries ScheduleEntry[] // Calendar sessions linked to this project (Module 2)
 
   createdAt   DateTime    @default(now())
 }
@@ -149,8 +151,37 @@ model Expense {
 
   user        User            @relation(fields: [userId], references: [id])
   event       Event?          @relation(fields: [eventId], references: [id])
+  scheduleEntry ScheduleEntry? // Set when this expense was auto-created from a calendar session
 
   createdAt   DateTime        @default(now())
+}
+
+// ==========================================
+// МОДУЛЬ 2: Smart Calendar (daily schedule)
+// ==========================================
+// A lightweight calendar item: a single training/practice/competition/rest day, etc.
+// Distinct from Event (which is a multi-part "Project" with checklist/attachments).
+model ScheduleEntry {
+  id        String      @id @default(uuid())
+  userId    String
+  eventId   String?     // Optional link to a Project (tournament/camp)
+  expenseId String?     @unique // Optional auto-created expense when the session has a cost
+
+  title     String
+  type      SessionType
+  date      DateTime    // The calendar day (stored at UTC midnight)
+  startTime String?     // "HH:MM" (local), optional
+  endTime   String?     // "HH:MM" (local), optional
+  allDay    Boolean     @default(false)
+  location  String?
+  notes     String?
+
+  user      User        @relation(fields: [userId], references: [id])
+  event     Event?      @relation(fields: [eventId], references: [id])
+  expense   Expense?    @relation(fields: [expenseId], references: [id])
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 }
 
 // --- Энумераторы (Enums) ---
@@ -182,6 +213,16 @@ enum ExpenseStatus {
   PAID
 }
 
+enum SessionType {
+  INDIVIDUAL
+  GROUP_LESSON
+  PRACTICE
+  COMPETITION
+  CAMP
+  REST
+  OTHER
+}
+
 enum ExpenseCategory {
   INDIVIDUAL
   GROUP
@@ -189,8 +230,11 @@ enum ExpenseCategory {
   HALL_RENT
   COSTUME
   FLIGHT
+  TRANSPORT
   HOTEL
+  FOOD
   START_FEE
+  ENTRY_TICKET
   VISA
   OTHER
 }

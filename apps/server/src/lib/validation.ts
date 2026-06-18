@@ -8,8 +8,11 @@ export const EXPENSE_CATEGORIES = [
   "HALL_RENT",
   "COSTUME",
   "FLIGHT",
+  "TRANSPORT",
   "HOTEL",
+  "FOOD",
   "START_FEE",
+  "ENTRY_TICKET",
   "VISA",
   "OTHER",
 ] as const;
@@ -23,6 +26,20 @@ export const EVENT_TYPES = [
 ] as const;
 
 export const EXPENSE_STATUSES = ["PLANNED", "PAID"] as const;
+
+export const SESSION_TYPES = [
+  "INDIVIDUAL",
+  "GROUP_LESSON",
+  "PRACTICE",
+  "COMPETITION",
+  "CAMP",
+  "REST",
+  "OTHER",
+] as const;
+
+const timeString = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Time must be HH:MM");
 
 // --- Auth ---
 export const signupSchema = z.object({
@@ -81,3 +98,22 @@ export const updateChecklistItemSchema = z.object({
 export const createAttachmentSchema = z.object({
   label: z.string().min(1).default("Attachment"),
 });
+
+// --- Schedule (Module 2: Smart Calendar) ---
+export const createScheduleSchema = z.object({
+  title: z.string().min(1),
+  type: z.enum(SESSION_TYPES),
+  date: z.coerce.date(),
+  startTime: timeString.optional().nullable(),
+  endTime: timeString.optional().nullable(),
+  allDay: z.boolean().optional().default(false),
+  location: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  eventId: z.string().uuid().optional().nullable(),
+  // Optional money tie-in: creates a linked Expense.
+  cost: z.number().positive().optional().nullable(),
+  category: z.enum(EXPENSE_CATEGORIES).optional().nullable(),
+  currency: z.string().min(1).default("EUR"),
+});
+
+export const updateScheduleSchema = createScheduleSchema.partial();

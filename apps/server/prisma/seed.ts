@@ -14,6 +14,8 @@ async function main() {
   });
 
   // Start clean for this user so the seed is repeatable.
+  // Schedule entries reference expenses, so remove them first.
+  await prisma.scheduleEntry.deleteMany({ where: { userId: user.id } });
   await prisma.expense.deleteMany({ where: { userId: user.id } });
   await prisma.event.deleteMany({ where: { ownerId: user.id } });
 
@@ -81,6 +83,70 @@ async function main() {
       },
     },
   });
+
+  // --- Module 2: Calendar sessions for the current month ---
+  // Sessions with a cost auto-create a linked expense (PAID if past, PLANNED if future).
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  async function session(opts: {
+    title: string;
+    type: "INDIVIDUAL" | "GROUP_LESSON" | "PRACTICE" | "COMPETITION" | "CAMP" | "REST" | "OTHER";
+    day: number;
+    startTime?: string;
+    endTime?: string;
+    location?: string;
+    cost?: number;
+    eventId?: string;
+  }) {
+    const date = thisMonth(opts.day);
+    const categoryMap = {
+      INDIVIDUAL: "INDIVIDUAL",
+      GROUP_LESSON: "GROUP",
+      PRACTICE: "PRACTICE",
+      COMPETITION: "START_FEE",
+      CAMP: "OTHER",
+      REST: "OTHER",
+      OTHER: "OTHER",
+    } as const;
+
+    let expenseId: string | null = null;
+    if (opts.cost && opts.cost > 0) {
+      const expense = await prisma.expense.create({
+        data: {
+          userId: user.id,
+          eventId: opts.eventId ?? null,
+          title: opts.title,
+          category: categoryMap[opts.type],
+          amount: opts.cost,
+          date,
+          status: date < startOfToday ? "PAID" : "PLANNED",
+        },
+      });
+      expenseId = expense.id;
+    }
+    await prisma.scheduleEntry.create({
+      data: {
+        userId: user.id,
+        eventId: opts.eventId ?? null,
+        expenseId,
+        title: opts.title,
+        type: opts.type,
+        date,
+        startTime: opts.startTime ?? null,
+        endTime: opts.endTime ?? null,
+        location: opts.location ?? null,
+      },
+    });
+  }
+
+  await session({ title: "Individual with Coach", type: "INDIVIDUAL", day: 4, startTime: "10:00", endTime: "11:00", cost: 70 });
+  await session({ title: "Practice", type: "PRACTICE", day: 4, startTime: "18:00", endTime: "20:00" });
+  await session({ title: "Group class", type: "GROUP_LESSON", day: 6, startTime: "19:00", endTime: "20:30", cost: 25 });
+  await session({ title: "Individual with Coach", type: "INDIVIDUAL", day: 11, startTime: "10:00", endTime: "11:00", cost: 70 });
+  await session({ title: "Rest day", type: "REST", day: 14 });
+  await session({ title: "Practice", type: "PRACTICE", day: 18, startTime: "18:00", endTime: "20:00" });
+  await session({ title: "Individual with Coach", type: "INDIVIDUAL", day: 25, startTime: "10:00", endTime: "11:00", cost: 70 });
 
   console.log("Seed complete.");
   console.log(`  Dev user: ${email} / password123`);

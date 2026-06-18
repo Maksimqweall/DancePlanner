@@ -1,12 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform } from "react-native";
+import { View, Text, ScrollView, Alert, Platform, StyleSheet } from "react-native";
 import { useFocusEffect } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useFinanceStore } from "../../../store/useFinanceStore";
 import { useProjectStore } from "../../../store/useProjectStore";
 import TransactionCard from "../../../components/TransactionCard";
 import ExpenseFormModal from "../../../components/ExpenseFormModal";
 import { monthLong, monthKeyFromIso, formatMoney } from "../../../lib/display";
 import type { Expense } from "../../../lib/types";
+import PressableScale from "../../../components/ui/PressableScale";
+import { C } from "../../../lib/theme";
 
 interface MonthGroup {
   month: string;
@@ -27,7 +30,6 @@ export default function ExpensesScreen() {
     }, [refresh, refreshProjects])
   );
 
-  // Group expenses into months (most recent first).
   const groups = useMemo<MonthGroup[]>(() => {
     const map = new Map<string, MonthGroup>();
     for (const e of expenses) {
@@ -42,10 +44,7 @@ export default function ExpensesScreen() {
   }, [expenses]);
 
   const confirmDelete = (id: string) => {
-    if (Platform.OS === "web") {
-      deleteExpense(id);
-      return;
-    }
+    if (Platform.OS === "web") { deleteExpense(id); return; }
     Alert.alert("Delete expense", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => deleteExpense(id) },
@@ -53,44 +52,48 @@ export default function ExpensesScreen() {
   };
 
   return (
-    <View className="flex-1 bg-zinc-900">
-      <ScrollView className="flex-1 px-4 pt-4">
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-2xl text-white font-bold">Expenses</Text>
-          <TouchableOpacity
-            className="bg-emerald-500 px-4 py-2 rounded-xl"
-            onPress={() => setModalOpen(true)}
-          >
-            <Text className="text-white font-bold">+ Add</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.titleRow}>
+          <Text style={styles.pageTitle}>Finance</Text>
+          <PressableScale style={styles.addBtn} onPress={() => setModalOpen(true)}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </PressableScale>
+        </Animated.View>
 
         {groups.length === 0 ? (
-          <Text className="text-zinc-500 text-center mt-10">
-            No expenses yet. Tap “+ Add” to record one.
-          </Text>
+          <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.emptyCard}>
+            <Text style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>💳</Text>
+            <Text style={styles.emptyTitle}>No expenses yet</Text>
+            <Text style={styles.emptyText}>Tap "+ Add" to record your first expense.</Text>
+          </Animated.View>
         ) : (
-          groups.map((g) => (
-            <View key={g.month} className="mb-4">
-              {/* Month header */}
-              <View className="flex-row justify-between items-end mb-2 mt-2">
-                <Text className="text-zinc-300 font-semibold text-base">{monthLong(g.month)}</Text>
-                <View className="flex-row items-center">
-                  <Text className="text-white font-bold">{formatMoney(g.paid)}</Text>
-                  {g.planned > 0 ? (
-                    <Text className="text-amber-400 text-sm ml-2">
-                      +{formatMoney(g.planned)} planned
-                    </Text>
-                  ) : null}
+          groups.map((g, gi) => (
+            <Animated.View
+              key={g.month}
+              entering={gi < 4 ? FadeInDown.delay(gi * 80 + 60).duration(380) : undefined}
+            >
+              <View style={styles.monthHeader}>
+                <Text style={styles.monthLabel}>{monthLong(g.month)}</Text>
+                <View style={styles.monthAmounts}>
+                  <Text style={styles.monthPaid}>{formatMoney(g.paid)}</Text>
+                  {g.planned > 0 && (
+                    <Text style={styles.monthPlanned}>+{formatMoney(g.planned)} planned</Text>
+                  )}
                 </View>
               </View>
-              {g.items.map((tx) => (
-                <TransactionCard key={tx.id} expense={tx} onDelete={confirmDelete} />
+              {g.items.map((tx, i) => (
+                <TransactionCard
+                  key={tx.id}
+                  expense={tx}
+                  onDelete={confirmDelete}
+                  index={i}
+                />
               ))}
-            </View>
+            </Animated.View>
           ))
         )}
-        <View className="h-10" />
+        <View style={{ height: 24 }} />
       </ScrollView>
 
       <ExpenseFormModal
@@ -102,3 +105,45 @@ export default function ExpensesScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 20 },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pageTitle: { color: C.t1, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  addBtn: {
+    backgroundColor: C.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  emptyCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  emptyTitle: { color: C.t1, fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  emptyText: { color: C.t2, fontSize: 14, textAlign: 'center' },
+  monthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 10,
+    marginTop: 16,
+    paddingHorizontal: 2,
+  },
+  monthLabel: { color: C.t1, fontWeight: '700', fontSize: 16 },
+  monthAmounts: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  monthPaid: { color: C.t1, fontWeight: '700', fontSize: 15 },
+  monthPlanned: { color: C.gold, fontSize: 13, fontWeight: '500' },
+});

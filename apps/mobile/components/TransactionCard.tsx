@@ -1,54 +1,103 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Expense } from "../lib/types";
 import { CATEGORY_META, formatMoney, formatShortDate } from "../lib/display";
+import PressableScale from "./ui/PressableScale";
+import { C } from "../lib/theme";
 
 interface Props {
   expense: Expense;
   onDelete?: (id: string) => void;
+  index?: number;
 }
 
-export default function TransactionCard({ expense, onDelete }: Props) {
+export default function TransactionCard({ expense, onDelete, index = 0 }: Props) {
   const meta = CATEGORY_META[expense.category] ?? CATEGORY_META.OTHER;
   const isPlanned = expense.status === "PLANNED";
   const title = expense.title || meta.label;
 
   return (
-    <View className="flex-row items-center justify-between p-4 mb-3 bg-zinc-800 rounded-2xl">
-      <View className="flex-row items-center flex-1">
-        <View className={`w-12 h-12 rounded-full items-center justify-center ${meta.color}`}>
-          <Text className="text-xl">{meta.icon}</Text>
+    <Animated.View entering={index < 8 ? FadeInDown.delay(index * 55).duration(380) : undefined}>
+      <View style={styles.card}>
+        <View style={styles.iconWrapper}>
+          <View style={[styles.iconCircle, { backgroundColor: meta.hex + '22' }]}>
+            <Text style={styles.icon}>{meta.icon}</Text>
+          </View>
         </View>
 
-        <View className="ml-4 flex-1">
-          <Text className="text-white font-semibold text-base" numberOfLines={1}>
-            {title}
-          </Text>
-          <View className="flex-row items-center">
-            <Text className="text-zinc-400 text-sm">{formatShortDate(expense.date)}</Text>
+        <View style={styles.content}>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
+          <View style={styles.meta}>
+            <Text style={styles.date}>{formatShortDate(expense.date)}</Text>
             {expense.event ? (
-              <Text className="text-zinc-500 text-sm" numberOfLines={1}>
-                {"  ·  "}
-                {expense.event.title}
+              <Text style={styles.event} numberOfLines={1}>
+                {" · "}{expense.event.title}
               </Text>
             ) : null}
             {isPlanned ? (
-              <Text className="text-amber-400 text-xs ml-2 font-semibold">PLANNED</Text>
+              <View style={styles.plannedBadge}>
+                <Text style={styles.plannedText}>PLANNED</Text>
+              </View>
             ) : null}
           </View>
         </View>
-      </View>
 
-      <View className="items-end ml-2">
-        <Text className={`font-bold text-base ${isPlanned ? "text-amber-400" : "text-white"}`}>
-          {isPlanned ? "" : "-"}
-          {formatMoney(expense.amount)}
-        </Text>
-        {onDelete ? (
-          <TouchableOpacity onPress={() => onDelete(expense.id)} hitSlop={8}>
-            <Text className="text-zinc-500 text-xs mt-1">Delete</Text>
-          </TouchableOpacity>
-        ) : null}
+        <View style={styles.right}>
+          <Text style={[styles.amount, isPlanned ? styles.amountPlanned : styles.amountPaid]}>
+            {isPlanned ? "~" : "−"}{formatMoney(expense.amount)}
+          </Text>
+          {onDelete ? (
+            <PressableScale
+              onPress={() => onDelete(expense.id)}
+              hitSlop={10}
+              style={styles.deleteBtn}
+            >
+              <Text style={styles.deleteText}>Delete</Text>
+            </PressableScale>
+          ) : null}
+        </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.card,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  iconWrapper: { marginRight: 12 },
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  icon: { fontSize: 20 },
+  content: { flex: 1, marginRight: 8 },
+  title: { color: C.t1, fontWeight: '600', fontSize: 15, marginBottom: 4 },
+  meta: { flexDirection: 'row', alignItems: 'center' },
+  date: { color: C.t2, fontSize: 13 },
+  event: { color: C.t3, fontSize: 13, flex: 1 },
+  plannedBadge: {
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  plannedText: { color: C.gold, fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
+  right: { alignItems: 'flex-end' },
+  amount: { fontSize: 15, fontWeight: '700' },
+  amountPaid: { color: C.t1 },
+  amountPlanned: { color: C.gold },
+  deleteBtn: { marginTop: 4 },
+  deleteText: { color: C.t3, fontSize: 12 },
+});

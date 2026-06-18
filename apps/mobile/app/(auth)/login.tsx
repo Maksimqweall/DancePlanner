@@ -3,14 +3,30 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { Link } from "expo-router";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
+import PressableScale from "../../components/ui/PressableScale";
+import { C } from "../../lib/theme";
+import Svg, { Path, Circle, Defs, RadialGradient, Stop, Ellipse } from "react-native-svg";
+
+function LogoMark() {
+  return (
+    <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
+      <Circle cx="32" cy="32" r="32" fill={C.accentFade} />
+      <Path
+        d="M20 44L28 20H36L44 44H38L36 38H28L26 44H20ZM30 26L28.5 34H35.5L34 26H30Z"
+        fill={C.accent}
+      />
+    </Svg>
+  );
+}
 
 export default function Login() {
   const login = useAuthStore((s) => s.login);
@@ -18,6 +34,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   const onSubmit = async () => {
     setError(null);
@@ -34,58 +52,156 @@ export default function Login() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 bg-zinc-900"
+      style={styles.root}
     >
-      <View className="flex-1 justify-center px-6">
-        <Text className="text-4xl text-white font-bold mb-2">DancePlanner</Text>
-        <Text className="text-zinc-400 mb-8">Sign in to manage your finances</Text>
+      <View style={styles.inner}>
+        {/* Logo / hero */}
+        <Animated.View entering={FadeInDown.delay(50).duration(500)} style={styles.hero}>
+          <LogoMark />
+          <Text style={styles.appName}>DancePlanner</Text>
+          <Text style={styles.tagline}>Manage your dancesport finances</Text>
+        </Animated.View>
 
-        {error ? (
-          <View className="bg-red-500/20 border border-red-500 rounded-xl p-3 mb-4">
-            <Text className="text-red-300">{error}</Text>
+        {/* Form */}
+        <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.form}>
+          {error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={[styles.input, emailFocused && styles.inputFocused]}
+            placeholder="you@example.com"
+            placeholderTextColor={C.t3}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
+          />
+
+          <Text style={[styles.label, { marginTop: 4 }]}>Password</Text>
+          <TextInput
+            style={[styles.input, passwordFocused && styles.inputFocused]}
+            placeholder="••••••••"
+            placeholderTextColor={C.t3}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
+          />
+
+          <PressableScale onPress={onSubmit} disabled={submitting} scaleTo={0.97} style={styles.button}>
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Sign in</Text>
+            )}
+          </PressableScale>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>No account? </Text>
+            <Link href="/signup" style={styles.footerLink}>Create one</Link>
           </View>
-        ) : null}
-
-        <Text className="text-zinc-400 mb-1">Email</Text>
-        <TextInput
-          className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-4"
-          placeholder="you@example.com"
-          placeholderTextColor="#71717a"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <Text className="text-zinc-400 mb-1">Password</Text>
-        <TextInput
-          className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-6"
-          placeholder="••••••••"
-          placeholderTextColor="#71717a"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <TouchableOpacity
-          className="bg-emerald-500 rounded-xl py-4 items-center"
-          onPress={onSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text className="text-white font-bold text-base">Sign in</Text>
-          )}
-        </TouchableOpacity>
-
-        <View className="flex-row justify-center mt-6">
-          <Text className="text-zinc-400">No account? </Text>
-          <Link href="/signup" className="text-emerald-400 font-semibold">
-            Create one
-          </Link>
-        </View>
+        </Animated.View>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
+  inner: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  hero: {
+    alignItems: 'center',
+    marginBottom: 44,
+  },
+  appName: {
+    color: C.t1,
+    fontSize: 30,
+    fontWeight: '800',
+    marginTop: 16,
+    letterSpacing: -0.5,
+  },
+  tagline: {
+    color: C.t2,
+    fontSize: 15,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  form: {
+    gap: 0,
+  },
+  errorBox: {
+    backgroundColor: C.redFade,
+    borderWidth: 1,
+    borderColor: C.red,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#fca5a5',
+    fontSize: 14,
+  },
+  label: {
+    color: C.t2,
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  input: {
+    backgroundColor: C.input,
+    color: C.t1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 16,
+  },
+  inputFocused: {
+    borderColor: C.accentBorder,
+    backgroundColor: '#1a1f1e',
+  },
+  button: {
+    backgroundColor: C.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  footerText: {
+    color: C.t2,
+    fontSize: 14,
+  },
+  footerLink: {
+    color: C.accent,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+});

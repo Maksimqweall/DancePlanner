@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
   Modal,
   TextInput,
+  StyleSheet,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import {
   useFinanceStore,
   summarizeMonth,
@@ -27,6 +28,8 @@ import {
   monthKeyFromIso,
 } from "../../../lib/display";
 import type { ForecastMonth } from "../../../lib/types";
+import PressableScale from "../../../components/ui/PressableScale";
+import { C } from "../../../lib/theme";
 
 const DEFAULT_BUDGET = 1000;
 
@@ -61,111 +64,116 @@ export default function Dashboard() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      await refresh();
-    } finally {
-      setRefreshing(false);
-    }
+    try { await refresh(); }
+    finally { setRefreshing(false); }
   };
 
   const isCurrent = selectedMonth === currentMonthKey();
 
   return (
     <ScrollView
-      className="flex-1 bg-zinc-900 px-4 pt-4"
+      style={styles.screen}
+      contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10b981" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />
       }
     >
-      <View className="flex-row justify-between items-center mb-5">
+      {/* Header */}
+      <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.header}>
         <View>
-          <Text className="text-zinc-400">Welcome back,</Text>
-          <Text className="text-2xl text-white font-bold">{user?.firstName ?? "Dancer"}</Text>
+          <Text style={styles.welcome}>Welcome back,</Text>
+          <Text style={styles.userName}>{user?.firstName ?? "Dancer"}</Text>
         </View>
-        <TouchableOpacity onPress={logout} className="bg-zinc-800 px-3 py-2 rounded-xl">
-          <Text className="text-zinc-300">Log out</Text>
-        </TouchableOpacity>
-      </View>
+        <PressableScale onPress={logout} style={styles.logoutBtn}>
+          <Text style={styles.logoutText}>Log out</Text>
+        </PressableScale>
+      </Animated.View>
 
       {/* Month selector */}
-      <View className="flex-row items-center justify-between bg-zinc-800 rounded-2xl px-2 py-2 mb-4">
-        <TouchableOpacity
+      <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.monthRow}>
+        <PressableScale
           onPress={() => setSelectedMonth((m) => shiftMonth(m, -1))}
-          className="w-10 h-10 items-center justify-center"
+          style={styles.monthArrow}
         >
-          <Text className="text-emerald-400 text-2xl">‹</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSelectedMonth(currentMonthKey())}>
-          <Text className="text-white font-semibold text-base">{monthLong(selectedMonth)}</Text>
-          {!isCurrent ? (
-            <Text className="text-zinc-500 text-xs text-center">tap for current</Text>
-          ) : null}
-        </TouchableOpacity>
-        <TouchableOpacity
+          <Text style={styles.arrowText}>‹</Text>
+        </PressableScale>
+        <PressableScale onPress={() => setSelectedMonth(currentMonthKey())} style={styles.monthCenter}>
+          <Text style={styles.monthText}>{monthLong(selectedMonth)}</Text>
+          {!isCurrent && <Text style={styles.monthHint}>tap for current</Text>}
+        </PressableScale>
+        <PressableScale
           onPress={() => setSelectedMonth((m) => shiftMonth(m, 1))}
-          className="w-10 h-10 items-center justify-center"
+          style={styles.monthArrow}
         >
-          <Text className="text-emerald-400 text-2xl">›</Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={styles.arrowText}>›</Text>
+        </PressableScale>
+      </Animated.View>
 
-      {/* Budget for the selected month */}
-      <ProgressBar spent={summary.paid} limit={budget} />
-      <View className="flex-row justify-between items-center -mt-3 mb-6">
-        <Text className="text-zinc-400 text-sm">
-          {summary.planned > 0 ? `+ ${formatMoney(summary.planned)} planned this month` : " "}
-        </Text>
-        <TouchableOpacity onPress={() => setBudgetModal(true)}>
-          <Text className="text-emerald-400 text-sm">Edit budget</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Monthly spending chart */}
-      <Text className="text-xl text-white font-semibold mb-3">Monthly spending</Text>
-      <View className="bg-zinc-800 rounded-2xl p-3 mb-6">
-        <MonthlyBarChart
-          data={series}
-          selectedMonth={selectedMonth}
-          onSelect={setSelectedMonth}
-          budgetForMonth={budgetForMonth}
-        />
-      </View>
-
-      {/* Upcoming forecast */}
-      <Text className="text-xl text-white font-semibold mb-3">Upcoming forecast</Text>
-      {forecast.length === 0 ? (
-        <View className="bg-zinc-800 rounded-2xl p-4 mb-6">
-          <Text className="text-zinc-500">
-            No upcoming planned spend. Create a tournament or camp project to forecast costs.
+      {/* Budget progress */}
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <ProgressBar spent={summary.paid} limit={budget} />
+        <View style={styles.budgetMeta}>
+          <Text style={styles.plannedHint}>
+            {summary.planned > 0 ? `+ ${formatMoney(summary.planned)} planned` : " "}
           </Text>
+          <PressableScale onPress={() => setBudgetModal(true)}>
+            <Text style={styles.editBudget}>Edit budget</Text>
+          </PressableScale>
         </View>
-      ) : (
-        <View className="mb-3">
-          {forecast.map((m) => (
+      </Animated.View>
+
+      {/* Monthly chart */}
+      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+        <Text style={styles.sectionTitle}>Monthly spending</Text>
+        <View style={styles.chartCard}>
+          <MonthlyBarChart
+            data={series}
+            selectedMonth={selectedMonth}
+            onSelect={setSelectedMonth}
+            budgetForMonth={budgetForMonth}
+          />
+        </View>
+      </Animated.View>
+
+      {/* Forecast */}
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <Text style={styles.sectionTitle}>Upcoming forecast</Text>
+        {forecast.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>
+              No upcoming planned spend. Create a tournament or camp to forecast costs.
+            </Text>
+          </View>
+        ) : (
+          forecast.map((m, i) => (
             <ForecastCard
               key={m.month}
               month={m}
+              index={i}
               onPressProject={(id) => router.push(`/project/${id}`)}
             />
-          ))}
+          ))
+        )}
+      </Animated.View>
+
+      {/* Expenses */}
+      <Animated.View entering={FadeInDown.delay(240).duration(400)}>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>Expenses</Text>
+          <PressableScale onPress={() => router.push("/expenses")}>
+            <Text style={styles.seeAll}>See all →</Text>
+          </PressableScale>
         </View>
-      )}
+        {monthExpenses.length === 0 ? (
+          <Text style={styles.emptyText}>No expenses in {monthLong(selectedMonth)}.</Text>
+        ) : (
+          monthExpenses.map((tx, i) => (
+            <TransactionCard key={tx.id} expense={tx} index={i} />
+          ))
+        )}
+      </Animated.View>
 
-      {/* Expenses for the selected month */}
-      <View className="flex-row justify-between items-center mb-3 mt-3">
-        <Text className="text-xl text-white font-semibold">Expenses</Text>
-        <TouchableOpacity onPress={() => router.push("/expenses")}>
-          <Text className="text-emerald-400">See all</Text>
-        </TouchableOpacity>
-      </View>
-
-      {monthExpenses.length === 0 ? (
-        <Text className="text-zinc-500 text-center mt-6">No expenses in {monthLong(selectedMonth)}.</Text>
-      ) : (
-        monthExpenses.map((tx) => <TransactionCard key={tx.id} expense={tx} />)
-      )}
-
-      <View className="h-10" />
+      <View style={{ height: 24 }} />
 
       <BudgetModal
         visible={budgetModal}
@@ -181,34 +189,38 @@ export default function Dashboard() {
 function ForecastCard({
   month,
   onPressProject,
+  index = 0,
 }: {
   month: ForecastMonth;
   onPressProject: (id: string) => void;
+  index?: number;
 }) {
   return (
-    <View className="bg-zinc-800 rounded-2xl p-4 mb-3">
-      <View className="flex-row justify-between items-center mb-2">
-        <Text className="text-white font-semibold text-base">{month.label}</Text>
-        <Text className="text-amber-400 font-bold text-base">~{formatMoney(month.expected)}</Text>
-      </View>
-      {month.projects.length > 0 ? (
-        <View className="flex-row flex-wrap">
-          {month.projects.map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              onPress={() => onPressProject(p.id)}
-              className="bg-zinc-700 rounded-full px-3 py-1 mr-2 mb-1"
-            >
-              <Text className="text-zinc-200 text-sm">
-                {EVENT_TYPE_META[p.type]?.icon} {p.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
+    <Animated.View entering={index < 4 ? FadeInDown.delay(index * 60).duration(350) : undefined}>
+      <View style={styles.forecastCard}>
+        <View style={styles.forecastHeader}>
+          <Text style={styles.forecastMonth}>{month.label}</Text>
+          <Text style={styles.forecastAmount}>~{formatMoney(month.expected)}</Text>
         </View>
-      ) : (
-        <Text className="text-zinc-500 text-sm">Planned expenses</Text>
-      )}
-    </View>
+        {month.projects.length > 0 ? (
+          <View style={styles.projectPills}>
+            {month.projects.map((p) => (
+              <PressableScale
+                key={p.id}
+                onPress={() => onPressProject(p.id)}
+                style={styles.projectPill}
+              >
+                <Text style={styles.projectPillText}>
+                  {EVENT_TYPE_META[p.type]?.icon} {p.title}
+                </Text>
+              </PressableScale>
+            ))}
+          </View>
+        ) : (
+          <Text style={{ color: C.t3, fontSize: 13 }}>Planned expenses</Text>
+        )}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -238,10 +250,7 @@ function BudgetModal({
 
   const save = async () => {
     const n = Number(value.replace(",", "."));
-    if (!n || n <= 0) {
-      setError("Enter a valid amount");
-      return;
-    }
+    if (!n || n <= 0) { setError("Enter a valid amount"); return; }
     setSaving(true);
     try {
       await onSave(n);
@@ -255,37 +264,188 @@ function BudgetModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View className="flex-1 justify-center bg-black/60 px-6">
-        <View className="bg-zinc-900 rounded-3xl p-5">
-          <Text className="text-xl text-white font-bold mb-1">Budget · {monthLabel}</Text>
-          <Text className="text-zinc-500 mb-4">Spending limit for this month.</Text>
-          {error ? <Text className="text-red-400 mb-2">{error}</Text> : null}
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Budget · {monthLabel}</Text>
+          <Text style={styles.modalSubtitle}>Spending limit for this month.</Text>
+          {error ? <Text style={styles.modalError}>{error}</Text> : null}
           <TextInput
-            className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-4 text-lg"
+            style={styles.modalInput}
             keyboardType="decimal-pad"
             placeholder="1000"
-            placeholderTextColor="#71717a"
+            placeholderTextColor={C.t3}
             value={value}
             onChangeText={setValue}
             autoFocus
           />
-          <View className="flex-row">
-            <TouchableOpacity
-              className="flex-1 py-3 rounded-xl items-center bg-zinc-800 mr-2"
-              onPress={onClose}
-            >
-              <Text className="text-zinc-300 font-semibold">Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 py-3 rounded-xl items-center bg-emerald-500"
-              onPress={save}
-              disabled={saving}
-            >
-              <Text className="text-white font-bold">{saving ? "Saving…" : "Save"}</Text>
-            </TouchableOpacity>
+          <View style={styles.modalButtons}>
+            <PressableScale style={styles.modalCancel} onPress={onClose}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </PressableScale>
+            <PressableScale style={styles.modalSave} onPress={save} disabled={saving}>
+              <Text style={styles.modalSaveText}>{saving ? "Saving…" : "Save"}</Text>
+            </PressableScale>
           </View>
         </View>
       </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  content: { paddingHorizontal: 20, paddingTop: 20 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  welcome: { color: C.t2, fontSize: 14 },
+  userName: { color: C.t1, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginTop: 2 },
+  logoutBtn: {
+    backgroundColor: C.card,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  logoutText: { color: C.t2, fontSize: 13, fontWeight: '500' },
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.card,
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  monthArrow: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
+  arrowText: { color: C.accent, fontSize: 24, fontWeight: '300' },
+  monthCenter: { alignItems: 'center' },
+  monthText: { color: C.t1, fontWeight: '600', fontSize: 16 },
+  monthHint: { color: C.t3, fontSize: 11, marginTop: 2 },
+  budgetMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: -8,
+    marginBottom: 24,
+  },
+  plannedHint: { color: C.t3, fontSize: 13 },
+  editBudget: { color: C.accent, fontSize: 13, fontWeight: '600' },
+  sectionTitle: {
+    color: C.t1,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    letterSpacing: -0.3,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  seeAll: { color: C.accent, fontSize: 14, fontWeight: '600' },
+  chartCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  emptyCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  emptyText: { color: C.t3, fontSize: 14, lineHeight: 20 },
+  forecastCard: {
+    backgroundColor: C.card,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  forecastHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  forecastMonth: { color: C.t1, fontWeight: '600', fontSize: 15 },
+  forecastAmount: { color: C.gold, fontWeight: '700', fontSize: 15 },
+  projectPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  projectPill: {
+    backgroundColor: C.elevated,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  projectPillText: { color: C.t2, fontSize: 13 },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: C.card,
+    borderRadius: 24,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modalTitle: { color: C.t1, fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  modalSubtitle: { color: C.t2, fontSize: 14, marginBottom: 16 },
+  modalError: { color: C.red, fontSize: 13, marginBottom: 10 },
+  modalInput: {
+    backgroundColor: C.elevated,
+    color: C.t1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  modalButtons: { flexDirection: 'row', gap: 10 },
+  modalCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    backgroundColor: C.elevated,
+  },
+  modalCancelText: { color: C.t2, fontWeight: '600' },
+  modalSave: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    backgroundColor: C.accent,
+  },
+  modalSaveText: { color: '#fff', fontWeight: '700' },
+});

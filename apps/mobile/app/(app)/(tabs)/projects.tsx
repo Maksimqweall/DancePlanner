@@ -3,12 +3,13 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Modal,
   TextInput,
   Switch,
+  StyleSheet,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useProjectStore, type CreateProjectInput } from "../../../store/useProjectStore";
 import {
   EVENT_TYPE_META,
@@ -19,6 +20,8 @@ import {
 import type { EventType, Project } from "../../../lib/types";
 import { ApiError } from "../../../lib/api";
 import { DateField } from "../../../components/DateTimeField";
+import PressableScale from "../../../components/ui/PressableScale";
+import { C } from "../../../lib/theme";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -36,29 +39,30 @@ export default function ProjectsScreen() {
   );
 
   return (
-    <View className="flex-1 bg-zinc-900">
-      <ScrollView className="flex-1 px-4 pt-4">
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-2xl text-white font-bold">Projects</Text>
-          <TouchableOpacity
-            className="bg-emerald-500 px-4 py-2 rounded-xl"
-            onPress={() => setModalOpen(true)}
-          >
-            <Text className="text-white font-bold">+ New</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.titleRow}>
+          <Text style={styles.pageTitle}>Events</Text>
+          <PressableScale style={styles.addBtn} onPress={() => setModalOpen(true)}>
+            <Text style={styles.addBtnText}>+ New</Text>
+          </PressableScale>
+        </Animated.View>
 
         {projects.length === 0 ? (
-          <Text className="text-zinc-500 text-center mt-10">
-            No projects yet. Create a tournament or training camp to organize tickets,
-            bookings and a prep checklist.
-          </Text>
+          <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.emptyCard}>
+            <Text style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>🏆</Text>
+            <Text style={styles.emptyTitle}>No events yet</Text>
+            <Text style={styles.emptyText}>
+              Create a tournament or training camp to organize tickets,
+              bookings and a prep checklist.
+            </Text>
+          </Animated.View>
         ) : (
-          projects.map((p) => (
-            <ProjectRow key={p.id} project={p} onPress={() => router.push(`/project/${p.id}`)} />
+          projects.map((p, i) => (
+            <ProjectRow key={p.id} project={p} index={i} onPress={() => router.push(`/project/${p.id}`)} />
           ))
         )}
-        <View className="h-10" />
+        <View style={{ height: 24 }} />
       </ScrollView>
 
       <NewProjectModal
@@ -71,35 +75,47 @@ export default function ProjectsScreen() {
   );
 }
 
-function ProjectRow({ project, onPress }: { project: Project; onPress: () => void }) {
+function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress: () => void; index?: number }) {
   const meta = EVENT_TYPE_META[project.type] ?? EVENT_TYPE_META.TOURNAMENT;
   const counts = project._count;
+
   return (
-    <TouchableOpacity onPress={onPress} className="bg-zinc-800 rounded-2xl p-4 mb-3">
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1 pr-2">
-          <Text className="text-white font-semibold text-lg">
-            {meta.icon} {project.title}
-          </Text>
-          <Text className="text-zinc-400 mt-1">
-            {meta.label} · {formatDate(project.date)}
-          </Text>
-          {project.location ? (
-            <Text className="text-zinc-500 mt-0.5">📍 {project.location}</Text>
-          ) : null}
+    <Animated.View entering={index < 8 ? FadeInDown.delay(index * 60 + 80).duration(380) : undefined}>
+      <PressableScale onPress={onPress} style={styles.projectCard}>
+        <View style={styles.projectHeader}>
+          <View style={styles.projectLeft}>
+            <View style={styles.projectIconWrapper}>
+              <Text style={styles.projectIcon}>{meta.icon}</Text>
+            </View>
+            <View style={styles.projectInfo}>
+              <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
+              <Text style={styles.projectMeta}>{meta.label} · {formatDate(project.date)}</Text>
+              {project.location ? (
+                <Text style={styles.projectLocation}>📍 {project.location}</Text>
+              ) : null}
+            </View>
+          </View>
+          {project.budget != null && (
+            <Text style={styles.projectBudget}>{formatMoney(project.budget)}</Text>
+          )}
         </View>
-        {project.budget != null ? (
-          <Text className="text-amber-400 font-bold">{formatMoney(project.budget)}</Text>
+        {counts ? (
+          <View style={styles.projectStats}>
+            <StatChip label={`${counts.attachments} files`} />
+            <StatChip label={`${counts.checklist} tasks`} />
+            <StatChip label={`${counts.expenses} expenses`} />
+          </View>
         ) : null}
-      </View>
-      {counts ? (
-        <View className="flex-row mt-3">
-          <Text className="text-zinc-500 text-sm mr-4">📎 {counts.attachments}</Text>
-          <Text className="text-zinc-500 text-sm mr-4">✅ {counts.checklist}</Text>
-          <Text className="text-zinc-500 text-sm">💶 {counts.expenses}</Text>
-        </View>
-      ) : null}
-    </TouchableOpacity>
+      </PressableScale>
+    </Animated.View>
+  );
+}
+
+function StatChip({ label }: { label: string }) {
+  return (
+    <View style={styles.statChip}>
+      <Text style={styles.statChipText}>{label}</Text>
+    </View>
   );
 }
 
@@ -125,35 +141,17 @@ function NewProjectModal({
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
-    setTitle("");
-    setType("TOURNAMENT");
-    setDate(todayISO());
-    setMultiDay(false);
-    setEndDate(todayISO());
-    setLocation("");
-    setBudget("");
-    setError(null);
+    setTitle(""); setType("TOURNAMENT"); setDate(todayISO());
+    setMultiDay(false); setEndDate(todayISO()); setLocation(""); setBudget(""); setError(null);
   };
 
-  const close = () => {
-    reset();
-    onClose();
-  };
+  const close = () => { reset(); onClose(); };
 
   const submit = async () => {
     setError(null);
-    if (!title.trim()) {
-      setError("Enter a title");
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setError("Date must be YYYY-MM-DD");
-      return;
-    }
-    if (multiDay && endDate < date) {
-      setError("End date must be on or after the start date");
-      return;
-    }
+    if (!title.trim()) { setError("Enter a title"); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError("Date must be YYYY-MM-DD"); return; }
+    if (multiDay && endDate < date) { setError("End date must be on or after start date"); return; }
     const budgetValue = budget ? Number(budget.replace(",", ".")) : null;
     setSubmitting(true);
     try {
@@ -176,107 +174,256 @@ function NewProjectModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <View className="flex-1 justify-end bg-black/60">
-        <View className="bg-zinc-900 rounded-t-3xl p-5 max-h-[90%]">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-xl text-white font-bold">New project</Text>
-              <TouchableOpacity onPress={close}>
-                <Text className="text-zinc-400 text-lg">✕</Text>
-              </TouchableOpacity>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New event</Text>
+              <PressableScale onPress={close} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </PressableScale>
             </View>
 
             {error ? (
-              <View className="bg-red-500/20 border border-red-500 rounded-xl p-3 mb-4">
-                <Text className="text-red-300">{error}</Text>
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
-            <Text className="text-zinc-400 mb-1">Title</Text>
+            <Text style={styles.fieldLabel}>Title</Text>
             <TextInput
-              className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-4"
+              style={styles.input}
               placeholder="e.g. Vienna Open Championship"
-              placeholderTextColor="#71717a"
+              placeholderTextColor={C.t3}
               value={title}
               onChangeText={setTitle}
             />
 
-            <Text className="text-zinc-400 mb-2">Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-              {EVENT_TYPE_ORDER.map((t) => {
-                const meta = EVENT_TYPE_META[t];
-                const active = t === type;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    onPress={() => setType(t)}
-                    className={`px-3 py-2 rounded-xl mr-2 ${active ? "bg-emerald-500" : "bg-zinc-800"}`}
-                  >
-                    <Text className={active ? "text-white font-semibold" : "text-zinc-300"}>
-                      {meta.icon} {meta.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <Text style={styles.fieldLabel}>Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 2 }}>
+                {EVENT_TYPE_ORDER.map((t) => {
+                  const meta = EVENT_TYPE_META[t];
+                  const active = t === type;
+                  return (
+                    <PressableScale
+                      key={t}
+                      onPress={() => setType(t)}
+                      style={[styles.typeChip, active && styles.typeChipActive]}
+                    >
+                      <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>
+                        {meta.icon} {meta.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
             </ScrollView>
 
-            <Text className="text-zinc-400 mb-1">{multiDay ? "Start date" : "Date"}</Text>
-            <View className="mb-3">
+            <Text style={styles.fieldLabel}>{multiDay ? "Start date" : "Date"}</Text>
+            <View style={{ marginBottom: 14 }}>
               <DateField value={date} onChange={setDate} />
             </View>
 
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-zinc-400">Multi-day</Text>
+            <View style={styles.switchRow}>
+              <Text style={styles.fieldLabel}>Multi-day event</Text>
               <Switch
                 value={multiDay}
-                onValueChange={(v) => {
-                  setMultiDay(v);
-                  if (v && endDate < date) setEndDate(date);
-                }}
-                trackColor={{ true: "#10b981", false: "#3f3f46" }}
+                onValueChange={(v) => { setMultiDay(v); if (v && endDate < date) setEndDate(date); }}
+                trackColor={{ true: C.accent, false: C.elevated }}
                 thumbColor="#fff"
               />
             </View>
+
             {multiDay ? (
               <>
-                <Text className="text-zinc-400 mb-1">End date</Text>
-                <View className="mb-4">
+                <Text style={styles.fieldLabel}>End date</Text>
+                <View style={{ marginBottom: 14 }}>
                   <DateField value={endDate} onChange={setEndDate} />
                 </View>
               </>
             ) : null}
 
-            <Text className="text-zinc-400 mb-1">Location (optional)</Text>
+            <Text style={styles.fieldLabel}>Location (optional)</Text>
             <TextInput
-              className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-4"
+              style={styles.input}
               placeholder="City, country"
-              placeholderTextColor="#71717a"
+              placeholderTextColor={C.t3}
               value={location}
               onChangeText={setLocation}
             />
 
-            <Text className="text-zinc-400 mb-1">Budget € (optional)</Text>
+            <Text style={styles.fieldLabel}>Budget € (optional)</Text>
             <TextInput
-              className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-4"
+              style={styles.input}
               placeholder="e.g. 1200"
-              placeholderTextColor="#71717a"
+              placeholderTextColor={C.t3}
               keyboardType="decimal-pad"
               value={budget}
               onChangeText={setBudget}
             />
 
-            <TouchableOpacity
-              className="bg-emerald-500 rounded-xl py-4 items-center mt-2 mb-6"
-              onPress={submit}
-              disabled={submitting}
-            >
-              <Text className="text-white font-bold text-base">
-                {submitting ? "Creating…" : "Create project"}
+            <PressableScale style={styles.submitBtn} onPress={submit} disabled={submitting}>
+              <Text style={styles.submitBtnText}>
+                {submitting ? "Creating…" : "Create event"}
               </Text>
-            </TouchableOpacity>
+            </PressableScale>
+            <View style={{ height: 24 }} />
           </ScrollView>
         </View>
       </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 20 },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pageTitle: { color: C.t1, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  addBtn: {
+    backgroundColor: C.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  emptyCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  emptyTitle: { color: C.t1, fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  emptyText: { color: C.t2, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  projectCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  projectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  projectLeft: { flexDirection: 'row', flex: 1, marginRight: 12 },
+  projectIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.elevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  projectIcon: { fontSize: 22 },
+  projectInfo: { flex: 1 },
+  projectTitle: { color: C.t1, fontWeight: '700', fontSize: 16, marginBottom: 3 },
+  projectMeta: { color: C.t2, fontSize: 13 },
+  projectLocation: { color: C.t3, fontSize: 12, marginTop: 2 },
+  projectBudget: { color: C.gold, fontWeight: '700', fontSize: 15 },
+  projectStats: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  statChip: {
+    backgroundColor: C.elevated,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  statChipText: { color: C.t3, fontSize: 12 },
+  // Modal
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
+  modalSheet: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    maxHeight: '92%',
+    borderWidth: 1,
+    borderColor: C.border,
+    borderBottomWidth: 0,
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: C.elevated,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: { color: C.t1, fontSize: 20, fontWeight: '700' },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.elevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: { color: C.t2, fontSize: 16 },
+  errorBox: {
+    backgroundColor: C.redFade,
+    borderWidth: 1,
+    borderColor: C.red,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  errorText: { color: '#fca5a5', fontSize: 13 },
+  fieldLabel: { color: C.t2, fontSize: 13, fontWeight: '500', marginBottom: 8 },
+  input: {
+    backgroundColor: C.elevated,
+    color: C.t1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 16,
+  },
+  typeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: C.elevated,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  typeChipActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
+  typeChipText: { color: C.t2, fontSize: 14 },
+  typeChipTextActive: { color: C.accent, fontWeight: '600' },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  submitBtn: {
+    backgroundColor: C.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+});

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { useFocusEffect, useRouter } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useScheduleStore, monthKeyOf } from "../../../store/useScheduleStore";
 import { useProjectStore } from "../../../store/useProjectStore";
 import SessionFormModal from "../../../components/SessionFormModal";
@@ -13,10 +14,11 @@ import {
   formatMoney,
 } from "../../../lib/display";
 import type { Project, ScheduleEntry } from "../../../lib/types";
+import PressableScale from "../../../components/ui/PressableScale";
+import { C } from "../../../lib/theme";
 
-const PROJECT_COLOR = "#a855f7";
+const PROJECT_COLOR = C.purple;
 
-// Inclusive list of "YYYY-MM-DD" keys between two ISO dates (UTC).
 function daysBetweenIso(startIso: string, endIso: string): string[] {
   const out: string[] = [];
   let t = Date.parse(`${startIso.slice(0, 10)}T00:00:00.000Z`);
@@ -30,9 +32,7 @@ function daysBetweenIso(startIso: string, endIso: string): string[] {
 
 function todayKey(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function monthLabel(monthKey: string): string {
@@ -51,17 +51,18 @@ function dayHeading(day: string): string {
 }
 
 const calendarTheme = {
-  calendarBackground: "#18181b",
-  monthTextColor: "#ffffff",
+  calendarBackground: C.bg,
+  monthTextColor: C.t1,
   textMonthFontWeight: "bold" as const,
+  textMonthFontSize: 16,
   dayTextColor: "#e4e4e7",
-  textDisabledColor: "#3f3f46",
-  todayTextColor: "#10b981",
-  arrowColor: "#10b981",
-  textSectionTitleColor: "#71717a",
+  textDisabledColor: C.t3,
+  todayTextColor: C.accent,
+  arrowColor: C.accent,
+  textSectionTitleColor: C.t3,
+  textDayFontSize: 13,
 };
 
-// Cell height per zoom level, and how many session labels to show inline.
 const ZOOM_HEIGHT = [42, 66, 96, 128];
 const ZOOM_LABELS = [0, 0, 2, 4];
 const MAX_ZOOM = ZOOM_HEIGHT.length - 1;
@@ -87,8 +88,7 @@ export default function CalendarScreen() {
 
   const totals = useMemo(() => {
     const trainings = entries.filter((e) => SESSION_META[e.type]?.isTraining).length;
-    let paid = 0;
-    let planned = 0;
+    let paid = 0, planned = 0;
     for (const e of monthExpenses) {
       if (e.status === "PAID") paid += e.amount;
       else planned += e.amount;
@@ -96,7 +96,6 @@ export default function CalendarScreen() {
     return { trainings, paid, planned };
   }, [entries, monthExpenses]);
 
-  // Sessions grouped per day, expanding multi-day events across their span.
   const entriesByDay = useMemo(() => {
     const map: Record<string, ScheduleEntry[]> = {};
     for (const e of entries) {
@@ -109,7 +108,6 @@ export default function CalendarScreen() {
     return map;
   }, [entries]);
 
-  // Projects (tournaments/camps) spanning each day.
   const projectsByDay = useMemo(() => {
     const map: Record<string, Project[]> = {};
     for (const p of projects) {
@@ -121,7 +119,6 @@ export default function CalendarScreen() {
 
   const dayEntries = entriesByDay[selectedDay] ?? [];
   const dayProjects = projectsByDay[selectedDay] ?? [];
-
   const standaloneExpenses = useMemo(() => {
     const linked = new Set(entries.map((e) => e.expenseId).filter(Boolean));
     return monthExpenses.filter((x) => dayKey(x.date) === selectedDay && !linked.has(x.id));
@@ -131,39 +128,32 @@ export default function CalendarScreen() {
   const cellHeight = ZOOM_HEIGHT[zoom];
   const labelCount = ZOOM_LABELS[zoom];
 
-  const openNew = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
-  const openEdit = (entry: ScheduleEntry) => {
-    setEditing(entry);
-    setModalOpen(true);
-  };
+  const openNew = () => { setEditing(null); setModalOpen(true); };
+  const openEdit = (entry: ScheduleEntry) => { setEditing(entry); setModalOpen(true); };
   const onSubmit = async (input: Parameters<typeof createEntry>[0]) => {
     if (editing) await updateEntry(editing.id, input);
     else await createEntry(input);
   };
 
   return (
-    <View className="flex-1 bg-zinc-900">
-      <ScrollView className="flex-1">
-        <View className="px-4 pt-4">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-2xl text-white font-bold flex-1" numberOfLines={1}>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scroll}>
+        <View style={styles.topPad}>
+          <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.calHeader}>
+            <Text style={styles.monthTitle} numberOfLines={1}>
               {monthLabel(viewMonth)}
             </Text>
-            {/* Zoom controls */}
-            <View className="flex-row items-center">
+            <View style={styles.zoomRow}>
               <ZoomBtn label="−" disabled={zoom === 0} onPress={() => setZoom((z) => Math.max(0, z - 1))} />
               <ZoomBtn label="+" disabled={zoom === MAX_ZOOM} onPress={() => setZoom((z) => Math.min(MAX_ZOOM, z + 1))} />
             </View>
-          </View>
+          </Animated.View>
 
-          <View className="bg-zinc-800 rounded-2xl p-4 flex-row justify-between mb-3">
-            <Totals label="Trainings" value={String(totals.trainings)} />
-            <Totals label="Spent" value={formatMoney(totals.paid)} />
-            <Totals label="Planned" value={formatMoney(totals.planned)} tone="amber" />
-          </View>
+          <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.statsRow}>
+            <StatPill label="Trainings" value={String(totals.trainings)} />
+            <StatPill label="Spent" value={formatMoney(totals.paid)} />
+            <StatPill label="Planned" value={formatMoney(totals.planned)} gold />
+          </Animated.View>
         </View>
 
         <Calendar
@@ -172,7 +162,7 @@ export default function CalendarScreen() {
           firstDay={1}
           enableSwipeMonths
           theme={calendarTheme}
-          style={{ backgroundColor: "#18181b" }}
+          style={{ backgroundColor: C.bg }}
           onMonthChange={(m) => fetchMonth(monthKeyOf(new Date(m.year, m.month - 1, 1)))}
           dayComponent={({ date, state }: any) => {
             if (!date) return <View style={{ width: cellWidth, height: cellHeight }} />;
@@ -193,73 +183,70 @@ export default function CalendarScreen() {
           }}
         />
 
-        {/* Selected day agenda */}
-        <View className="px-4 pt-4">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-lg text-white font-semibold flex-1" numberOfLines={1}>
+        {/* Day agenda */}
+        <View style={styles.agenda}>
+          <View style={styles.agendaHeader}>
+            <Text style={styles.agendaTitle} numberOfLines={1}>
               {dayHeading(selectedDay)}
             </Text>
-            <TouchableOpacity className="bg-emerald-500 px-4 py-2 rounded-xl ml-2" onPress={openNew}>
-              <Text className="text-white font-bold">+ Add</Text>
-            </TouchableOpacity>
+            <PressableScale style={styles.addBtn} onPress={openNew}>
+              <Text style={styles.addBtnText}>+ Add</Text>
+            </PressableScale>
           </View>
 
-          {dayEntries.length === 0 &&
-          standaloneExpenses.length === 0 &&
-          dayProjects.length === 0 ? (
-            <Text className="text-zinc-500 mb-6">
-              Nothing planned. Tap “+ Add” to schedule a session.
-            </Text>
+          {dayEntries.length === 0 && standaloneExpenses.length === 0 && dayProjects.length === 0 ? (
+            <Text style={styles.emptyDay}>Nothing planned. Tap "+ Add" to schedule a session.</Text>
           ) : null}
 
-          {/* Active projects on this day */}
-          {dayProjects.map((p) => {
+          {dayProjects.map((p, i) => {
             const meta = EVENT_TYPE_META[p.type] ?? EVENT_TYPE_META.TOURNAMENT;
             return (
-              <TouchableOpacity
+              <Animated.View
                 key={p.id}
-                onPress={() => router.push(`/project/${p.id}`)}
-                className="flex-row items-center bg-purple-500/20 border border-purple-500/40 rounded-2xl p-4 mb-2"
+                entering={i < 4 ? FadeInDown.delay(i * 60).duration(350) : undefined}
               >
-                <Text className="text-lg mr-3">{meta.icon}</Text>
-                <View className="flex-1">
-                  <Text className="text-white font-semibold" numberOfLines={1}>
-                    {p.title}
-                  </Text>
-                  <Text className="text-purple-300 text-sm">
-                    {meta.label} · project{p.location ? ` · ${p.location}` : ""}
-                  </Text>
-                </View>
-                <Text className="text-purple-300">›</Text>
-              </TouchableOpacity>
+                <PressableScale
+                  onPress={() => router.push(`/project/${p.id}`)}
+                  style={styles.projectRow}
+                >
+                  <Text style={styles.projectRowIcon}>{meta.icon}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.projectRowTitle} numberOfLines={1}>{p.title}</Text>
+                    <Text style={styles.projectRowMeta}>
+                      {meta.label}{p.location ? ` · ${p.location}` : ""}
+                    </Text>
+                  </View>
+                  <Text style={{ color: C.purple, fontSize: 16 }}>›</Text>
+                </PressableScale>
+              </Animated.View>
             );
           })}
 
-          {dayEntries.map((e) => (
-            <SessionRow key={e.id} entry={e} onPress={() => openEdit(e)} />
+          {dayEntries.map((e, i) => (
+            <Animated.View
+              key={e.id}
+              entering={i < 6 ? FadeInDown.delay(i * 55).duration(350) : undefined}
+            >
+              <SessionRow entry={e} onPress={() => openEdit(e)} />
+            </Animated.View>
           ))}
 
           {standaloneExpenses.map((x) => {
             const meta = CATEGORY_META[x.category] ?? CATEGORY_META.OTHER;
             return (
-              <View
-                key={x.id}
-                className="flex-row items-center justify-between bg-zinc-800/60 rounded-2xl p-3 mb-2"
-              >
-                <View className="flex-row items-center flex-1">
-                  <Text className="text-lg mr-3">{meta.icon}</Text>
-                  <Text className="text-zinc-300 flex-1" numberOfLines={1}>
-                    {x.title || meta.label}
-                  </Text>
-                </View>
-                <Text className={x.status === "PLANNED" ? "text-amber-400" : "text-white"}>
+              <View key={x.id} style={styles.expenseRow}>
+                <Text style={styles.expenseIcon}>{meta.icon}</Text>
+                <Text style={styles.expenseLabel} numberOfLines={1}>
+                  {x.title || meta.label}
+                </Text>
+                <Text style={[styles.expenseAmount, x.status === "PLANNED" && { color: C.gold }]}>
                   {formatMoney(x.amount)}
                 </Text>
               </View>
             );
           })}
 
-          <View className="h-10" />
+          <View style={{ height: 24 }} />
         </View>
       </ScrollView>
 
@@ -278,42 +265,26 @@ export default function CalendarScreen() {
 
 function ZoomBtn({ label, onPress, disabled }: { label: string; onPress: () => void; disabled: boolean }) {
   return (
-    <TouchableOpacity
+    <PressableScale
       onPress={onPress}
       disabled={disabled}
-      className={`w-9 h-9 rounded-full items-center justify-center ml-2 ${disabled ? "bg-zinc-800/50" : "bg-zinc-800"}`}
+      style={[styles.zoomBtn, disabled && styles.zoomBtnDisabled]}
     >
-      <Text className={`text-xl ${disabled ? "text-zinc-600" : "text-white"}`}>{label}</Text>
-    </TouchableOpacity>
+      <Text style={[styles.zoomBtnText, disabled && { color: C.t3 }]}>{label}</Text>
+    </PressableScale>
   );
 }
 
 function DayCell({
-  dayNum,
-  state,
-  entries,
-  projects,
-  selected,
-  onPress,
-  width,
-  height,
-  labelCount,
+  dayNum, state, entries, projects, selected, onPress, width, height, labelCount,
 }: {
-  dayNum: number;
-  dateString: string;
-  state: string;
-  entries: ScheduleEntry[];
-  projects: Project[];
-  selected: boolean;
-  onPress: () => void;
-  width: number;
-  height: number;
-  labelCount: number;
+  dayNum: number; dateString: string; state: string;
+  entries: ScheduleEntry[]; projects: Project[];
+  selected: boolean; onPress: () => void;
+  width: number; height: number; labelCount: number;
 }) {
   const disabled = state === "disabled";
   const isToday = state === "today";
-
-  // Combined items: projects first, then sessions.
   const labels = [
     ...projects.map((p) => ({ id: `p-${p.id}`, color: PROJECT_COLOR, text: p.title })),
     ...entries.map((e) => ({
@@ -324,104 +295,188 @@ function DayCell({
   ];
 
   return (
-    <TouchableOpacity
+    <PressableScale
       onPress={onPress}
       disabled={disabled}
-      style={{ width, height }}
-      className={`px-0.5 pt-1 ${selected ? "bg-emerald-500/20 rounded-xl" : ""}`}
+      scaleTo={0.94}
+      style={[
+        { width, height, paddingHorizontal: 2, paddingTop: 4 },
+        selected && { backgroundColor: C.accentFade, borderRadius: 10 },
+      ]}
     >
       <Text
-        className={`text-center text-xs ${
-          disabled ? "text-zinc-700" : isToday ? "text-emerald-400 font-bold" : "text-zinc-200"
-        }`}
+        style={[
+          styles.dayNum,
+          disabled && { color: C.t3 },
+          isToday && { color: C.accent, fontWeight: '700' },
+        ]}
       >
         {dayNum}
       </Text>
-
       {labelCount > 0 ? (
-        <View className="mt-0.5">
+        <View style={{ marginTop: 2 }}>
           {labels.slice(0, labelCount).map((l) => (
             <View
               key={l.id}
-              style={{ backgroundColor: `${l.color}33` }}
-              className="rounded px-1 mb-0.5"
+              style={{ backgroundColor: `${l.color}33`, borderRadius: 3, paddingHorizontal: 2, marginBottom: 1 }}
             >
-              <Text numberOfLines={1} style={{ fontSize: 9, color: l.color }}>
-                {l.text}
-              </Text>
+              <Text numberOfLines={1} style={{ fontSize: 8, color: l.color }}>{l.text}</Text>
             </View>
           ))}
           {labels.length > labelCount ? (
-            <Text style={{ fontSize: 9 }} className="text-zinc-500 px-1">
-              +{labels.length - labelCount} more
-            </Text>
+            <Text style={{ fontSize: 8, color: C.t3 }}>+{labels.length - labelCount}</Text>
           ) : null}
         </View>
       ) : (
-        <View className="flex-row justify-center mt-1" style={{ flexWrap: "wrap" }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
           {labels.slice(0, 4).map((l) => (
             <View
               key={l.id}
-              style={{
-                width: 5,
-                height: 5,
-                borderRadius: 3,
-                marginHorizontal: 1,
-                backgroundColor: l.color,
-              }}
+              style={{ width: 5, height: 5, borderRadius: 3, marginHorizontal: 1, backgroundColor: l.color }}
             />
           ))}
         </View>
       )}
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 
-function Totals({ label, value, tone }: { label: string; value: string; tone?: "amber" }) {
+function StatPill({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
   return (
-    <View className="items-center flex-1">
-      <Text className="text-zinc-400 text-xs mb-1">{label}</Text>
-      <Text className={`font-bold text-base ${tone === "amber" ? "text-amber-400" : "text-white"}`}>
-        {value}
-      </Text>
+    <View style={styles.statPill}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, gold && { color: C.gold }]}>{value}</Text>
     </View>
   );
 }
 
 function SessionRow({ entry, onPress }: { entry: ScheduleEntry; onPress: () => void }) {
   const meta = SESSION_META[entry.type] ?? SESSION_META.OTHER;
-  const range = (a: string, b: string) => {
-    const fmt = (iso: string) =>
-      new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-      });
-    return `${fmt(a)} – ${fmt(b)}`;
-  };
   const time = entry.endDate
-    ? range(entry.date, entry.endDate)
+    ? `${entry.date.slice(0, 10)} – ${entry.endDate.slice(0, 10)}`
     : entry.allDay
       ? "All day"
       : [entry.startTime, entry.endTime].filter(Boolean).join(" – ") || "Anytime";
+
   return (
-    <TouchableOpacity onPress={onPress} className="flex-row items-center bg-zinc-800 rounded-2xl p-4 mb-2">
-      <View className={`w-11 h-11 rounded-full items-center justify-center ${meta.color}`}>
-        <Text className="text-lg">{meta.icon}</Text>
+    <PressableScale onPress={onPress} style={styles.sessionRow}>
+      <View style={[styles.sessionIcon, { backgroundColor: meta.dot ? `${meta.dot}22` : C.elevated }]}>
+        <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
       </View>
-      <View className="ml-3 flex-1">
-        <Text className="text-white font-semibold" numberOfLines={1}>
-          {entry.title}
-        </Text>
-        <Text className="text-zinc-400 text-sm">
-          {time}
-          {entry.location ? ` · ${entry.location}` : ""}
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={styles.sessionTitle} numberOfLines={1}>{entry.title}</Text>
+        <Text style={styles.sessionMeta}>
+          {time}{entry.location ? ` · ${entry.location}` : ""}
         </Text>
       </View>
       {entry.expense ? (
-        <Text className={entry.expense.status === "PLANNED" ? "text-amber-400" : "text-white"}>
+        <Text style={entry.expense.status === "PLANNED" ? { color: C.gold, fontWeight: '600' } : { color: C.t1, fontWeight: '600' }}>
           {formatMoney(entry.expense.amount)}
         </Text>
       ) : null}
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1 },
+  topPad: { paddingHorizontal: 20, paddingTop: 16 },
+  calHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  monthTitle: { color: C.t1, fontSize: 22, fontWeight: '800', letterSpacing: -0.4, flex: 1 },
+  zoomRow: { flexDirection: 'row', gap: 8 },
+  zoomBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  zoomBtnDisabled: { opacity: 0.4 },
+  zoomBtnText: { color: C.t1, fontSize: 18, fontWeight: '500' },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: C.card,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 0,
+  },
+  statPill: { flex: 1, alignItems: 'center' },
+  statLabel: { color: C.t3, fontSize: 11, fontWeight: '500', letterSpacing: 0.3, marginBottom: 4 },
+  statValue: { color: C.t1, fontSize: 16, fontWeight: '700' },
+  agenda: { paddingHorizontal: 20, paddingTop: 16 },
+  agendaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  agendaTitle: { color: C.t1, fontSize: 17, fontWeight: '700', flex: 1 },
+  addBtn: {
+    backgroundColor: C.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  emptyDay: { color: C.t3, fontSize: 14, marginBottom: 16, lineHeight: 20 },
+  projectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.purpleFade,
+    borderWidth: 1,
+    borderColor: C.purpleBorder,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    gap: 10,
+  },
+  projectRowIcon: { fontSize: 20 },
+  projectRowTitle: { color: C.t1, fontWeight: '600', fontSize: 15 },
+  projectRowMeta: { color: C.purple, fontSize: 13, opacity: 0.8 },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  sessionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sessionTitle: { color: C.t1, fontWeight: '600', fontSize: 15 },
+  sessionMeta: { color: C.t2, fontSize: 13, marginTop: 2 },
+  expenseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${C.card}99`,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 10,
+  },
+  expenseIcon: { fontSize: 18 },
+  expenseLabel: { flex: 1, color: C.t2, fontSize: 14 },
+  expenseAmount: { color: C.t1, fontWeight: '600', fontSize: 14 },
+  dayNum: { textAlign: 'center', fontSize: 12, color: '#e4e4e7' },
+});

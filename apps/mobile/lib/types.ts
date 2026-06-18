@@ -7,8 +7,11 @@ export type Category =
   | "HALL_RENT"
   | "COSTUME"
   | "FLIGHT"
+  | "TRANSPORT"
   | "HOTEL"
+  | "FOOD"
   | "START_FEE"
+  | "ENTRY_TICKET"
   | "VISA"
   | "OTHER";
 
@@ -21,11 +24,21 @@ export type EventType =
 
 export type ExpenseStatus = "PLANNED" | "PAID";
 
+export type SessionType =
+  | "INDIVIDUAL"
+  | "GROUP_LESSON"
+  | "PRACTICE"
+  | "COMPETITION"
+  | "CAMP"
+  | "REST"
+  | "OTHER";
+
 export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
+  monthlyBudget: number | null;
 }
 
 export interface Expense {
@@ -95,4 +108,24 @@ export interface ForecastMonth {
   label: string;
   expected: number;
   projects: { id: string; title: string; type: EventType }[];
+}
+
+export interface ScheduleEntry {
+  id: string;
+  userId: string;
+  eventId: string | null;
+  expenseId: string | null;
+  title: string;
+  type: SessionType;
+  date: string; // ISO (UTC midnight of the calendar day / start day)
+  endDate: string | null; // ISO, for multi-day events (inclusive)
+  startTime: string | null; // "HH:MM"
+  endTime: string | null;
+  allDay: boolean;
+  location: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  event?: { id: string; title: string; type: EventType } | null;
+  expense?: { id: string; amount: number; category: Category; status: ExpenseStatus } | null;
 }

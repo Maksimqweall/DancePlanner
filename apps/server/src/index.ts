@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth";
 import expenseRoutes from "./routes/expenses";
 import eventRoutes from "./routes/events";
 import scheduleRoutes from "./routes/schedule";
+import budgetRoutes from "./routes/budgets";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/schedule", scheduleRoutes);
+app.use("/api/budgets", budgetRoutes);
 
 // 404 for unknown API routes
 app.use((_req, res) => {

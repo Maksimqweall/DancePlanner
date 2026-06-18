@@ -17,6 +17,7 @@ interface AuthState {
     lastName: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  setMonthlyBudget: (budget: number) => Promise<void>;
 }
 
 interface AuthResponse {
@@ -67,5 +68,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     await tokenStorage.clear();
     setAuthToken(null);
     set({ status: "unauthenticated", user: null });
+  },
+
+  setMonthlyBudget: async (budget) => {
+    const { user } = await api.patch<{ user: User }>("/auth/me", { monthlyBudget: budget });
+    set({ user });
   },
 }));

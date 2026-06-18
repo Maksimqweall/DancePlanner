@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api, type UploadFile } from "../lib/api";
 import type { Project, EventType } from "../lib/types";
+import type { CreateExpenseInput } from "./useFinanceStore";
 
 export interface CreateProjectInput {
   title: string;
@@ -31,6 +32,8 @@ interface ProjectState {
 
   uploadAttachment: (eventId: string, file: UploadFile, label: string) => Promise<void>;
   deleteAttachment: (eventId: string, attId: string) => Promise<void>;
+
+  createProjectExpense: (eventId: string, input: CreateExpenseInput) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -94,6 +97,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   deleteAttachment: async (eventId, attId) => {
     await api.del(`/events/${eventId}/attachments/${attId}`);
+    await get().fetchProject(eventId);
+  },
+
+  createProjectExpense: async (eventId, input) => {
+    await api.post("/expenses", { ...input, eventId });
     await get().fetchProject(eventId);
   },
 }));

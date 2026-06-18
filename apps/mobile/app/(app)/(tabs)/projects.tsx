@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Switch,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useProjectStore, type CreateProjectInput } from "../../../store/useProjectStore";
@@ -17,6 +18,7 @@ import {
 } from "../../../lib/display";
 import type { EventType, Project } from "../../../lib/types";
 import { ApiError } from "../../../lib/api";
+import { DateField } from "../../../components/DateTimeField";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -115,6 +117,8 @@ function NewProjectModal({
   const [title, setTitle] = useState("");
   const [type, setType] = useState<EventType>("TOURNAMENT");
   const [date, setDate] = useState(todayISO());
+  const [multiDay, setMultiDay] = useState(false);
+  const [endDate, setEndDate] = useState(todayISO());
   const [location, setLocation] = useState("");
   const [budget, setBudget] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +128,8 @@ function NewProjectModal({
     setTitle("");
     setType("TOURNAMENT");
     setDate(todayISO());
+    setMultiDay(false);
+    setEndDate(todayISO());
     setLocation("");
     setBudget("");
     setError(null);
@@ -144,13 +150,18 @@ function NewProjectModal({
       setError("Date must be YYYY-MM-DD");
       return;
     }
+    if (multiDay && endDate < date) {
+      setError("End date must be on or after the start date");
+      return;
+    }
     const budgetValue = budget ? Number(budget.replace(",", ".")) : null;
     setSubmitting(true);
     try {
       const project = await onCreate({
         title: title.trim(),
         type,
-        date: new Date(date).toISOString(),
+        date: new Date(`${date}T00:00:00.000Z`).toISOString(),
+        endDate: multiDay ? new Date(`${endDate}T00:00:00.000Z`).toISOString() : null,
         location: location.trim() || null,
         budget: budgetValue && budgetValue > 0 ? budgetValue : null,
       });
@@ -209,14 +220,31 @@ function NewProjectModal({
               })}
             </ScrollView>
 
-            <Text className="text-zinc-400 mb-1">Date</Text>
-            <TextInput
-              className="bg-zinc-800 text-white rounded-xl px-4 py-3 mb-4"
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#71717a"
-              value={date}
-              onChangeText={setDate}
-            />
+            <Text className="text-zinc-400 mb-1">{multiDay ? "Start date" : "Date"}</Text>
+            <View className="mb-3">
+              <DateField value={date} onChange={setDate} />
+            </View>
+
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-zinc-400">Multi-day</Text>
+              <Switch
+                value={multiDay}
+                onValueChange={(v) => {
+                  setMultiDay(v);
+                  if (v && endDate < date) setEndDate(date);
+                }}
+                trackColor={{ true: "#10b981", false: "#3f3f46" }}
+                thumbColor="#fff"
+              />
+            </View>
+            {multiDay ? (
+              <>
+                <Text className="text-zinc-400 mb-1">End date</Text>
+                <View className="mb-4">
+                  <DateField value={endDate} onChange={setEndDate} />
+                </View>
+              </>
+            ) : null}
 
             <Text className="text-zinc-400 mb-1">Location (optional)</Text>
             <TextInput

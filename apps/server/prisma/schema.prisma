@@ -19,6 +19,9 @@ model User {
   // Для интеграции с модулем Performance & Analytics
   wdsfMin       String?    // WDSF MIN (Member ID Number)
   dtvId         String?    // DTV ID номер
+
+  // Module 1: target monthly spending budget (EUR)
+  monthlyBudget Float?
   
   // Связи
   couplesAsLead   Couple[]   @relation("LeadPartner")
@@ -27,6 +30,7 @@ model User {
   expenses        Expense[]
   ownedEvents     Event[]    @relation("EventOwner") // Projects this user owns directly (Module 1)
   scheduleEntries ScheduleEntry[] // Calendar sessions (Module 2)
+  budgets         MonthlyBudget[] // Per-month spending limits (Module 1)
   
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -169,7 +173,8 @@ model ScheduleEntry {
 
   title     String
   type      SessionType
-  date      DateTime    // The calendar day (stored at UTC midnight)
+  date      DateTime    // The calendar day, or start day for multi-day events (UTC midnight)
+  endDate   DateTime?   // Optional end day for multi-day events (inclusive)
   startTime String?     // "HH:MM" (local), optional
   endTime   String?     // "HH:MM" (local), optional
   allDay    Boolean     @default(false)
@@ -182,6 +187,18 @@ model ScheduleEntry {
 
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+}
+
+// Per-month spending limit. Falls back to User.monthlyBudget when no row exists.
+model MonthlyBudget {
+  id     String @id @default(uuid())
+  userId String
+  month  String // "YYYY-MM"
+  amount Float
+
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, month])
 }
 
 // --- Энумераторы (Enums) ---

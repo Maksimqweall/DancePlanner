@@ -15,11 +15,15 @@ import * as DocumentPicker from "expo-document-picker";
 import { useProjectStore } from "../../../store/useProjectStore";
 import {
   EVENT_TYPE_META,
+  CATEGORY_META,
+  CATEGORY_ORDER,
   formatDate,
   formatMoney,
 } from "../../../lib/display";
-import type { Attachment, ChecklistItem } from "../../../lib/types";
+import type { Attachment, Category, ChecklistItem } from "../../../lib/types";
 import { ApiError } from "../../../lib/api";
+import ExpenseFormModal from "../../../components/ExpenseFormModal";
+import CategoryDonut, { type DonutSlice } from "../../../components/CategoryDonut";
 
 export default function ProjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,10 +38,13 @@ export default function ProjectDetail() {
     deleteChecklistItem,
     uploadAttachment,
     deleteAttachment,
+    createProjectExpense,
   } = useProjectStore();
 
   const [newItem, setNewItem] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [filterCat, setFilterCat] = useState<Category | null>(null);
+  const [expenseModal, setExpenseModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -64,12 +71,24 @@ export default function ProjectDetail() {
   }
 
   const meta = EVENT_TYPE_META[project.type] ?? EVENT_TYPE_META.TOURNAMENT;
-  const spent = (project.expenses ?? [])
-    .filter((e) => e.status === "PAID")
-    .reduce((s, e) => s + e.amount, 0);
-  const planned = (project.expenses ?? [])
-    .filter((e) => e.status === "PLANNED")
-    .reduce((s, e) => s + e.amount, 0);
+  const expenses = project.expenses ?? [];
+  const spent = expenses.filter((e) => e.status === "PAID").reduce((s, e) => s + e.amount, 0);
+  const planned = expenses.filter((e) => e.status === "PLANNED").reduce((s, e) => s + e.amount, 0);
+
+  // Spend per part (category) for this project.
+  const byCategory: Partial<Record<Category, number>> = {};
+  for (const e of expenses) {
+    byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
+  }
+  const presentCategories = CATEGORY_ORDER.filter((c) => byCategory[c] != null);
+  const visibleExpenses = filterCat
+    ? expenses.filter((e) => e.category === filterCat)
+    : expenses;
+  const donutData: DonutSlice[] = presentCategories.map((c) => ({
+    key: c,
+    value: byCategory[c] ?? 0,
+    color: CATEGORY_META[c].hex,
+  }));
 
   const onAddItem = async () => {
     const text = newItem.trim();
@@ -215,14 +234,78 @@ export default function ProjectDetail() {
         )}
       </Section>
 
-      {/* Linked expenses */}
-      <Section title="💶 Linked expenses">
-        {(project.expenses ?? []).length === 0 ? (
+      {/* Add expense directly to this project */}
+      <TouchableOpacity
+        onPress={() => setExpenseModal(true)}
+        className="bg-emerald-500 rounded-2xl py-3 items-center mt-4"
+      >
+        <Text className="text-white font-bold">+ Add expense to this project</Text>
+      </TouchableOpacity>
+
+      {/* Analytics: spend by part */}
+      <Section title="📊 Analytics — where the money goes">
+        {presentCategories.length === 0 ? (
+          <Text className="text-zinc-500">
+            No costs yet. Tap “+ Add expense” above (hotel, tickets, registration, food…) or add a
+            session with a cost.
+          </Text>
+        ) : (
+          <>
+            <View className="items-center mb-4">
+              <CategoryDonut data={donutData} centerLabel="Total" />
+            </View>
+            <View className="flex-row flex-wrap -mx-1">
+            {presentCategories.map((c) => {
+              const m = CATEGORY_META[c];
+              const active = filterCat === c;
+              return (
+                <TouchableOpacity
+                  key={c}
+                  onPress={() => setFilterCat(active ? null : c)}
+                  className={`w-1/2 px-1 mb-2`}
+                >
+                  <View
+                    className={`rounded-2xl p-3 ${active ? "bg-emerald-500/20 border border-emerald-500" : "bg-zinc-700/50"}`}
+                  >
+                    <Text className="text-zinc-300 text-sm" numberOfLines={1}>
+                      {m.icon} {m.label}
+                    </Text>
+                    <Text className="text-white font-bold text-lg mt-1">
+                      {formatMoney(byCategory[c] ?? 0)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            </View>
+          </>
+        )}
+      </Section>
+
+      {/* Linked expenses (filtered by selected part) */}
+      <Section
+        title={
+          filterCat
+            ? `💶 ${CATEGORY_META[filterCat].label} expenses`
+            : "💶 Linked expenses"
+        }
+      >
+        {filterCat ? (
+          <TouchableOpacity onPress={() => setFilterCat(null)} className="mb-2">
+            <Text className="text-emerald-400">← Show all parts</Text>
+          </TouchableOpacity>
+        ) : null}
+        {visibleExpenses.length === 0 ? (
           <Text className="text-zinc-500">No expenses linked to this project.</Text>
         ) : (
-          (project.expenses ?? []).map((e) => (
+          visibleExpenses.map((e) => (
             <View key={e.id} className="flex-row justify-between py-2 border-b border-zinc-700">
-              <Text className="text-zinc-200">{e.title || e.category}</Text>
+              <View className="flex-row items-center flex-1 pr-2">
+                <Text className="mr-2">{CATEGORY_META[e.category]?.icon ?? "📦"}</Text>
+                <Text className="text-zinc-200 flex-1" numberOfLines={1}>
+                  {e.title || CATEGORY_META[e.category]?.label || e.category}
+                </Text>
+              </View>
               <Text className={e.status === "PLANNED" ? "text-amber-400" : "text-white"}>
                 {formatMoney(e.amount)}
               </Text>
@@ -234,6 +317,15 @@ export default function ProjectDetail() {
       <TouchableOpacity onPress={onDeleteProject} className="py-4 items-center mt-2 mb-10">
         <Text className="text-red-400 font-semibold">Delete project</Text>
       </TouchableOpacity>
+
+      <ExpenseFormModal
+        visible={expenseModal}
+        onClose={() => setExpenseModal(false)}
+        onSubmit={(input) => createProjectExpense(project.id, input)}
+        projects={[]}
+        lockedProject={{ id: project.id, title: project.title }}
+        defaultCategory="HOTEL"
+      />
     </ScrollView>
   );
 }

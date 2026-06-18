@@ -9,8 +9,8 @@ async function main() {
   // Idempotent dev user.
   const user = await prisma.user.upsert({
     where: { email },
-    update: {},
-    create: { email, passwordHash, firstName: "Dev", lastName: "Dancer" },
+    update: { monthlyBudget: 1000 },
+    create: { email, passwordHash, firstName: "Dev", lastName: "Dancer", monthlyBudget: 1000 },
   });
 
   // Start clean for this user so the seed is repeatable.
@@ -18,11 +18,14 @@ async function main() {
   await prisma.scheduleEntry.deleteMany({ where: { userId: user.id } });
   await prisma.expense.deleteMany({ where: { userId: user.id } });
   await prisma.event.deleteMany({ where: { ownerId: user.id } });
+  await prisma.monthlyBudget.deleteMany({ where: { userId: user.id } });
 
   const now = new Date();
-  const thisMonth = (day: number) => new Date(now.getFullYear(), now.getMonth(), day);
+  // Build dates at UTC midnight so they land on the intended calendar day everywhere
+  // (matches how the app sends dates).
+  const thisMonth = (day: number) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day));
   const inMonths = (n: number, day: number) =>
-    new Date(now.getFullYear(), now.getMonth() + n, day);
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + n, day));
 
   // --- Some PAID expenses for the current month (dashboard "spent so far") ---
   await prisma.expense.createMany({
@@ -31,6 +34,18 @@ async function main() {
       { userId: user.id, title: "Group class", category: "GROUP", amount: 25, date: thisMonth(5), status: "PAID" },
       { userId: user.id, title: "Hall rent", category: "HALL_RENT", amount: 40, date: thisMonth(8), status: "PAID" },
       { userId: user.id, title: "New dress fitting", category: "COSTUME", amount: 180, date: thisMonth(10), status: "PAID" },
+    ],
+  });
+
+  // --- PAID expenses in previous months (so the monthly chart shows history) ---
+  await prisma.expense.createMany({
+    data: [
+      { userId: user.id, title: "Coach lessons", category: "INDIVIDUAL", amount: 280, date: inMonths(-1, 6), status: "PAID" },
+      { userId: user.id, title: "Hall rent", category: "HALL_RENT", amount: 120, date: inMonths(-1, 14), status: "PAID" },
+      { userId: user.id, title: "Costume repair", category: "COSTUME", amount: 60, date: inMonths(-1, 20), status: "PAID" },
+      { userId: user.id, title: "Coach lessons", category: "INDIVIDUAL", amount: 210, date: inMonths(-2, 9), status: "PAID" },
+      { userId: user.id, title: "Competition start fee", category: "START_FEE", amount: 95, date: inMonths(-2, 22), status: "PAID" },
+      { userId: user.id, title: "Coach lessons", category: "INDIVIDUAL", amount: 140, date: inMonths(-3, 12), status: "PAID" },
     ],
   });
 
@@ -147,6 +162,27 @@ async function main() {
   await session({ title: "Rest day", type: "REST", day: 14 });
   await session({ title: "Practice", type: "PRACTICE", day: 18, startTime: "18:00", endTime: "20:00" });
   await session({ title: "Individual with Coach", type: "INDIVIDUAL", day: 25, startTime: "10:00", endTime: "11:00", cost: 70 });
+
+  // Multi-day competition this month (shows as a span on the calendar).
+  await prisma.scheduleEntry.create({
+    data: {
+      userId: user.id,
+      title: "GOC Stuttgart",
+      type: "COMPETITION",
+      date: thisMonth(20),
+      endDate: thisMonth(22),
+      location: "Stuttgart, Germany",
+    },
+  });
+
+  // Per-month budget overrides (different limit per month).
+  const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  await prisma.monthlyBudget.createMany({
+    data: [
+      { userId: user.id, month: monthKey(inMonths(-1, 1)), amount: 800 },
+      { userId: user.id, month: monthKey(inMonths(-2, 1)), amount: 700 },
+    ],
+  });
 
   console.log("Seed complete.");
   console.log(`  Dev user: ${email} / password123`);

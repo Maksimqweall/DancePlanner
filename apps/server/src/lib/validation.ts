@@ -54,6 +54,16 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const updateMeSchema = z.object({
+  monthlyBudget: z.number().positive().nullable().optional(),
+});
+
+export const budgetUpsertSchema = z.object({
+  amount: z.number().positive(),
+});
+
+export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 // --- Expenses ---
 export const createExpenseSchema = z.object({
   title: z.string().min(1).optional(),
@@ -104,6 +114,7 @@ export const createScheduleSchema = z.object({
   title: z.string().min(1),
   type: z.enum(SESSION_TYPES),
   date: z.coerce.date(),
+  endDate: z.coerce.date().optional().nullable(),
   startTime: timeString.optional().nullable(),
   endTime: timeString.optional().nullable(),
   allDay: z.boolean().optional().default(false),

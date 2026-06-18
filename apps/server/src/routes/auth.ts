@@ -3,17 +3,24 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
 import { signToken } from "../lib/jwt";
 import { asyncHandler, HttpError } from "../lib/http";
-import { signupSchema, loginSchema } from "../lib/validation";
+import { signupSchema, loginSchema, updateMeSchema } from "../lib/validation";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
-function publicUser(user: { id: string; email: string; firstName: string; lastName: string }) {
+function publicUser(user: {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  monthlyBudget: number | null;
+}) {
   return {
     id: user.id,
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    monthlyBudget: user.monthlyBudget,
   };
 }
 
@@ -73,6 +80,20 @@ router.get(
     if (!user) {
       throw new HttpError(404, "User not found");
     }
+    res.json({ user: publicUser(user) });
+  })
+);
+
+// PATCH /api/auth/me  — update profile settings (e.g. monthly budget)
+router.patch(
+  "/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const data = updateMeSchema.parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { monthlyBudget: data.monthlyBudget },
+    });
     res.json({ user: publicUser(user) });
   })
 );

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,6 +8,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { C, SPRING } from '../lib/theme';
+import { usePartnerStore } from '../store/usePartnerStore';
 
 type TabBarRoute = { key: string; name: string };
 type TabBarProps = {
@@ -73,16 +74,56 @@ function TrophyIcon({ color, size = 22 }: { color: string; size?: number }) {
   );
 }
 
+function UsersIcon({ color, size = 22 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="9" cy="8" r="3" stroke={color} strokeWidth="1.75" />
+      <Path
+        d="M3 19C3 16.2 5.7 14 9 14C12.3 14 15 16.2 15 19"
+        stroke={color} strokeWidth="1.75" strokeLinecap="round"
+      />
+      <Path
+        d="M16 11C17.7 11 19 9.7 19 8C19 6.3 17.7 5 16 5"
+        stroke={color} strokeWidth="1.75" strokeLinecap="round"
+      />
+      <Path
+        d="M19 14C20.7 14.8 22 16.2 22 19"
+        stroke={color} strokeWidth="1.75" strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 const ICONS: Record<string, React.ComponentType<{ color: string; size?: number }>> = {
   index: HomeIcon,
   calendar: CalendarIcon,
   expenses: WalletIcon,
   projects: TrophyIcon,
+  partner: UsersIcon,
 };
+
+const badge = StyleSheet.create({
+  dot: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: C.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: C.card,
+  },
+  dotText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+});
 
 export default function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const pendingCount = usePartnerStore((s) => s.pendingCount);
 
   const containerW = width - 32;
   const tabW = containerW / state.routes.length;
@@ -149,6 +190,8 @@ export default function TabBar({ state, navigation }: TabBarProps) {
             }
           };
 
+          const showBadge = route.name === 'partner' && pendingCount > 0;
+
           return (
             <Pressable
               key={route.key}
@@ -161,7 +204,16 @@ export default function TabBar({ state, navigation }: TabBarProps) {
                 zIndex: 1,
               }}
             >
-              <Icon color={focused ? '#ffffff' : C.t3} size={22} />
+              <View style={{ position: 'relative' }}>
+                <Icon color={focused ? '#ffffff' : C.t3} size={22} />
+                {showBadge ? (
+                  <View style={badge.dot}>
+                    {pendingCount > 9 ? null : (
+                      <Text style={badge.dotText}>{pendingCount}</Text>
+                    )}
+                  </View>
+                ) : null}
+              </View>
             </Pressable>
           );
         })}

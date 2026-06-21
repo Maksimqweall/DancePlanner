@@ -1,6 +1,15 @@
+import { useEffect } from "react";
 import { Stack } from "expo-router";
+import { connectSync, disconnectSync } from "../../lib/syncSocket";
 
 export default function AppLayout() {
+  // Start real-time partner sync when the user is authenticated (this layout
+  // only mounts after successful login/hydration). Clean up on sign-out.
+  useEffect(() => {
+    connectSync();
+    return () => disconnectSync();
+  }, []);
+
   return (
     <Stack
       screenOptions={{

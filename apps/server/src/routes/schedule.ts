@@ -6,6 +6,7 @@ import {
   createScheduleSchema,
   updateScheduleSchema,
 } from "../lib/validation";
+import { notifyPartner } from "../lib/partnerNotify";
 
 const router = Router();
 router.use(requireAuth);
@@ -63,7 +64,7 @@ function monthRange(month: string): { gte: Date; lt: Date } | null {
 
 const scheduleInclude = {
   event: { select: { id: true, title: true, type: true } },
-  expense: { select: { id: true, amount: true, category: true, status: true } },
+  expense: { select: { id: true, amount: true, category: true, status: true, userId: true } },
 } as const;
 
 async function assertEventOwnership(eventId: string, userId: string) {
@@ -74,11 +75,22 @@ async function assertEventOwnership(eventId: string, userId: string) {
 }
 
 // GET /api/schedule?month=YYYY-MM  (defaults to the current month)
+// When in a couple, returns entries for BOTH partners so the calendar is shared.
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const month = queryString(req, "month");
-    const where: Record<string, unknown> = { userId: req.userId };
+
+    // Collect the IDs of all users whose entries should appear in this calendar
+    const couple = await prisma.couple.findFirst({
+      where: { isActive: true, OR: [{ leadId: req.userId }, { followId: req.userId }] },
+    });
+    const partnerId = couple
+      ? couple.leadId === req.userId ? couple.followId : couple.leadId
+      : null;
+    const userIds = partnerId ? [req.userId!, partnerId] : [req.userId!];
+
+    const where: Record<string, unknown> = { userId: { in: userIds } };
     if (month) {
       const range = monthRange(month);
       if (!range) throw new HttpError(400, "Invalid month, expected YYYY-MM");
@@ -100,12 +112,25 @@ router.post(
     const data = createScheduleSchema.parse(req.body);
     if (data.eventId) await assertEventOwnership(data.eventId, req.userId!);
 
+    // Resolve partner ID for coupleEntry / paidBy
+    let partnerId: string | null = null;
+    if (data.coupleEntry || data.paidBy === "PARTNER") {
+      const couple = await prisma.couple.findFirst({
+        where: { isActive: true, OR: [{ leadId: req.userId }, { followId: req.userId }] },
+      });
+      if (couple) {
+        partnerId = couple.leadId === req.userId ? couple.followId : couple.leadId;
+      }
+    }
+
+    const expenseUserId = data.paidBy === "PARTNER" && partnerId ? partnerId : req.userId!;
+
     const entry = await prisma.$transaction(async (tx) => {
       let expenseId: string | null = null;
       if (data.cost && data.cost > 0) {
         const expense = await tx.expense.create({
           data: {
-            userId: req.userId!,
+            userId: expenseUserId,
             eventId: data.eventId ?? null,
             title: data.title,
             category: data.category ?? categoryForType(data.type),
@@ -117,7 +142,8 @@ router.post(
         });
         expenseId = expense.id;
       }
-      return tx.scheduleEntry.create({
+
+      const myEntry = await tx.scheduleEntry.create({
         data: {
           userId: req.userId!,
           eventId: data.eventId ?? null,
@@ -134,9 +160,35 @@ router.post(
         },
         include: scheduleInclude,
       });
+
+      // Mirror the entry to partner's calendar when coupleEntry is set
+      if (data.coupleEntry && partnerId) {
+        await tx.scheduleEntry.create({
+          data: {
+            userId: partnerId,
+            eventId: null,
+            expenseId: null,
+            title: data.title,
+            type: data.type,
+            date: data.date,
+            endDate: data.endDate ?? null,
+            startTime: data.startTime ?? null,
+            endTime: data.endTime ?? null,
+            allDay: data.allDay,
+            location: data.location ?? null,
+            notes: data.notes ?? null,
+          },
+        });
+      }
+
+      return myEntry;
     });
 
     res.status(201).json({ entry });
+    // If couple entry was created, notify partner to refresh their calendar
+    if (data.coupleEntry) notifyPartner(req.userId!, "schedule");
+    // If partner paid, notify them to refresh expenses too
+    if (data.paidBy === "PARTNER") notifyPartner(req.userId!, "expenses");
   })
 );
 

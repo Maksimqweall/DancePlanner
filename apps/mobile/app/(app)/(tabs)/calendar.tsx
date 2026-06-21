@@ -5,6 +5,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useScheduleStore, monthKeyOf } from "../../../store/useScheduleStore";
 import { useProjectStore } from "../../../store/useProjectStore";
+import { usePartnerStore } from "../../../store/usePartnerStore";
+import { useAuthStore } from "../../../store/useAuthStore";
 import SessionFormModal from "../../../components/SessionFormModal";
 import {
   SESSION_META,
@@ -72,6 +74,8 @@ export default function CalendarScreen() {
   const { viewMonth, entries, monthExpenses, fetchMonth, createEntry, updateEntry, deleteEntry } =
     useScheduleStore();
   const { projects, refreshProjects } = useProjectStore();
+  const { couple, createProposal } = usePartnerStore();
+  const myId = useAuthStore((s) => s.user?.id);
   const { width } = useWindowDimensions();
 
   const [selectedDay, setSelectedDay] = useState<string>(todayKey());
@@ -129,7 +133,12 @@ export default function CalendarScreen() {
   const labelCount = ZOOM_LABELS[zoom];
 
   const openNew = () => { setEditing(null); setModalOpen(true); };
-  const openEdit = (entry: ScheduleEntry) => { setEditing(entry); setModalOpen(true); };
+  const openEdit = (entry: ScheduleEntry) => {
+    // Partner entries are read-only — only edit your own
+    if (entry.userId !== myId) return;
+    setEditing(entry);
+    setModalOpen(true);
+  };
   const onSubmit = async (input: Parameters<typeof createEntry>[0]) => {
     if (editing) await updateEntry(editing.id, input);
     else await createEntry(input);
@@ -178,6 +187,7 @@ export default function CalendarScreen() {
                 width={cellWidth}
                 height={cellHeight}
                 labelCount={labelCount}
+                myId={myId}
               />
             );
           }}
@@ -227,7 +237,12 @@ export default function CalendarScreen() {
               key={e.id}
               entering={i < 6 ? FadeInDown.delay(i * 55).duration(350) : undefined}
             >
-              <SessionRow entry={e} onPress={() => openEdit(e)} />
+              <SessionRow
+                entry={e}
+                onPress={() => openEdit(e)}
+                myId={myId}
+                partnerName={couple?.partner.firstName}
+              />
             </Animated.View>
           ))}
 
@@ -254,10 +269,13 @@ export default function CalendarScreen() {
         visible={modalOpen}
         onClose={() => setModalOpen(false)}
         onSubmit={onSubmit}
+        onProposal={couple ? createProposal : undefined}
         onDelete={editing ? () => deleteEntry(editing.id) : undefined}
         defaultDate={selectedDay}
         initial={editing}
         projects={projects.map((p) => ({ id: p.id, title: p.title }))}
+        hasPartner={!!couple}
+        partnerName={couple ? couple.partner.firstName : undefined}
       />
     </View>
   );
@@ -276,22 +294,27 @@ function ZoomBtn({ label, onPress, disabled }: { label: string; onPress: () => v
 }
 
 function DayCell({
-  dayNum, state, entries, projects, selected, onPress, width, height, labelCount,
+  dayNum, state, entries, projects, selected, onPress, width, height, labelCount, myId,
 }: {
   dayNum: number; dateString: string; state: string;
   entries: ScheduleEntry[]; projects: Project[];
   selected: boolean; onPress: () => void;
-  width: number; height: number; labelCount: number;
+  width: number; height: number; labelCount: number; myId?: string;
 }) {
   const disabled = state === "disabled";
   const isToday = state === "today";
   const labels = [
     ...projects.map((p) => ({ id: `p-${p.id}`, color: PROJECT_COLOR, text: p.title })),
-    ...entries.map((e) => ({
-      id: e.id,
-      color: SESSION_META[e.type]?.dot ?? "#9ca3af",
-      text: `${e.startTime ? `${e.startTime} ` : ""}${e.title}`,
-    })),
+    ...entries.map((e) => {
+      const isPartner = myId && e.userId !== myId;
+      const baseColor = SESSION_META[e.type]?.dot ?? "#9ca3af";
+      return {
+        id: e.id,
+        // Partner entries shown with accent teal so they're distinguishable
+        color: isPartner ? C.accent : baseColor,
+        text: `${e.startTime ? `${e.startTime} ` : ""}${e.title}`,
+      };
+    }),
   ];
 
   return (
@@ -350,29 +373,64 @@ function StatPill({ label, value, gold }: { label: string; value: string; gold?:
   );
 }
 
-function SessionRow({ entry, onPress }: { entry: ScheduleEntry; onPress: () => void }) {
+function SessionRow({
+  entry,
+  onPress,
+  myId,
+  partnerName,
+}: {
+  entry: ScheduleEntry;
+  onPress: () => void;
+  myId?: string;
+  partnerName?: string;
+}) {
   const meta = SESSION_META[entry.type] ?? SESSION_META.OTHER;
+  const isPartner = Boolean(myId && entry.userId !== myId);
+
   const time = entry.endDate
     ? `${entry.date.slice(0, 10)} – ${entry.endDate.slice(0, 10)}`
     : entry.allDay
       ? "All day"
       : [entry.startTime, entry.endTime].filter(Boolean).join(" – ") || "Anytime";
 
+  const paidByLabel = entry.expense && myId && partnerName
+    ? entry.expense.userId === myId ? "you paid" : `${partnerName} paid`
+    : null;
+
   return (
-    <PressableScale onPress={onPress} style={styles.sessionRow}>
+    <PressableScale
+      onPress={onPress}
+      scaleTo={isPartner ? 1 : 0.97}
+      style={[
+        styles.sessionRow,
+        isPartner && styles.sessionRowPartner,
+      ]}
+    >
       <View style={[styles.sessionIcon, { backgroundColor: meta.dot ? `${meta.dot}22` : C.elevated }]}>
         <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.sessionTitle} numberOfLines={1}>{entry.title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: isPartner ? 2 : 0 }}>
+          <Text style={styles.sessionTitle} numberOfLines={1}>{entry.title}</Text>
+          {isPartner && partnerName ? (
+            <View style={styles.partnerChip}>
+              <Text style={styles.partnerChipText}>{partnerName}</Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.sessionMeta}>
           {time}{entry.location ? ` · ${entry.location}` : ""}
         </Text>
       </View>
       {entry.expense ? (
-        <Text style={entry.expense.status === "PLANNED" ? { color: C.gold, fontWeight: '600' } : { color: C.t1, fontWeight: '600' }}>
-          {formatMoney(entry.expense.amount)}
-        </Text>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={entry.expense.status === "PLANNED" ? { color: C.gold, fontWeight: '600' } : { color: C.t1, fontWeight: '600' }}>
+            {formatMoney(entry.expense.amount)}
+          </Text>
+          {paidByLabel ? (
+            <Text style={styles.paidByLabel}>{paidByLabel}</Text>
+          ) : null}
+        </View>
       ) : null}
     </PressableScale>
   );
@@ -455,6 +513,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
+  sessionRowPartner: {
+    borderColor: C.accentBorder,
+    backgroundColor: C.accentFade,
+  },
+  partnerChip: {
+    backgroundColor: C.accentBorder,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  partnerChipText: {
+    color: C.accent,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
   sessionIcon: {
     width: 44,
     height: 44,
@@ -464,6 +538,7 @@ const styles = StyleSheet.create({
   },
   sessionTitle: { color: C.t1, fontWeight: '600', fontSize: 15 },
   sessionMeta: { color: C.t2, fontSize: 13, marginTop: 2 },
+  paidByLabel: { color: C.t3, fontSize: 11, marginTop: 2 },
   expenseRow: {
     flexDirection: 'row',
     alignItems: 'center',

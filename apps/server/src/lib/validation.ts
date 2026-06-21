@@ -74,6 +74,8 @@ export const createExpenseSchema = z.object({
   description: z.string().optional(),
   status: z.enum(EXPENSE_STATUSES).default("PAID"),
   eventId: z.string().uuid().optional().nullable(),
+  paidBy: z.enum(["ME", "PARTNER"]).optional(),
+  syncCalendar: z.boolean().optional().default(false),
 });
 
 export const updateExpenseSchema = createExpenseSchema.partial();
@@ -121,10 +123,45 @@ export const createScheduleSchema = z.object({
   location: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   eventId: z.string().uuid().optional().nullable(),
-  // Optional money tie-in: creates a linked Expense.
   cost: z.number().positive().optional().nullable(),
   category: z.enum(EXPENSE_CATEGORIES).optional().nullable(),
   currency: z.string().min(1).default("EUR"),
+  coupleEntry: z.boolean().optional().default(false),
+  paidBy: z.enum(["ME", "PARTNER"]).optional(),
 });
 
 export const updateScheduleSchema = createScheduleSchema.partial();
+
+// --- Partner Sync (Module 3) ---
+export const PROPOSAL_TYPES = [
+  "TRAINING",
+  "TOURNAMENT",
+  "HOTEL",
+  "TRANSPORT",
+  "OTHER",
+] as const;
+
+export const linkPartnerSchema = z.object({
+  email: z.string().email(),
+});
+
+export const createProposalSchema = z.object({
+  title: z.string().min(1),
+  type: z.enum(PROPOSAL_TYPES),
+  cost: z.number().positive().optional().nullable(),
+  currency: z.string().min(1).default("EUR"),
+  details: z
+    .object({
+      date: z.string().optional(),
+      startTime: timeString.optional(),
+      notes: z.string().optional(),
+      location: z.string().optional(),
+      trainerName: z.string().optional(),
+      hotelName: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const respondProposalSchema = z.object({
+  action: z.enum(["APPROVE", "DECLINE"]),
+});

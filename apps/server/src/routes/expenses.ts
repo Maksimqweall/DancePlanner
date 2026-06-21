@@ -7,11 +7,26 @@ import {
   updateExpenseSchema,
   EXPENSE_CATEGORIES,
 } from "../lib/validation";
+import { notifyPartner } from "../lib/partnerNotify";
 
 const router = Router();
 router.use(requireAuth);
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+type SessionType = "INDIVIDUAL" | "GROUP_LESSON" | "PRACTICE" | "COMPETITION" | "CAMP" | "REST" | "OTHER";
+
+function categoryToSessionType(category: string): SessionType {
+  switch (category) {
+    case "INDIVIDUAL": return "INDIVIDUAL";
+    case "GROUP": return "GROUP_LESSON";
+    case "PRACTICE":
+    case "HALL_RENT": return "PRACTICE";
+    case "START_FEE":
+    case "ENTRY_TICKET": return "COMPETITION";
+    default: return "OTHER";
+  }
+}
 
 // Parse a "YYYY-MM" string into [start, endExclusive) of that month.
 function monthRange(month: string): { gte: Date; lt: Date } | null {
@@ -174,9 +189,19 @@ router.post(
       await assertEventOwnership(data.eventId, req.userId!);
     }
 
+    // If partner paid, create the expense under their userId
+    let targetUserId = req.userId!;
+    if (data.paidBy === "PARTNER") {
+      const couple = await prisma.couple.findFirst({
+        where: { isActive: true, OR: [{ leadId: req.userId }, { followId: req.userId }] },
+      });
+      if (!couple) throw new HttpError(400, "Not in a couple");
+      targetUserId = couple.leadId === req.userId ? couple.followId : couple.leadId;
+    }
+
     const expense = await prisma.expense.create({
       data: {
-        userId: req.userId!,
+        userId: targetUserId,
         title: data.title ?? null,
         category: data.category,
         amount: data.amount,
@@ -187,7 +212,25 @@ router.post(
         eventId: data.eventId ?? null,
       },
     });
+
+    // Auto-create a calendar entry for the requester when syncCalendar is set
+    if (data.syncCalendar) {
+      await prisma.scheduleEntry.create({
+        data: {
+          userId: req.userId!,
+          expenseId: expense.id,
+          title: expense.title ?? data.category,
+          type: categoryToSessionType(data.category),
+          date: data.date,
+          allDay: true,
+          eventId: data.eventId ?? null,
+        },
+      });
+    }
+
     res.status(201).json({ expense });
+    // Notify partner so their Finance / split view refreshes automatically
+    notifyPartner(req.userId!, "expenses");
   })
 );
 
@@ -217,6 +260,7 @@ router.delete(
     await assertExpenseOwnership(param(req, "id"), req.userId!);
     await prisma.expense.delete({ where: { id: param(req, "id") } });
     res.status(204).end();
+    notifyPartner(req.userId!, "expenses");
   })
 );
 

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import http from "http";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import { MulterError } from "multer";
@@ -6,11 +7,14 @@ import { ZodError } from "zod";
 import { env } from "./lib/env";
 import { HttpError } from "./lib/http";
 import { UPLOADS_DIR } from "./lib/upload";
+import { attachWsServer } from "./lib/wsManager";
 import authRoutes from "./routes/auth";
 import expenseRoutes from "./routes/expenses";
 import eventRoutes from "./routes/events";
 import scheduleRoutes from "./routes/schedule";
 import budgetRoutes from "./routes/budgets";
+import partnerRoutes from "./routes/partner";
+import proposalRoutes from "./routes/proposals";
 
 const app = express();
 
@@ -29,6 +33,8 @@ app.use("/api/expenses", expenseRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/budgets", budgetRoutes);
+app.use("/api/partner", partnerRoutes);
+app.use("/api/proposals", proposalRoutes);
 
 // 404 for unknown API routes
 app.use((_req, res) => {
@@ -57,6 +63,9 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(env.port, () => {
+const server = http.createServer(app);
+attachWsServer(server);
+
+server.listen(env.port, () => {
   console.log(`DancePlanner API listening on http://localhost:${env.port}`);
 });

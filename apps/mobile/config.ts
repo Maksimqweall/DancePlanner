@@ -26,3 +26,6 @@ function resolveApiBaseUrl(): string {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+
+// WebSocket base URL — same host/port as API, different protocol
+export const WS_BASE_URL = API_BASE_URL.replace(/^http/, "ws");

@@ -13,12 +13,11 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import {
   useFinanceStore,
   summarizeMonth,
-  monthlySeries,
 } from "../../../store/useFinanceStore";
 import { useAuthStore } from "../../../store/useAuthStore";
+import { usePartnerStore } from "../../../store/usePartnerStore";
 import ProgressBar from "../../../components/ProgressBar";
 import TransactionCard from "../../../components/TransactionCard";
-import MonthlyBarChart from "../../../components/MonthlyBarChart";
 import {
   EVENT_TYPE_META,
   formatMoney,
@@ -38,6 +37,7 @@ export default function Dashboard() {
   const { forecast, expenses, budgets, refresh, setBudget } = useFinanceStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const { couple, split, fetchPartner, fetchSplit } = usePartnerStore();
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [refreshing, setRefreshing] = useState(false);
@@ -46,8 +46,13 @@ export default function Dashboard() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh])
+      fetchPartner();
+    }, [refresh, fetchPartner])
   );
+
+  useEffect(() => {
+    if (couple) fetchSplit();
+  }, [couple?.id]);
 
   const defaultBudget = user?.monthlyBudget ?? DEFAULT_BUDGET;
   const budgetForMonth = useCallback(
@@ -55,7 +60,6 @@ export default function Dashboard() {
     [budgets, defaultBudget]
   );
   const budget = budgetForMonth(selectedMonth);
-  const series = useMemo(() => monthlySeries(expenses, currentMonthKey()), [expenses]);
   const summary = useMemo(() => summarizeMonth(expenses, selectedMonth), [expenses, selectedMonth]);
   const monthExpenses = useMemo(
     () => expenses.filter((e) => monthKeyFromIso(e.date) === selectedMonth).slice(0, 6),
@@ -88,6 +92,13 @@ export default function Dashboard() {
           <Text style={styles.logoutText}>Log out</Text>
         </PressableScale>
       </Animated.View>
+
+      {/* Partner balance widget */}
+      {couple && split ? (
+        <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+          <BalanceWidget split={split} partnerName={couple.partner.firstName} />
+        </Animated.View>
+      ) : null}
 
       {/* Month selector */}
       <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.monthRow}>
@@ -122,21 +133,8 @@ export default function Dashboard() {
         </View>
       </Animated.View>
 
-      {/* Monthly chart */}
-      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-        <Text style={styles.sectionTitle}>Monthly spending</Text>
-        <View style={styles.chartCard}>
-          <MonthlyBarChart
-            data={series}
-            selectedMonth={selectedMonth}
-            onSelect={setSelectedMonth}
-            budgetForMonth={budgetForMonth}
-          />
-        </View>
-      </Animated.View>
-
       {/* Forecast */}
-      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
         <Text style={styles.sectionTitle}>Upcoming forecast</Text>
         {forecast.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -157,7 +155,7 @@ export default function Dashboard() {
       </Animated.View>
 
       {/* Expenses */}
-      <Animated.View entering={FadeInDown.delay(240).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Expenses</Text>
           <PressableScale onPress={() => router.push("/expenses")}>
@@ -183,6 +181,49 @@ export default function Dashboard() {
         onSave={(value) => setBudget(selectedMonth, value)}
       />
     </ScrollView>
+  );
+}
+
+function BalanceWidget({
+  split,
+  partnerName,
+}: {
+  split: { balance: number; myTotal: number; partnerTotal: number };
+  partnerName: string;
+}) {
+  const { balance } = split;
+  const abs = Math.abs(balance);
+
+  if (abs < 0.01) {
+    return (
+      <View style={[styles.balanceCard, styles.balanceSquared]}>
+        <Text style={styles.balanceSquaredText}>You and {partnerName} are squared up ✓</Text>
+      </View>
+    );
+  }
+
+  const positive = balance > 0;
+  const color = positive ? C.accent : C.gold;
+  const label = positive
+    ? `${partnerName} owes you`
+    : `You owe ${partnerName}`;
+
+  return (
+    <View
+      style={[
+        styles.balanceCard,
+        {
+          backgroundColor: positive ? C.accentFade : C.goldFade,
+          borderColor: positive ? C.accentBorder : 'rgba(245,158,11,0.4)',
+        },
+      ]}
+    >
+      <View style={styles.balanceLeft}>
+        <View style={[styles.balanceDot, { backgroundColor: color }]} />
+        <Text style={styles.balanceLabel}>{label}</Text>
+      </View>
+      <Text style={[styles.balanceAmount, { color }]}>{formatMoney(abs)}</Text>
+    </View>
   );
 }
 
@@ -359,14 +400,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   seeAll: { color: C.accent, fontSize: 14, fontWeight: '600' },
-  chartCard: {
-    backgroundColor: C.card,
-    borderRadius: 20,
-    padding: 12,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
   emptyCard: {
     backgroundColor: C.card,
     borderRadius: 20,
@@ -448,4 +481,23 @@ const styles = StyleSheet.create({
     backgroundColor: C.accent,
   },
   modalSaveText: { color: '#fff', fontWeight: '700' },
+  // Balance widget
+  balanceCard: {
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+  },
+  balanceLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  balanceDot: { width: 8, height: 8, borderRadius: 4 },
+  balanceLabel: { color: C.t2, fontSize: 13 },
+  balanceAmount: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  balanceSquared: {
+    backgroundColor: C.accentFade,
+    borderColor: C.accentBorder,
+  },
+  balanceSquaredText: { color: C.accent, fontSize: 14, fontWeight: '600' },
 });

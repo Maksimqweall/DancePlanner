@@ -11,6 +11,8 @@ export interface CreateExpenseInput {
   description?: string;
   status: ExpenseStatus;
   eventId?: string | null;
+  paidBy?: "ME" | "PARTNER";
+  syncCalendar?: boolean;
 }
 
 export interface MonthAggregate {

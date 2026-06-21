@@ -15,6 +15,8 @@ export interface CreateScheduleInput {
   eventId?: string | null;
   cost?: number | null;
   category?: Category | null;
+  coupleEntry?: boolean;
+  paidBy?: "ME" | "PARTNER";
 }
 
 export function monthKeyOf(date: Date): string {

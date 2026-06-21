@@ -110,6 +110,69 @@ export interface ForecastMonth {
   projects: { id: string; title: string; type: EventType }[];
 }
 
+// ─── Partner Sync (Module 3) ───────────────────────────────────────────────
+
+export type ProposalType = "TRAINING" | "TOURNAMENT" | "HOTEL" | "TRANSPORT" | "OTHER";
+export type ProposalStatus = "PENDING" | "APPROVED" | "DECLINED";
+
+export interface ProposalSender {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface ProposalDetails {
+  date?: string;
+  startTime?: string;
+  notes?: string;
+  location?: string;
+  trainerName?: string;
+  hotelName?: string;
+  expenseId?: string;
+  entryId?: string;
+}
+
+export interface Proposal {
+  id: string;
+  coupleId: string;
+  senderId: string;
+  title: string;
+  type: ProposalType;
+  status: ProposalStatus;
+  cost: number | null;
+  currency: string;
+  details: ProposalDetails | null;
+  createdAt: string;
+  updatedAt: string;
+  sender?: ProposalSender;
+}
+
+export interface CouplePartner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export interface Couple {
+  id: string;
+  leadId: string;
+  followId: string;
+  isActive: boolean;
+  createdAt: string;
+  partner: CouplePartner;
+}
+
+export interface SplitView {
+  myTotal: number;
+  partnerTotal: number;
+  balance: number;
+  myExpenses: Expense[];
+  partnerExpenses: Expense[];
+}
+
+// ─── Calendar Entries ──────────────────────────────────────────────────────
+
 export interface ScheduleEntry {
   id: string;
   userId: string;
@@ -127,5 +190,5 @@ export interface ScheduleEntry {
   createdAt: string;
   updatedAt: string;
   event?: { id: string; title: string; type: EventType } | null;
-  expense?: { id: string; amount: number; category: Category; status: ExpenseStatus } | null;
+  expense?: { id: string; amount: number; category: Category; status: ExpenseStatus; userId: string } | null;
 }

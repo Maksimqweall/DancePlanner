@@ -14,6 +14,7 @@ import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from "expo-rou
 import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useProjectStore } from "../../../store/useProjectStore";
+import { usePartnerStore } from "../../../store/usePartnerStore";
 import {
   EVENT_TYPE_META,
   CATEGORY_META,
@@ -37,6 +38,7 @@ export default function ProjectDetail() {
     uploadAttachment, deleteAttachment, createProjectExpense,
   } = useProjectStore();
 
+  const { couple, createProposal } = usePartnerStore();
   const [newItem, setNewItem] = useState("");
   const [uploading, setUploading] = useState(false);
   const [filterCat, setFilterCat] = useState<Category | null>(null);
@@ -289,6 +291,9 @@ export default function ProjectDetail() {
         visible={expenseModal}
         onClose={() => setExpenseModal(false)}
         onSubmit={(input) => createProjectExpense(project.id, input)}
+        onProposal={couple ? createProposal : undefined}
+        hasPartner={!!couple}
+        partnerName={couple ? couple.partner.firstName : undefined}
         projects={[]}
         lockedProject={{ id: project.id, title: project.title }}
         defaultCategory="HOTEL"

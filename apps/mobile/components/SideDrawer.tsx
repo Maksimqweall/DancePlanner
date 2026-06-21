@@ -9,13 +9,13 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useSegments } from "expo-router";
 import Svg, { Path, Rect, Circle, Line } from "react-native-svg";
-import { C, SPRING } from "../lib/theme";
+import { C } from "../lib/theme";
 import { useDrawer } from "../lib/DrawerContext";
 import { useAuthStore } from "../store/useAuthStore";
 import { usePartnerStore } from "../store/usePartnerStore";
 import type { Href } from "expo-router";
 
-const DRAWER_W = 285;
+const DRAWER_W = 290;
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 function HomeIcon({ color, size = 20 }: { color: string; size?: number }) {
@@ -60,6 +60,14 @@ function UsersIcon({ color, size = 20 }: { color: string; size?: number }) {
     </Svg>
   );
 }
+function InfoIcon({ color, size = 20 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.75" />
+      <Path d="M12 8V8.5M12 11V16" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
+    </Svg>
+  );
+}
 function LogoutIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -70,48 +78,46 @@ function LogoutIcon({ color, size = 20 }: { color: string; size?: number }) {
   );
 }
 
-// ── Nav config ───────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { key: "index",    label: "Dashboard", href: "/",          icon: HomeIcon },
-  { key: "calendar", label: "Calendar",  href: "/calendar",  icon: CalendarIcon },
-  { key: "expenses", label: "Finance",   href: "/expenses",  icon: WalletIcon },
-  { key: "projects", label: "Events",    href: "/projects",  icon: TrophyIcon },
-  { key: "partner",  label: "Partner",   href: "/partner",   icon: UsersIcon },
+// ── Nav items ────────────────────────────────────────────────────────────────
+const NAV_MAIN = [
+  { key: "index",    label: "Dashboard", href: "/",         icon: HomeIcon,     accent: C.accent },
+  { key: "calendar", label: "Calendar",  href: "/calendar", icon: CalendarIcon, accent: C.purple },
+  { key: "expenses", label: "Finance",   href: "/expenses", icon: WalletIcon,   accent: C.accent },
+  { key: "projects", label: "Events",    href: "/projects", icon: TrophyIcon,   accent: C.gold   },
+  { key: "partner",  label: "Partner",   href: "/partner",  icon: UsersIcon,    accent: C.accent },
 ] as const;
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const NAV_SECONDARY = [
+  { key: "about", label: "About Us", href: "/about", icon: InfoIcon, accent: C.purple },
+] as const;
+
+// ── Component ────────────────────────────────────────────────────────────────
 export default function SideDrawer() {
   const { isOpen, close } = useDrawer();
-  const router = useRouter();
-  const segments = useSegments();
-  const insets = useSafeAreaInsets();
+  const router    = useRouter();
+  const segments  = useSegments();
+  const insets    = useSafeAreaInsets();
+  const user      = useAuthStore((s) => s.user);
+  const logout    = useAuthStore((s) => s.logout);
+  const pending   = usePartnerStore((s) => s.pendingCount);
 
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
-  const pendingCount = usePartnerStore((s) => s.pendingCount);
-
-  const translateX = useSharedValue(-DRAWER_W - 20);
-  const backdropOpacity = useSharedValue(0);
+  const translateX     = useSharedValue(-DRAWER_W - 24);
+  const backdropO      = useSharedValue(0);
 
   useEffect(() => {
     if (isOpen) {
-      translateX.value = withSpring(0, { damping: 22, stiffness: 260, mass: 0.8 });
-      backdropOpacity.value = withTiming(1, { duration: 220 });
+      translateX.value   = withSpring(0,  { damping: 22, stiffness: 260, mass: 0.8 });
+      backdropO.value    = withTiming(1,  { duration: 230 });
     } else {
-      translateX.value = withSpring(-DRAWER_W - 20, { damping: 22, stiffness: 260, mass: 0.8 });
-      backdropOpacity.value = withTiming(0, { duration: 180 });
+      translateX.value   = withSpring(-DRAWER_W - 24, { damping: 22, stiffness: 260, mass: 0.8 });
+      backdropO.value    = withTiming(0,  { duration: 200 });
     }
   }, [isOpen]);
 
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+  const panelStyle   = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropO.value }));
 
-  // Detect active tab from route segments
-  const lastSeg = segments[segments.length - 1];
+  const lastSeg  = segments[segments.length - 1];
   const activeKey = lastSeg === "(tabs)" || lastSeg === "(app)" ? "index" : lastSeg;
 
   const navigate = (href: string) => {
@@ -119,169 +125,221 @@ export default function SideDrawer() {
     router.navigate(href as Href);
   };
 
-  const handleLogout = () => {
-    close();
-    logout();
-  };
+  const handleLogout = () => { close(); logout(); };
 
-  const initials =
-    (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
+  const initials = (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={isOpen ? "auto" : "none"}>
+
       {/* Backdrop */}
       <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={close}>
-          <View style={styles.backdropFill} />
+          <View style={s.backdropFill} />
         </Pressable>
       </Animated.View>
 
-      {/* Slide panel */}
-      <Animated.View
-        style={[
-          styles.panel,
-          panelStyle,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 },
-        ]}
-      >
-        {/* User header */}
-        <View style={styles.userRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials || "?"}</Text>
+      {/* Panel */}
+      <Animated.View style={[
+        s.panel,
+        panelStyle,
+        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+      ]}>
+
+        {/* ── User card ── */}
+        <View style={s.userCard}>
+          {/* Avatar with glow */}
+          <View style={s.avatarWrap}>
+            <View style={s.avatarGlow} />
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{initials || "?"}</Text>
+            </View>
           </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName} numberOfLines={1}>
+          <View style={s.userInfo}>
+            <Text style={s.userName} numberOfLines={1}>
               {user?.firstName} {user?.lastName}
             </Text>
-            <Text style={styles.userEmail} numberOfLines={1}>
-              {user?.email}
-            </Text>
+            <Text style={s.userEmail} numberOfLines={1}>{user?.email}</Text>
           </View>
         </View>
 
-        <View style={styles.divider} />
+        {/* ── Divider ── */}
+        <View style={s.divider} />
 
-        {/* Nav items */}
-        <View style={styles.nav}>
-          {NAV_ITEMS.map(({ key, label, href, icon: Icon }) => {
+        {/* ── Main navigation ── */}
+        <View style={s.navGroup}>
+          <Text style={s.navGroupLabel}>NAVIGATION</Text>
+          {NAV_MAIN.map(({ key, label, href, icon: Icon, accent }) => {
             const active = key === activeKey;
-            const badge = key === "partner" && pendingCount > 0;
+            const badge  = key === "partner" && pending > 0;
             return (
-              <Pressable
+              <NavItem
                 key={key}
+                label={label}
+                active={active}
+                accent={accent}
+                badge={badge ? pending : 0}
+                icon={<Icon color={active ? "#fff" : C.t2} size={20} />}
                 onPress={() => navigate(href)}
-                style={({ pressed }) => [
-                  styles.navItem,
-                  active && styles.navItemActive,
-                  pressed && !active && styles.navItemPressed,
-                ]}
-              >
-                <Icon color={active ? "#fff" : C.t2} size={20} />
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>
-                  {label}
-                </Text>
-                {badge ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {pendingCount > 9 ? "9+" : pendingCount}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
+              />
             );
           })}
         </View>
 
-        <View style={styles.spacer} />
+        {/* ── Secondary navigation ── */}
+        <View style={[s.navGroup, { marginTop: 8 }]}>
+          <Text style={s.navGroupLabel}>MORE</Text>
+          {NAV_SECONDARY.map(({ key, label, href, icon: Icon, accent }) => {
+            const active = key === activeKey;
+            return (
+              <NavItem
+                key={key}
+                label={label}
+                active={active}
+                accent={accent}
+                badge={0}
+                icon={<Icon color={active ? "#fff" : C.t2} size={20} />}
+                onPress={() => navigate(href)}
+              />
+            );
+          })}
+        </View>
 
-        {/* Logout */}
+        <View style={s.spacer} />
+
+        {/* ── Sign out ── */}
         <Pressable
           onPress={handleLogout}
-          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.7 }]}
         >
           <LogoutIcon color={C.red} size={20} />
-          <Text style={styles.logoutText}>Sign out</Text>
+          <Text style={s.logoutText}>Sign out</Text>
         </Pressable>
+
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+// ── Reusable nav item ────────────────────────────────────────────────────────
+function NavItem({
+  label, active, accent, badge, icon, onPress,
+}: {
+  label: string; active: boolean; accent: string; badge: number; icon: React.ReactNode; onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.navItem,
+        active  && { backgroundColor: accent },
+        !active && pressed && s.navItemPressed,
+      ]}
+    >
+      {icon}
+      <Text style={[s.navLabel, active && s.navLabelActive]}>{label}</Text>
+      {badge > 0 ? (
+        <View style={s.badge}>
+          <Text style={s.badgeText}>{badge > 9 ? "9+" : badge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+const s = StyleSheet.create({
   backdropFill: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   panel: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    bottom: 0,
+    top: 0, left: 0, bottom: 0,
     width: DRAWER_W,
     backgroundColor: C.card,
     borderRightWidth: 1,
-    borderRightColor: C.border,
+    borderRightColor: C.borderStrong,
     paddingHorizontal: 16,
     shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    shadowOffset: { width: 8, height: 0 },
-    elevation: 16,
+    shadowOpacity: 0.5,
+    shadowRadius: 32,
+    shadowOffset: { width: 12, height: 0 },
+    elevation: 20,
   },
-  // User header
-  userRow: {
+
+  // User card
+  userCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
+    gap: 14,
     paddingHorizontal: 4,
+    marginBottom: 22,
+  },
+  avatarWrap: {
+    position: "relative",
+    width: 52,
+    height: 52,
+  },
+  avatarGlow: {
+    position: "absolute",
+    inset: -6,
+    borderRadius: 32,
+    backgroundColor: C.accentGlow,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.accentFade,
-    borderWidth: 1.5,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.elevated,
+    borderWidth: 2,
     borderColor: C.accentBorder,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     color: C.accent,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "800",
     letterSpacing: 0.5,
   },
   userInfo: { flex: 1 },
   userName: {
     color: C.t1,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
-    marginBottom: 2,
+    letterSpacing: -0.3,
+    marginBottom: 3,
   },
   userEmail: {
     color: C.t3,
     fontSize: 12,
     fontWeight: "500",
   },
+
   divider: {
     height: 1,
     backgroundColor: C.border,
-    marginBottom: 12,
+    marginBottom: 18,
     marginHorizontal: 4,
   },
-  // Nav
-  nav: { gap: 2 },
+
+  // Nav groups
+  navGroup: { gap: 2, marginBottom: 4 },
+  navGroupLabel: {
+    color: C.t3,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+    paddingHorizontal: 14,
+    marginBottom: 6,
+  },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     paddingVertical: 13,
     paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  navItemActive: {
-    backgroundColor: C.accent,
+    borderRadius: 15,
   },
   navItemPressed: {
     backgroundColor: C.elevated,
@@ -291,35 +349,33 @@ const styles = StyleSheet.create({
     color: C.t2,
     fontSize: 15,
     fontWeight: "600",
+    letterSpacing: -0.2,
   },
-  navLabelActive: {
-    color: "#fff",
-  },
+  navLabelActive: { color: "#fff" },
+
   badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: C.red,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
   },
-  badgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "800",
-  },
+  badgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+
   spacer: { flex: 1 },
+
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     paddingVertical: 13,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: 15,
     backgroundColor: C.redFade,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
+    borderColor: C.redBorder,
   },
   logoutText: {
     color: C.red,

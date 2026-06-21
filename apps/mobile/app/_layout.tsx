@@ -1,39 +1,42 @@
 // @ts-ignore
 import "../global.css";
-import { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "../store/useAuthStore";
+import SplashScreen from "../components/SplashScreen";
 
 export default function RootLayout() {
-  const status = useAuthStore((s) => s.status);
-  const hydrate = useAuthStore((s) => s.hydrate);
-  const router = useRouter();
+  const status   = useAuthStore((s) => s.status);
+  const hydrate  = useAuthStore((s) => s.hydrate);
+  const router   = useRouter();
   const segments = useSegments();
 
-  // Restore the saved session once on launch.
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+  const [splashDone, setSplashDone] = useState(false);
 
-  // Redirect between the auth and app areas based on session state.
-  useEffect(() => {
-    if (status === "loading") return;
-    const inAuthGroup = segments[0] === "(auth)";
-    if (status === "unauthenticated" && !inAuthGroup) {
-      router.replace("/login");
-    } else if (status === "authenticated" && inAuthGroup) {
-      router.replace("/");
-    }
-  }, [status, segments, router]);
+  useEffect(() => { hydrate(); }, [hydrate]);
 
-  if (status === "loading") {
+  useEffect(() => {
+    if (!splashDone || status === "loading") return;
+    const inAuth = segments[0] === "(auth)";
+    if (status === "unauthenticated" && !inAuth) router.replace("/login");
+    else if (status === "authenticated" && inAuth)  router.replace("/");
+  }, [splashDone, status, segments, router]);
+
+  // Show animated splash until it finishes (hydration always completes within it)
+  if (!splashDone) {
     return (
-      <View className="flex-1 items-center justify-center bg-zinc-900">
-        <ActivityIndicator size="large" color="#10b981" />
-      </View>
+      <>
+        <StatusBar style="light" />
+        <SplashScreen onFinish={() => setSplashDone(true)} />
+      </>
     );
+  }
+
+  // Brief blank while auth state resolves (rare — usually < 50 ms after splash)
+  if (status === "loading") {
+    return <View style={{ flex: 1, backgroundColor: "#07070a" }} />;
   }
 
   return (

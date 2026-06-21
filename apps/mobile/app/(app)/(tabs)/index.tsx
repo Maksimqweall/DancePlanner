@@ -36,7 +36,6 @@ export default function Dashboard() {
   const router = useRouter();
   const { forecast, expenses, budgets, refresh, setBudget } = useFinanceStore();
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
   const { couple, split, fetchPartner, fetchSplit } = usePartnerStore();
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
@@ -85,12 +84,15 @@ export default function Dashboard() {
       {/* Header */}
       <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.header}>
         <View>
-          <Text style={styles.welcome}>Welcome back,</Text>
-          <Text style={styles.userName}>{user?.firstName ?? "Dancer"}</Text>
+          <Text style={styles.welcome}>Welcome back</Text>
+          <Text style={styles.userName}>{user?.firstName ?? "Dancer"} 👋</Text>
         </View>
-        <PressableScale onPress={logout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Log out</Text>
-        </PressableScale>
+        {couple ? (
+          <View style={styles.partnerChip}>
+            <View style={styles.partnerDot} />
+            <Text style={styles.partnerChipText}>Synced</Text>
+          </View>
+        ) : null}
       </Animated.View>
 
       {/* Partner balance widget */}
@@ -342,17 +344,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  welcome: { color: C.t2, fontSize: 14 },
-  userName: { color: C.t1, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginTop: 2 },
-  logoutBtn: {
-    backgroundColor: C.card,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+  welcome: { color: C.t2, fontSize: 14, fontWeight: '500' },
+  userName: { color: C.t1, fontSize: 28, fontWeight: '800', letterSpacing: -0.6, marginTop: 2 },
+  partnerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: C.accentFade,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.accentBorder,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  logoutText: { color: C.t2, fontSize: 13, fontWeight: '500' },
+  partnerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: C.accent,
+  },
+  partnerChipText: { color: C.accent, fontSize: 12, fontWeight: '700' },
   monthRow: {
     flexDirection: 'row',
     alignItems: 'center',

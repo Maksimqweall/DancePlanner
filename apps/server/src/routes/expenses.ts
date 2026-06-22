@@ -272,10 +272,18 @@ async function assertExpenseOwnership(id: string, userId: string) {
 }
 
 async function assertEventOwnership(id: string, userId: string) {
-  const event = await prisma.event.findUnique({ where: { id } });
-  if (!event || event.ownerId !== userId) {
-    throw new HttpError(404, "Project not found");
-  }
+  const event = await prisma.event.findUnique({
+    where: { id },
+    include: { couple: { select: { leadId: true, followId: true } } },
+  });
+  if (!event) throw new HttpError(404, "Project not found");
+
+  const isOwner = event.ownerId === userId;
+  const isMember = event.couple
+    ? event.couple.leadId === userId || event.couple.followId === userId
+    : false;
+
+  if (!isOwner && !isMember) throw new HttpError(404, "Project not found");
 }
 
 export default router;

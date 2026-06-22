@@ -103,6 +103,10 @@ export default function Login() {
             )}
           </PressableScale>
 
+          <View style={styles.forgotRow}>
+            <Link href="/forgot-password" style={styles.forgotLink}>Forgot password?</Link>
+          </View>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>No account? </Text>
             <Link href="/signup" style={styles.footerLink}>Create one</Link>
@@ -190,10 +194,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.2,
   },
+  forgotRow: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  forgotLink: {
+    color: C.t3,
+    fontSize: 13,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   footerText: {
     color: C.t2,

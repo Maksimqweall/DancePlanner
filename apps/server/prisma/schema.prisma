@@ -23,6 +23,9 @@ model User {
   wdsfUpdatedAt   DateTime?  // When WDSF data was last fetched
   dtvId           String?    // DTV ID номер
 
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
   // Module 1: target monthly spending budget (EUR)
   monthlyBudget Float?
   

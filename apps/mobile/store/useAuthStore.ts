@@ -18,6 +18,8 @@ interface AuthState {
   }) => Promise<void>;
   logout: () => Promise<void>;
   setMonthlyBudget: (budget: number) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (token: string, password: string) => Promise<void>;
 }
 
 interface AuthResponse {
@@ -73,5 +75,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   setMonthlyBudget: async (budget) => {
     const { user } = await api.patch<{ user: User }>("/auth/me", { monthlyBudget: budget });
     set({ user });
+  },
+
+  forgotPassword: async (email) => {
+    await api.post("/auth/forgot-password", { email });
+  },
+
+  resetPassword: async (token, password) => {
+    await api.post("/auth/reset-password", { token, password });
   },
 }));

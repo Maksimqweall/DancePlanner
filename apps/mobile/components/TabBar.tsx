@@ -143,6 +143,8 @@ export default function TabBar({ state, navigation }: TabBarProps) {
         backgroundColor: C.bg,
         paddingBottom: Math.max(insets.bottom, 10),
         paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: C.border,
       }}
     >
       <View
@@ -150,11 +152,11 @@ export default function TabBar({ state, navigation }: TabBarProps) {
           flexDirection: 'row',
           marginHorizontal: 16,
           backgroundColor: C.card,
-          borderRadius: 22,
+          borderRadius: 26,
           padding: H_PAD,
           height: TAB_HEIGHT + H_PAD * 2,
           borderWidth: 1,
-          borderColor: C.border,
+          borderColor: C.borderStrong,
           overflow: 'hidden',
           position: 'relative',
         }}
@@ -169,8 +171,12 @@ export default function TabBar({ state, navigation }: TabBarProps) {
               width: tabW,
               height: TAB_HEIGHT,
               backgroundColor: C.accent,
-              borderRadius: 16,
-              opacity: 0.95,
+              borderRadius: 20,
+              shadowColor: C.accent,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.50,
+              shadowRadius: 16,
+              elevation: 10,
             },
           ]}
         />

@@ -17,8 +17,11 @@ model User {
   lastName      String
   
   // Для интеграции с модулем Performance & Analytics
-  wdsfMin       String?    // WDSF MIN (Member ID Number)
-  dtvId         String?    // DTV ID номер
+  wdsfMin         String?    // WDSF MIN (Member ID Number)
+  wdsfProfileUrl  String?    // Full WDSF athlete profile URL (contains UUID)
+  wdsfData        Json?      // Cached parsed data from WDSF profile page
+  wdsfUpdatedAt   DateTime?  // When WDSF data was last fetched
+  dtvId           String?    // DTV ID номер
 
   // Module 1: target monthly spending budget (EUR)
   monthlyBudget Float?

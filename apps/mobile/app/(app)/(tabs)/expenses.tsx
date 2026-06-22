@@ -12,8 +12,8 @@ import { useAuthStore } from "../../../store/useAuthStore";
 import TransactionCard from "../../../components/TransactionCard";
 import ExpenseFormModal from "../../../components/ExpenseFormModal";
 import MonthlyBarChart from "../../../components/MonthlyBarChart";
-import { monthLong, monthKeyFromIso, formatMoney, currentMonthKey } from "../../../lib/display";
-import type { Expense } from "../../../lib/types";
+import { monthLong, monthKeyFromIso, formatMoney, currentMonthKey, CATEGORY_META, CATEGORY_ORDER } from "../../../lib/display";
+import type { Category, Expense } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
 import { C } from "../../../lib/theme";
 
@@ -41,6 +41,7 @@ export default function ExpensesScreen() {
   const user = useAuthStore((s) => s.user);
 
   const [period, setPeriod] = useState<Period>("3M");
+  const [filterCat, setFilterCat] = useState<Category | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([currentMonthKey()]));
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -58,9 +59,19 @@ export default function ExpensesScreen() {
     [expenses, cutoff]
   );
 
+  const categoryFilteredExpenses = useMemo(
+    () => filterCat ? filteredExpenses.filter((e) => e.category === filterCat) : filteredExpenses,
+    [filteredExpenses, filterCat]
+  );
+
+  const presentCategories = useMemo(
+    () => CATEGORY_ORDER.filter((c) => filteredExpenses.some((e) => e.category === c)),
+    [filteredExpenses]
+  );
+
   const groups = useMemo<MonthGroup[]>(() => {
     const map = new Map<string, MonthGroup>();
-    for (const e of filteredExpenses) {
+    for (const e of categoryFilteredExpenses) {
       const m = monthKeyFromIso(e.date);
       const g = map.get(m) ?? { month: m, items: [], paid: 0, planned: 0 };
       g.items.push(e);
@@ -69,12 +80,12 @@ export default function ExpensesScreen() {
       map.set(m, g);
     }
     return [...map.values()].sort((a, b) => (a.month < b.month ? 1 : -1));
-  }, [filteredExpenses]);
+  }, [categoryFilteredExpenses]);
 
   const periodTotals = useMemo(() => ({
-    paid: filteredExpenses.filter((e) => e.status === "PAID").reduce((s, e) => s + e.amount, 0),
-    planned: filteredExpenses.filter((e) => e.status === "PLANNED").reduce((s, e) => s + e.amount, 0),
-  }), [filteredExpenses]);
+    paid: categoryFilteredExpenses.filter((e) => e.status === "PAID").reduce((s, e) => s + e.amount, 0),
+    planned: categoryFilteredExpenses.filter((e) => e.status === "PLANNED").reduce((s, e) => s + e.amount, 0),
+  }), [categoryFilteredExpenses]);
 
   const defaultBudget = user?.monthlyBudget ?? 1000;
   const budgetForMonth = useCallback(
@@ -82,7 +93,7 @@ export default function ExpensesScreen() {
     [budgets, defaultBudget]
   );
 
-  const series = useMemo(() => monthlySeries(filteredExpenses, currentMonthKey()), [filteredExpenses]);
+  const series = useMemo(() => monthlySeries(categoryFilteredExpenses, currentMonthKey()), [categoryFilteredExpenses]);
 
   const toggleMonth = (month: string) => {
     setExpanded((prev) => {
@@ -132,6 +143,35 @@ export default function ExpensesScreen() {
             ))}
           </View>
         </Animated.View>
+
+        {/* Category filter */}
+        {presentCategories.length > 1 ? (
+          <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={catStyles.scroll} contentContainerStyle={catStyles.row}>
+              <PressableScale
+                onPress={() => setFilterCat(null)}
+                style={[catStyles.chip, !filterCat && catStyles.chipActive]}
+              >
+                <Text style={[catStyles.chipText, !filterCat && catStyles.chipTextActive]}>All</Text>
+              </PressableScale>
+              {presentCategories.map((c) => {
+                const m = CATEGORY_META[c];
+                const active = filterCat === c;
+                return (
+                  <PressableScale
+                    key={c}
+                    onPress={() => setFilterCat(active ? null : c)}
+                    style={[catStyles.chip, active && catStyles.chipActive]}
+                  >
+                    <Text style={[catStyles.chipText, active && catStyles.chipTextActive]}>
+                      {m.icon} {m.label}
+                    </Text>
+                  </PressableScale>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        ) : null}
 
         {/* Stats + chart */}
         {filteredExpenses.length > 0 ? (
@@ -233,12 +273,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  pageTitle: { color: C.t1, fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
+  pageTitle: { color: C.t1, fontSize: 30, fontWeight: "900", letterSpacing: -0.8 },
   addBtn: {
     backgroundColor: C.accent,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
   addBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   // Period selector
@@ -264,16 +304,16 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     backgroundColor: C.card,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.borderStrong,
   },
   statsItem: { flex: 1, alignItems: "center" },
   statsDivider: { width: 1, backgroundColor: C.border, marginVertical: 4 },
   statsLabel: { color: C.t2, fontSize: 12, fontWeight: "500", marginBottom: 6 },
-  statsAmount: { color: C.t1, fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
+  statsAmount: { color: C.t1, fontSize: 26, fontWeight: "900", letterSpacing: -0.6 },
   // Chart
   chartCard: {
     backgroundColor: C.card,
@@ -311,4 +351,20 @@ const styles = StyleSheet.create({
   monthPaid: { color: C.t2, fontWeight: "600", fontSize: 14 },
   monthPlanned: { color: C.gold, fontSize: 13, fontWeight: "500" },
   monthChevron: { color: C.t3, fontSize: 13, marginLeft: 8 },
+});
+
+const catStyles = StyleSheet.create({
+  scroll: { marginBottom: 14 },
+  row: { gap: 8, paddingVertical: 2 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  chipActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
+  chipText: { color: C.t2, fontSize: 13, fontWeight: "500" },
+  chipTextActive: { color: C.accent, fontWeight: "700" },
 });

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, useWindowDimensions, Alert } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { useFocusEffect, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -71,7 +71,7 @@ const MAX_ZOOM = ZOOM_HEIGHT.length - 1;
 
 export default function CalendarScreen() {
   const router = useRouter();
-  const { viewMonth, entries, monthExpenses, fetchMonth, createEntry, updateEntry, deleteEntry } =
+  const { viewMonth, entries, monthExpenses, fetchMonth, createEntry, updateEntry, deleteEntry, deleteDay } =
     useScheduleStore();
   const { projects, refreshProjects } = useProjectStore();
   const { couple, createProposal } = usePartnerStore();
@@ -131,6 +131,20 @@ export default function CalendarScreen() {
   const cellWidth = Math.floor((width - 12) / 7);
   const cellHeight = ZOOM_HEIGHT[zoom];
   const labelCount = ZOOM_LABELS[zoom];
+
+  const myDayEntries = dayEntries.filter((e) => e.userId === myId);
+
+  const clearDay = () => {
+    if (myDayEntries.length === 0) return;
+    Alert.alert(
+      "Clear day",
+      `Delete all ${myDayEntries.length} session${myDayEntries.length > 1 ? "s" : ""} for ${dayHeading(selectedDay)}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete all", style: "destructive", onPress: () => deleteDay(selectedDay) },
+      ]
+    );
+  };
 
   const openNew = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (entry: ScheduleEntry) => {
@@ -199,9 +213,16 @@ export default function CalendarScreen() {
             <Text style={styles.agendaTitle} numberOfLines={1}>
               {dayHeading(selectedDay)}
             </Text>
-            <PressableScale style={styles.addBtn} onPress={openNew}>
-              <Text style={styles.addBtnText}>+ Add</Text>
-            </PressableScale>
+            <View style={styles.agendaActions}>
+              {myDayEntries.length > 0 ? (
+                <PressableScale style={styles.clearBtn} onPress={clearDay}>
+                  <Text style={styles.clearBtnText}>Clear</Text>
+                </PressableScale>
+              ) : null}
+              <PressableScale style={styles.addBtn} onPress={openNew}>
+                <Text style={styles.addBtnText}>+ Add</Text>
+              </PressableScale>
+            </View>
           </View>
 
           {dayEntries.length === 0 && standaloneExpenses.length === 0 && dayProjects.length === 0 ? (
@@ -446,7 +467,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
-  monthTitle: { color: C.t1, fontSize: 22, fontWeight: '800', letterSpacing: -0.4, flex: 1 },
+  monthTitle: { color: C.t1, fontSize: 24, fontWeight: '900', letterSpacing: -0.6, flex: 1 },
   zoomRow: { flexDirection: 'row', gap: 8 },
   zoomBtn: {
     width: 36,
@@ -463,11 +484,11 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     backgroundColor: C.card,
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 22,
+    padding: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.borderStrong,
     gap: 0,
   },
   statPill: { flex: 1, alignItems: 'center' },
@@ -481,6 +502,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   agendaTitle: { color: C.t1, fontSize: 17, fontWeight: '700', flex: 1 },
+  agendaActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addBtn: {
     backgroundColor: C.accent,
     paddingHorizontal: 14,
@@ -488,6 +510,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  clearBtn: {
+    backgroundColor: `${C.red}18`,
+    borderWidth: 1,
+    borderColor: `${C.red}40`,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  clearBtnText: { color: C.red, fontWeight: '600', fontSize: 13 },
   emptyDay: { color: C.t3, fontSize: 14, marginBottom: 16, lineHeight: 20 },
   projectRow: {
     flexDirection: 'row',
@@ -495,7 +526,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.purpleFade,
     borderWidth: 1,
     borderColor: C.purpleBorder,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 14,
     marginBottom: 10,
     gap: 10,
@@ -507,11 +538,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: C.card,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.borderStrong,
   },
   sessionRowPartner: {
     borderColor: C.accentBorder,

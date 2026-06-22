@@ -4,6 +4,8 @@ import {
   Text,
   ScrollView,
   TextInput,
+  Modal,
+  Switch,
   ActivityIndicator,
   Linking,
   Alert,
@@ -13,17 +15,19 @@ import {
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useProjectStore } from "../../../store/useProjectStore";
+import { useProjectStore, type CreateProjectInput } from "../../../store/useProjectStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
 import {
   EVENT_TYPE_META,
+  EVENT_TYPE_ORDER,
   CATEGORY_META,
   CATEGORY_ORDER,
   formatDate,
   formatMoney,
 } from "../../../lib/display";
-import type { Attachment, Category, ChecklistItem } from "../../../lib/types";
+import type { Attachment, Category, ChecklistItem, Expense, EventType, Project } from "../../../lib/types";
 import { ApiError } from "../../../lib/api";
+import { DateField } from "../../../components/DateTimeField";
 import ExpenseFormModal from "../../../components/ExpenseFormModal";
 import CategoryDonut, { type DonutSlice } from "../../../components/CategoryDonut";
 import PressableScale from "../../../components/ui/PressableScale";
@@ -33,9 +37,9 @@ export default function ProjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const {
-    current, loading, fetchProject, deleteProject,
+    current, loading, fetchProject, deleteProject, updateProject,
     addChecklistItem, toggleChecklistItem, deleteChecklistItem,
-    uploadAttachment, deleteAttachment, createProjectExpense,
+    uploadAttachment, deleteAttachment, createProjectExpense, updateProjectExpense,
   } = useProjectStore();
 
   const { couple, createProposal } = usePartnerStore();
@@ -43,6 +47,8 @@ export default function ProjectDetail() {
   const [uploading, setUploading] = useState(false);
   const [filterCat, setFilterCat] = useState<Category | null>(null);
   const [expenseModal, setExpenseModal] = useState(false);
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [editModal, setEditModal] = useState(false);
 
   useFocusEffect(useCallback(() => { if (id) fetchProject(id); }, [id, fetchProject]));
 
@@ -117,7 +123,16 @@ export default function ProjectDetail() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: project.title }} />
+      <Stack.Screen
+        options={{
+          title: project.title,
+          headerRight: () => (
+            <PressableScale onPress={() => setEditModal(true)} hitSlop={10} style={{ marginRight: 14 }}>
+              <Text style={{ color: C.accent, fontSize: 15, fontWeight: "600" }}>Edit</Text>
+            </PressableScale>
+          ),
+        }}
+      />
 
       {/* Hero header */}
       <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.hero}>
@@ -266,15 +281,20 @@ export default function ProjectDetail() {
           <Text style={styles.emptyHint}>No expenses linked to this event.</Text>
         ) : (
           visibleExpenses.map((e) => (
-            <View key={e.id} style={styles.expenseLine}>
+            <PressableScale key={e.id} onPress={() => setEditExpense(e)} style={styles.expenseLine}>
               <Text style={styles.expenseLineIcon}>{CATEGORY_META[e.category]?.icon ?? "📦"}</Text>
               <Text style={styles.expenseLineName} numberOfLines={1}>
                 {e.title || CATEGORY_META[e.category]?.label || e.category}
               </Text>
+              <View style={[styles.statusBadge, e.status === "PLANNED" && styles.statusBadgePlanned]}>
+                <Text style={[styles.statusBadgeText, e.status === "PLANNED" && styles.statusBadgeTextPlanned]}>
+                  {e.status === "PLANNED" ? "Planned" : "Paid"}
+                </Text>
+              </View>
               <Text style={[styles.expenseLineAmount, e.status === "PLANNED" && { color: C.gold }]}>
                 {formatMoney(e.amount)}
               </Text>
-            </View>
+            </PressableScale>
           ))
         )}
       </Section>
@@ -297,6 +317,24 @@ export default function ProjectDetail() {
         projects={[]}
         lockedProject={{ id: project.id, title: project.title }}
         defaultCategory="HOTEL"
+        hideDate
+      />
+
+      <ExpenseFormModal
+        visible={!!editExpense}
+        onClose={() => setEditExpense(null)}
+        initialExpense={editExpense}
+        onUpdate={(expenseId, data) => updateProjectExpense(project.id, expenseId, data)}
+        projects={[]}
+        lockedProject={{ id: project.id, title: project.title }}
+        hideDate
+      />
+
+      <EditProjectModal
+        visible={editModal}
+        project={project}
+        onClose={() => setEditModal(false)}
+        onSave={async (input) => { await updateProject(project.id, input); setEditModal(false); }}
       />
     </ScrollView>
   );
@@ -357,6 +395,197 @@ function AttachmentRow({
     </View>
   );
 }
+
+function EditProjectModal({
+  visible, project, onClose, onSave,
+}: {
+  visible: boolean;
+  project: Project;
+  onClose: () => void;
+  onSave: (input: Partial<CreateProjectInput>) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(project.title);
+  const [type, setType] = useState<EventType>(project.type);
+  const [date, setDate] = useState(project.date.slice(0, 10));
+  const [multiDay, setMultiDay] = useState(!!project.endDate);
+  const [endDate, setEndDate] = useState(project.endDate ? project.endDate.slice(0, 10) : project.date.slice(0, 10));
+  const [location, setLocation] = useState(project.location ?? "");
+  const [budget, setBudget] = useState(project.budget != null ? String(project.budget) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setError(null);
+    if (!title.trim()) { setError("Enter a title"); return; }
+    const budgetValue = budget ? Number(budget.replace(",", ".")) : null;
+    setSaving(true);
+    try {
+      await onSave({
+        title: title.trim(),
+        type,
+        date: new Date(`${date}T00:00:00.000Z`).toISOString(),
+        endDate: multiDay ? new Date(`${endDate}T00:00:00.000Z`).toISOString() : null,
+        location: location.trim() || null,
+        budget: budgetValue && budgetValue > 0 ? budgetValue : null,
+      });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not save");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={editStyles.overlay}>
+        <View style={editStyles.sheet}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={editStyles.handle} />
+            <View style={editStyles.header}>
+              <Text style={editStyles.title}>Edit event</Text>
+              <PressableScale onPress={onClose} style={editStyles.closeBtn}>
+                <Text style={editStyles.closeBtnText}>✕</Text>
+              </PressableScale>
+            </View>
+
+            {error ? (
+              <View style={editStyles.errorBox}>
+                <Text style={editStyles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <Text style={editStyles.label}>Title</Text>
+            <TextInput
+              style={editStyles.input}
+              placeholder="Event title"
+              placeholderTextColor={C.t3}
+              value={title}
+              onChangeText={setTitle}
+            />
+
+            <Text style={editStyles.label}>Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", gap: 8, paddingVertical: 2 }}>
+                {EVENT_TYPE_ORDER.map((t) => {
+                  const m = EVENT_TYPE_META[t];
+                  const active = t === type;
+                  return (
+                    <PressableScale
+                      key={t}
+                      onPress={() => setType(t)}
+                      style={[editStyles.typeChip, active && editStyles.typeChipActive]}
+                    >
+                      <Text style={[editStyles.typeChipText, active && editStyles.typeChipTextActive]}>
+                        {m.icon} {m.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <Text style={editStyles.label}>{multiDay ? "Start date" : "Date"}</Text>
+            <View style={{ marginBottom: 14 }}>
+              <DateField value={date} onChange={setDate} />
+            </View>
+
+            <View style={editStyles.switchRow}>
+              <Text style={editStyles.label}>Multi-day event</Text>
+              <Switch
+                value={multiDay}
+                onValueChange={(v) => { setMultiDay(v); if (v && endDate < date) setEndDate(date); }}
+                trackColor={{ true: C.accent, false: C.elevated }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {multiDay ? (
+              <>
+                <Text style={editStyles.label}>End date</Text>
+                <View style={{ marginBottom: 14 }}>
+                  <DateField value={endDate} onChange={setEndDate} />
+                </View>
+              </>
+            ) : null}
+
+            <Text style={editStyles.label}>Location (optional)</Text>
+            <TextInput
+              style={editStyles.input}
+              placeholder="City, country"
+              placeholderTextColor={C.t3}
+              value={location}
+              onChangeText={setLocation}
+            />
+
+            <Text style={editStyles.label}>Budget € (optional)</Text>
+            <TextInput
+              style={editStyles.input}
+              placeholder="e.g. 1200"
+              placeholderTextColor={C.t3}
+              keyboardType="decimal-pad"
+              value={budget}
+              onChangeText={setBudget}
+            />
+
+            <PressableScale style={editStyles.saveBtn} onPress={submit} disabled={saving}>
+              <Text style={editStyles.saveBtnText}>{saving ? "Saving…" : "Save changes"}</Text>
+            </PressableScale>
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const editStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" },
+  sheet: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    maxHeight: "92%",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderBottomWidth: 0,
+  },
+  handle: {
+    width: 36, height: 4, backgroundColor: C.elevated, borderRadius: 2,
+    alignSelf: "center", marginBottom: 16,
+  },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  title: { color: C.t1, fontSize: 20, fontWeight: "700" },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: C.elevated, alignItems: "center", justifyContent: "center",
+  },
+  closeBtnText: { color: C.t2, fontSize: 16 },
+  errorBox: {
+    backgroundColor: C.redFade, borderWidth: 1, borderColor: C.red,
+    borderRadius: 12, padding: 12, marginBottom: 14,
+  },
+  errorText: { color: "#fca5a5", fontSize: 13 },
+  label: { color: C.t2, fontSize: 13, fontWeight: "500", marginBottom: 8 },
+  input: {
+    backgroundColor: C.elevated, color: C.t1,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 15, borderWidth: 1, borderColor: C.border, marginBottom: 16,
+  },
+  typeChip: {
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12, backgroundColor: C.elevated,
+    borderWidth: 1, borderColor: C.border,
+  },
+  typeChipActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
+  typeChipText: { color: C.t2, fontSize: 14 },
+  typeChipTextActive: { color: C.accent, fontWeight: "600" },
+  switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  saveBtn: {
+    backgroundColor: C.accent, borderRadius: 14,
+    paddingVertical: 16, alignItems: "center", marginTop: 8,
+  },
+  saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+});
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
@@ -501,6 +730,20 @@ const styles = StyleSheet.create({
   expenseLineIcon: { fontSize: 16 },
   expenseLineName: { flex: 1, color: C.t2, fontSize: 14 },
   expenseLineAmount: { color: C.t1, fontWeight: '600', fontSize: 14 },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: C.accentFade,
+    borderWidth: 1,
+    borderColor: C.accentBorder,
+  },
+  statusBadgePlanned: {
+    backgroundColor: C.goldFade,
+    borderColor: C.goldBorder,
+  },
+  statusBadgeText: { color: C.accent, fontSize: 11, fontWeight: '600' },
+  statusBadgeTextPlanned: { color: C.gold },
   // Delete
   deleteBtn: { paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   deleteBtnText: { color: C.red, fontWeight: '600', fontSize: 15 },

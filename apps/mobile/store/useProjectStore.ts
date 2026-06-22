@@ -33,7 +33,10 @@ interface ProjectState {
   uploadAttachment: (eventId: string, file: UploadFile, label: string) => Promise<void>;
   deleteAttachment: (eventId: string, attId: string) => Promise<void>;
 
+  updateProject: (id: string, input: Partial<CreateProjectInput>) => Promise<void>;
+
   createProjectExpense: (eventId: string, input: CreateExpenseInput) => Promise<void>;
+  updateProjectExpense: (eventId: string, expenseId: string, input: Partial<CreateExpenseInput>) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -100,8 +103,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await get().fetchProject(eventId);
   },
 
+  updateProject: async (id, input) => {
+    await api.patch(`/events/${id}`, input);
+    await get().refreshProjects();
+    if (get().current?.id === id) await get().fetchProject(id);
+  },
+
   createProjectExpense: async (eventId, input) => {
     await api.post("/expenses", { ...input, eventId });
+    await get().fetchProject(eventId);
+  },
+
+  updateProjectExpense: async (eventId, expenseId, input) => {
+    await api.patch(`/expenses/${expenseId}`, input);
     await get().fetchProject(eventId);
   },
 }));

@@ -274,6 +274,41 @@ router.patch(
   })
 );
 
+// DELETE /api/schedule?date=YYYY-MM-DD  (bulk-delete all of the user's own entries for a day)
+router.delete(
+  "/",
+  asyncHandler(async (req, res) => {
+    const dateParam = queryString(req, "date");
+    if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      throw new HttpError(400, "date query param required (YYYY-MM-DD)");
+    }
+    const startOfDay  = new Date(`${dateParam}T00:00:00.000Z`);
+    const startOfNext = new Date(startOfDay.getTime() + 86_400_000);
+
+    await prisma.$transaction(async (tx) => {
+      const toDelete = await tx.scheduleEntry.findMany({
+        where: {
+          userId: req.userId!,
+          date: { gte: startOfDay, lt: startOfNext },
+        },
+        select: { id: true, expenseId: true },
+      });
+
+      const ids        = toDelete.map((e) => e.id);
+      const expenseIds = toDelete.map((e) => e.expenseId).filter((id): id is string => !!id);
+
+      if (ids.length > 0) {
+        await tx.scheduleEntry.deleteMany({ where: { id: { in: ids } } });
+      }
+      if (expenseIds.length > 0) {
+        await tx.expense.deleteMany({ where: { id: { in: expenseIds } } });
+      }
+    });
+
+    res.status(204).end();
+  })
+);
+
 // DELETE /api/schedule/:id  (also removes the auto-created expense, if any)
 router.delete(
   "/:id",

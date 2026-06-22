@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Expense } from "../lib/types";
 import { CATEGORY_META, formatMoney, formatShortDate } from "../lib/display";
@@ -52,7 +53,9 @@ export default function TransactionCard({ expense, onDelete, index = 0 }: Props)
               hitSlop={10}
               style={styles.deleteBtn}
             >
-              <Text style={styles.deleteText}>Delete</Text>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path d="M3 6H21M8 6V4H16V6M19 6L18 20H6L5 6" stroke={C.t3} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
             </PressableScale>
           ) : null}
         </View>
@@ -66,11 +69,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: C.card,
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 20,
+    padding: 15,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.borderStrong,
   },
   iconWrapper: { marginRight: 12 },
   iconCircle: {
@@ -98,6 +101,5 @@ const styles = StyleSheet.create({
   amount: { fontSize: 15, fontWeight: '700' },
   amountPaid: { color: C.t1 },
   amountPlanned: { color: C.gold },
-  deleteBtn: { marginTop: 4 },
-  deleteText: { color: C.t3, fontSize: 12 },
+  deleteBtn: { marginTop: 6 },
 });

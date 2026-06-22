@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,9 +10,10 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { CATEGORY_META, CATEGORY_ORDER } from "../lib/display";
-import type { Category, ExpenseStatus } from "../lib/types";
+import type { Category, Expense, ExpenseStatus } from "../lib/types";
 import type { CreateExpenseInput } from "../store/useFinanceStore";
 import type { CreateProposalInput } from "../store/usePartnerStore";
+import { useTemplateStore } from "../store/useTemplateStore";
 import { ApiError } from "../lib/api";
 import { DateField } from "./DateTimeField";
 import PressableScale from "./ui/PressableScale";
@@ -35,26 +36,34 @@ function categoryToProposalType(category: Category): string {
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (input: CreateExpenseInput) => Promise<void>;
+  onSubmit?: (input: CreateExpenseInput) => Promise<void>;
+  onUpdate?: (id: string, data: Partial<CreateExpenseInput>) => Promise<void>;
+  initialExpense?: Expense | null;
   onProposal?: (input: CreateProposalInput) => Promise<void>;
   projects: { id: string; title: string }[];
   lockedProject?: { id: string; title: string } | null;
   defaultCategory?: Category;
   hasPartner?: boolean;
   partnerName?: string;
+  hideDate?: boolean;
 }
 
 export default function ExpenseFormModal({
   visible,
   onClose,
   onSubmit,
+  onUpdate,
+  initialExpense,
   onProposal,
   projects,
   lockedProject,
   defaultCategory = "INDIVIDUAL",
   hasPartner = false,
   partnerName = "Partner",
+  hideDate = false,
 }: Props) {
+  const isEditing = !!initialExpense;
+  const { templates, addTemplate, deleteTemplate } = useTemplateStore();
   const [mode, setMode] = useState<"add" | "proposal">("add");
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -67,19 +76,51 @@ export default function ExpenseFormModal({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Template creation inline form state
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [tmplTitle, setTmplTitle] = useState("");
+  const [tmplAmount, setTmplAmount] = useState("");
+  const [tmplCategory, setTmplCategory] = useState<Category>(defaultCategory);
+  const [tmplSaved, setTmplSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!visible) return;
     setMode("add");
-    setTitle("");
-    setAmount("");
-    setCategory(defaultCategory);
-    setDate(todayISO());
-    setStatus("PAID");
+    setTitle(initialExpense?.title ?? "");
+    setAmount(initialExpense ? String(initialExpense.amount) : "");
+    setCategory(initialExpense?.category ?? defaultCategory);
+    setDate(initialExpense?.date.slice(0, 10) ?? todayISO());
+    setStatus(initialExpense?.status ?? "PAID");
     setPaidBy("ME");
     setSyncCalendar(true);
     setEventId(lockedProject?.id ?? null);
     setError(null);
-  }, [visible, defaultCategory, lockedProject]);
+    setCreatingTemplate(false);
+    setTmplTitle("");
+    setTmplAmount("");
+    setTmplCategory(defaultCategory);
+    setTmplSaved(false);
+  }, [visible, defaultCategory, lockedProject, initialExpense]);
+
+  const applyTemplate = (t: { title: string; amount: number; category: Category }) => {
+    setTitle(t.title);
+    setAmount(String(t.amount));
+    setCategory(t.category);
+  };
+
+  const saveNewTemplate = () => {
+    const value = Number(tmplAmount.replace(",", "."));
+    if (!tmplTitle.trim() || !value || value <= 0) return;
+    addTemplate({ title: tmplTitle.trim(), amount: value, category: tmplCategory });
+    setTmplTitle("");
+    setTmplAmount("");
+    setTmplCategory(defaultCategory);
+    setCreatingTemplate(false);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    setTmplSaved(true);
+    savedTimerRef.current = setTimeout(() => setTmplSaved(false), 2000);
+  };
 
   const showPartnerOptions = hasPartner && !!onProposal;
 
@@ -87,18 +128,25 @@ export default function ExpenseFormModal({
     setError(null);
     const value = Number(amount.replace(",", "."));
     if (!value || value <= 0) { setError("Enter a valid amount"); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError("Date must be YYYY-MM-DD"); return; }
+    if (!hideDate && !/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError("Date must be YYYY-MM-DD"); return; }
 
     setSubmitting(true);
     try {
-      if (mode === "proposal" && onProposal) {
+      if (isEditing && onUpdate) {
+        await onUpdate(initialExpense!.id, {
+          title: title.trim() || undefined,
+          amount: value,
+          category,
+          status,
+        });
+      } else if (mode === "proposal" && onProposal) {
         await onProposal({
           title: title.trim() || CATEGORY_META[category].label,
           type: categoryToProposalType(category),
           cost: value,
           details: { date },
         });
-      } else {
+      } else if (onSubmit) {
         await onSubmit({
           title: title.trim() || undefined,
           amount: value,
@@ -128,7 +176,7 @@ export default function ExpenseFormModal({
             {/* Header */}
             <View style={s.header}>
               <Text style={s.headerTitle}>
-                {mode === "proposal" ? "Propose expense" : "New expense"}
+                {isEditing ? "Edit expense" : mode === "proposal" ? "Propose expense" : "New expense"}
               </Text>
               <PressableScale onPress={onClose} style={s.closeBtn}>
                 <Text style={s.closeBtnText}>✕</Text>
@@ -139,8 +187,8 @@ export default function ExpenseFormModal({
               <Text style={s.lockedHint}>Adding to: {lockedProject.title}</Text>
             ) : null}
 
-            {/* Mode toggle — only when partner is connected */}
-            {showPartnerOptions ? (
+            {/* Mode toggle — only when partner is connected and not editing */}
+            {showPartnerOptions && !isEditing ? (
               <View style={s.modeRow}>
                 <PressableScale
                   onPress={() => setMode("add")}
@@ -172,6 +220,115 @@ export default function ExpenseFormModal({
             {error ? (
               <View style={s.errorBox}>
                 <Text style={s.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Templates — only in add mode */}
+            {mode === "add" ? (
+              <View style={s.templatesSection}>
+                <View style={s.templatesSectionHeader}>
+                  <Text style={s.templatesSectionTitle}>
+                    {tmplSaved ? "✓ Template saved!" : "Templates"}
+                  </Text>
+                  <PressableScale
+                    onPress={() => setCreatingTemplate((v) => !v)}
+                    style={s.templateNewBtn}
+                  >
+                    <Text style={s.templateNewBtnText}>
+                      {creatingTemplate ? "Cancel" : "+ New"}
+                    </Text>
+                  </PressableScale>
+                </View>
+
+                {/* Template chips */}
+                {templates.length > 0 && !creatingTemplate ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 10 }}
+                  >
+                    <View style={s.templateChipRow}>
+                      {templates.map((t) => (
+                        <View key={t.id} style={s.templateChipWrapper}>
+                          <PressableScale
+                            onPress={() => applyTemplate(t)}
+                            style={s.templateChip}
+                          >
+                            <Text style={s.templateChipIcon}>
+                              {CATEGORY_META[t.category].icon}
+                            </Text>
+                            <View>
+                              <Text style={s.templateChipTitle} numberOfLines={1}>
+                                {t.title}
+                              </Text>
+                              <Text style={s.templateChipAmount}>€{t.amount}</Text>
+                            </View>
+                          </PressableScale>
+                          <PressableScale
+                            onPress={() => deleteTemplate(t.id)}
+                            hitSlop={8}
+                            style={s.templateChipX}
+                          >
+                            <Text style={s.templateChipXText}>✕</Text>
+                          </PressableScale>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                ) : null}
+
+                {templates.length === 0 && !creatingTemplate ? (
+                  <Text style={s.templatesEmpty}>
+                    No templates yet. Tap "+ New" to create one.
+                  </Text>
+                ) : null}
+
+                {/* Inline template creation form */}
+                {creatingTemplate ? (
+                  <View style={s.tmplForm}>
+                    <TextInput
+                      style={s.tmplInput}
+                      placeholder="Template name (e.g. Individual lesson)"
+                      placeholderTextColor={C.t3}
+                      value={tmplTitle}
+                      onChangeText={setTmplTitle}
+                    />
+                    <TextInput
+                      style={s.tmplInput}
+                      placeholder="Amount (€)"
+                      placeholderTextColor={C.t3}
+                      keyboardType="decimal-pad"
+                      value={tmplAmount}
+                      onChangeText={setTmplAmount}
+                    />
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ marginBottom: 10 }}
+                    >
+                      <View style={s.chipRow}>
+                        {CATEGORY_ORDER.map((c) => {
+                          const meta = CATEGORY_META[c];
+                          const active = c === tmplCategory;
+                          return (
+                            <PressableScale
+                              key={c}
+                              onPress={() => setTmplCategory(c)}
+                              style={[s.chip, active && s.chipActive]}
+                            >
+                              <Text style={[s.chipText, active && s.chipTextActive]}>
+                                {meta.icon} {meta.label}
+                              </Text>
+                            </PressableScale>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                    <PressableScale onPress={saveNewTemplate} style={s.tmplSaveBtn}>
+                      <Text style={s.tmplSaveBtnText}>Save template</Text>
+                    </PressableScale>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -218,11 +375,15 @@ export default function ExpenseFormModal({
               onChangeText={setTitle}
             />
 
-            {/* Date */}
-            <Text style={s.label}>Date</Text>
-            <View style={s.datePicker}>
-              <DateField value={date} onChange={setDate} />
-            </View>
+            {/* Date — hidden when adding to an event or editing */}
+            {!hideDate ? (
+              <>
+                <Text style={s.label}>Date</Text>
+                <View style={s.datePicker}>
+                  <DateField value={date} onChange={setDate} />
+                </View>
+              </>
+            ) : null}
 
             {/* Status — only in Add mode */}
             {mode === "add" ? (
@@ -319,7 +480,7 @@ export default function ExpenseFormModal({
               {submitting
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={s.submitBtnText}>
-                    {mode === "proposal" ? "Send Proposal ↗" : "Save expense"}
+                    {isEditing ? "Save changes" : mode === "proposal" ? "Send Proposal ↗" : "Save expense"}
                   </Text>
               }
             </PressableScale>
@@ -453,6 +614,81 @@ const s = StyleSheet.create({
   toggleBtnActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
   toggleBtnText: { color: C.t2, fontWeight: "600", fontSize: 14 },
   toggleBtnTextActive: { color: C.accent },
+  // Templates section
+  templatesSection: {
+    backgroundColor: C.elevated,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  templatesSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  templatesSectionTitle: { color: C.t1, fontWeight: "700", fontSize: 13 },
+  templateNewBtn: {
+    backgroundColor: C.accentFade,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: C.accentBorder,
+  },
+  templateNewBtnText: { color: C.accent, fontWeight: "700", fontSize: 12 },
+  templatesEmpty: { color: C.t3, fontSize: 13 },
+  templateChipRow: { flexDirection: "row", gap: 8 },
+  templateChipWrapper: { position: "relative" },
+  templateChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.card,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    maxWidth: 160,
+  },
+  templateChipIcon: { fontSize: 20 },
+  templateChipTitle: { color: C.t1, fontSize: 13, fontWeight: "600", maxWidth: 90 },
+  templateChipAmount: { color: C.accent, fontSize: 12, fontWeight: "500" },
+  templateChipX: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: C.red,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  templateChipXText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  // Inline template creation
+  tmplForm: { gap: 8 },
+  tmplInput: {
+    backgroundColor: C.card,
+    color: C.t1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  tmplSaveBtn: {
+    backgroundColor: C.accent,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 2,
+  },
+  tmplSaveBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   // Submit
   submitBtn: {
     backgroundColor: C.accent,

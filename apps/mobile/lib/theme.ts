@@ -1,41 +1,41 @@
 export const C = {
-  // ── Backgrounds ────────────────────────────────────────────────────────────
-  bg:       '#07070a',   // deep near-black with blue tint
-  card:     '#0e0e14',   // card surface
-  elevated: '#15151f',   // raised surfaces, modals
-  input:    '#11111a',   // input fields
+  // ── Backgrounds — deep blue-black slate (Apple/Linear dark base) ───────────
+  bg:       '#0D0E12',
+  card:     '#16181F',
+  elevated: '#1E2028',
+  input:    '#191B24',
 
-  // ── Borders ────────────────────────────────────────────────────────────────
-  border:       'rgba(255,255,255,0.06)',
-  borderStrong: 'rgba(255,255,255,0.12)',
+  // ── Borders — steel tone ───────────────────────────────────────────────────
+  border:       'rgba(255,255,255,0.08)',
+  borderStrong: 'rgba(255,255,255,0.16)',
 
-  // ── Emerald (primary accent) ────────────────────────────────────────────────
-  accent:       '#10b981',
-  accentFade:   'rgba(16,185,129,0.12)',
-  accentBorder: 'rgba(16,185,129,0.35)',
-  accentGlow:   'rgba(16,185,129,0.22)',
+  // ── Indigo (primary accent — Linear / premium tech) ────────────────────────
+  accent:       '#6366F1',
+  accentFade:   'rgba(99,102,241,0.12)',
+  accentBorder: 'rgba(99,102,241,0.40)',
+  accentGlow:   'rgba(99,102,241,0.22)',
 
-  // ── Gold (premium / planned) ────────────────────────────────────────────────
-  gold:       '#f59e0b',
+  // ── Gold (financial / planned) ─────────────────────────────────────────────
+  gold:       '#F59E0B',
   goldFade:   'rgba(245,158,11,0.12)',
   goldBorder: 'rgba(245,158,11,0.35)',
   goldGlow:   'rgba(245,158,11,0.20)',
 
   // ── Red (danger / debt) ────────────────────────────────────────────────────
-  red:       '#ef4444',
+  red:       '#EF4444',
   redFade:   'rgba(239,68,68,0.12)',
   redBorder: 'rgba(239,68,68,0.30)',
 
-  // ── Purple (events / projects) ─────────────────────────────────────────────
-  purple:       '#a855f7',
-  purpleFade:   'rgba(168,85,247,0.15)',
+  // ── Violet (events / projects — distinct from indigo accent) ──────────────
+  purple:       '#A855F7',
+  purpleFade:   'rgba(168,85,247,0.12)',
   purpleBorder: 'rgba(168,85,247,0.35)',
   purpleGlow:   'rgba(168,85,247,0.18)',
 
   // ── Text ───────────────────────────────────────────────────────────────────
-  t1: '#f0f0f8',   // primary
-  t2: '#8e8ea0',   // secondary
-  t3: '#44445a',   // disabled / hint
+  t1: '#F0F0FF',   // primary — white with subtle blue cast
+  t2: '#8888A8',   // secondary — blue-gray
+  t3: '#44445A',   // hint / disabled
 } as const;
 
 export const SPRING = {

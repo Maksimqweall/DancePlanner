@@ -1,246 +1,517 @@
-import { ScrollView, View, Text, StyleSheet } from "react-native";
+import { useEffect, useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Modal,
+  TextInput,
+  Alert,
+  Platform,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useAuthStore } from "../../../store/useAuthStore";
+import { useFinanceStore } from "../../../store/useFinanceStore";
+import { usePartnerStore } from "../../../store/usePartnerStore";
+import { formatMoney } from "../../../lib/display";
+import PressableScale from "../../../components/ui/PressableScale";
 import { C } from "../../../lib/theme";
-import { LogoMark } from "../../../components/SplashScreen";
+import { api } from "../../../lib/api";
+import { useWdsfStore } from "../../../store/useWdsfStore";
 
-const FEATURES = [
-  {
-    emoji: "💰",
-    color: C.accent,
-    glow: C.accentFade,
-    border: C.accentBorder,
-    title: "Finance Tracker",
-    desc: "Track every expense, split costs with your partner, and manage monthly budgets — with period filters and bar-chart insights.",
-  },
-  {
-    emoji: "📅",
-    color: C.purple,
-    glow: C.purpleFade,
-    border: C.purpleBorder,
-    title: "Shared Calendar",
-    desc: "Plan training sessions, competitions, and camps. Entries from both partners appear automatically on a single shared calendar.",
-  },
-  {
-    emoji: "🏆",
-    color: C.gold,
-    glow: C.goldFade,
-    border: C.goldBorder,
-    title: "Event Management",
-    desc: "Organize tournaments with hotel info, travel logistics, checklists, and expense tracking all in one place.",
-  },
-  {
-    emoji: "🤝",
-    color: C.accent,
-    glow: C.accentFade,
-    border: C.accentBorder,
-    title: "Live Partner Sync",
-    desc: "Real-time WebSocket synchronization — what one partner adds, the other sees instantly with no manual refresh needed.",
-  },
-  {
-    emoji: "📊",
-    color: C.gold,
-    glow: C.goldFade,
-    border: C.goldBorder,
-    title: "Smart Insights",
-    desc: "3M / 6M / 1Y period selectors, spending forecasts, accordion month groups, and couple expense split breakdowns.",
-  },
-] as const;
+export default function SettingsScreen() {
+  const router = useRouter();
+  const user   = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const { budgets, refresh, setBudget } = useFinanceStore();
+  const { couple } = usePartnerStore();
+  const wdsfProfile = useWdsfStore((s) => s.profile);
 
-export default function AboutScreen() {
+  const [budgetModal,  setBudgetModal]  = useState(false);
+  const [aboutModal,   setAboutModal]   = useState(false);
+  const [contactModal, setContactModal] = useState(false);
+
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+
+  const currentMonth  = new Date().toISOString().slice(0, 7);
+  const defaultBudget = user?.monthlyBudget ?? 1000;
+  const monthBudget   = budgets[currentMonth] ?? defaultBudget;
+  const initials      = (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
+
+  const handleLogout = () => {
+    if (Platform.OS === "web") { logout(); return; }
+    Alert.alert("Sign out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: logout },
+    ]);
+  };
+
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ── Hero ── */}
-      <Animated.View entering={FadeInDown.delay(0).duration(500)} style={styles.hero}>
-        <View style={styles.logoWrap}>
-          <LogoMark size={96} />
-        </View>
+    <ScrollView style={s.screen} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
-        <Text style={styles.appName}>DancePlanner</Text>
-        <View style={styles.versionChip}>
-          <Text style={styles.versionText}>Version 1.0 · Alpha</Text>
-        </View>
-
-        <Text style={styles.mission}>
-          Built for competitive dancesport athletes who demand excellence — managing finances, schedules, and partnerships in one elegant platform.
-        </Text>
-      </Animated.View>
-
-      {/* ── Features ── */}
-      <Animated.View entering={FadeInDown.delay(80).duration(400)}>
-        <View style={styles.sectionRow}>
-          <View style={styles.sectionLine} />
-          <Text style={styles.sectionLabel}>WHAT WE OFFER</Text>
-          <View style={styles.sectionLine} />
-        </View>
-      </Animated.View>
-
-      {FEATURES.map((f, i) => (
-        <Animated.View
-          key={f.title}
-          entering={FadeInDown.delay(120 + i * 70).duration(400)}
-        >
-          <View style={[styles.featureCard, { backgroundColor: f.glow, borderColor: f.border }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: f.glow, borderColor: f.border }]}>
-              <Text style={styles.featureEmoji}>{f.emoji}</Text>
-            </View>
-            <View style={styles.featureBody}>
-              <Text style={[styles.featureTitle, { color: f.color }]}>{f.title}</Text>
-              <Text style={styles.featureDesc}>{f.desc}</Text>
-            </View>
+      {/* Profile card */}
+      <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.profileCard}>
+        <View style={s.profileCardTopBand} />
+        <View style={s.avatarWrap}>
+          <View style={s.avatarGlow} />
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>{initials || "?"}</Text>
           </View>
-        </Animated.View>
-      ))}
+        </View>
+        <Text style={s.userName}>{user?.firstName} {user?.lastName}</Text>
+        <Text style={s.userEmail}>{user?.email}</Text>
+        <View style={s.premiumBadge}>
+          <Text style={s.premiumBadgeText}>✦ Premium</Text>
+        </View>
+      </Animated.View>
 
-      {/* ── Footer ── */}
-      <Animated.View entering={FadeInDown.delay(500).duration(400)} style={styles.footer}>
-        <View style={styles.footerDivider} />
-        <Text style={styles.footerHeart}>Made with ♥ for dancers worldwide</Text>
-        <Text style={styles.footerCopy}>© 2025 DancePlanner</Text>
-        <Text style={styles.footerSub}>
-          Competitive dancesport · Finance & logistics management
-        </Text>
+      {/* WDSF Profile */}
+      <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+        <Text style={s.sectionLabel}>WDSF PROFILE</Text>
+        <View style={s.settingsCard}>
+          <PressableScale onPress={() => router.push("/wdsf-profile")} style={s.settingsRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.settingsRowTitle}>
+                {wdsfProfile ? wdsfProfile.name : "Connect WDSF Profile"}
+              </Text>
+              <Text style={s.settingsRowSub}>
+                {wdsfProfile
+                  ? `MIN: ${wdsfProfile.min} · ${wdsfProfile.represents || wdsfProfile.nationality}`
+                  : "Link your WorldDanceSport profile"}
+              </Text>
+            </View>
+            {wdsfProfile ? (
+              <View style={[
+                s.wdsfStatusDot,
+                { backgroundColor: wdsfProfile.licenseStatus?.toLowerCase().includes("active")
+                  ? C.accent : C.red }
+              ]} />
+            ) : null}
+            <Text style={s.settingsRowChevron}>›</Text>
+          </PressableScale>
+        </View>
+      </Animated.View>
+
+      {/* Finance */}
+      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+        <Text style={s.sectionLabel}>FINANCE</Text>
+        <View style={s.settingsCard}>
+          <PressableScale onPress={() => setBudgetModal(true)} style={s.settingsRow}>
+            <View>
+              <Text style={s.settingsRowTitle}>Monthly Budget</Text>
+              <Text style={s.settingsRowSub}>Default spending limit per month</Text>
+            </View>
+            <View style={s.settingsRowRight}>
+              <Text style={s.settingsRowValue}>{formatMoney(monthBudget)}</Text>
+              <Text style={s.settingsRowChevron}>›</Text>
+            </View>
+          </PressableScale>
+
+          <View style={s.rowDivider} />
+
+          <View style={s.settingsRow}>
+            <View>
+              <Text style={s.settingsRowTitle}>Currency</Text>
+              <Text style={s.settingsRowSub}>All amounts displayed in</Text>
+            </View>
+            <Text style={s.settingsRowValue}>EUR €</Text>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Partner */}
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <Text style={s.sectionLabel}>PARTNER</Text>
+        <View style={s.settingsCard}>
+          <View style={s.settingsRow}>
+            <View>
+              <Text style={s.settingsRowTitle}>Partner sync</Text>
+              <Text style={s.settingsRowSub}>
+                {couple
+                  ? `Synced with ${couple.partner.firstName} ${couple.partner.lastName}`
+                  : "No partner connected"}
+              </Text>
+            </View>
+            <View style={[s.syncDot, { backgroundColor: couple ? C.accent : C.t3 }]} />
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Support */}
+      <Animated.View entering={FadeInDown.delay(140).duration(400)}>
+        <Text style={s.sectionLabel}>SUPPORT</Text>
+        <View style={s.settingsCard}>
+          <PressableScale onPress={() => setContactModal(true)} style={s.settingsRow}>
+            <View>
+              <Text style={s.settingsRowTitle}>Contact us</Text>
+              <Text style={s.settingsRowSub}>Send us a message via Telegram</Text>
+            </View>
+            <Text style={s.settingsRowChevron}>›</Text>
+          </PressableScale>
+
+          <View style={s.rowDivider} />
+
+          <PressableScale onPress={() => setAboutModal(true)} style={s.settingsRow}>
+            <View>
+              <Text style={s.settingsRowTitle}>About Dance Planner</Text>
+              <Text style={s.settingsRowSub}>Version, info & licenses</Text>
+            </View>
+            <Text style={s.settingsRowChevron}>›</Text>
+          </PressableScale>
+        </View>
+      </Animated.View>
+
+      {/* Account */}
+      <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+        <Text style={s.sectionLabel}>ACCOUNT</Text>
+        <View style={s.settingsCard}>
+          <PressableScale onPress={handleLogout} style={s.settingsRow}>
+            <Text style={[s.settingsRowTitle, { color: C.red }]}>Sign out</Text>
+            <Text style={s.settingsRowChevron}>›</Text>
+          </PressableScale>
+        </View>
       </Animated.View>
 
       <View style={{ height: 32 }} />
+
+      <BudgetModal
+        visible={budgetModal}
+        current={monthBudget}
+        onClose={() => setBudgetModal(false)}
+        onSave={async (val) => { await setBudget(currentMonth, val); setBudgetModal(false); }}
+      />
+
+      <AboutModal visible={aboutModal} onClose={() => setAboutModal(false)} />
+
+      <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
+// ─── Budget Modal ────────────────────────────────────────────────────────────
+
+function BudgetModal({
+  visible, current, onClose, onSave,
+}: {
+  visible: boolean;
+  current: number;
+  onClose: () => void;
+  onSave: (v: number) => Promise<void>;
+}) {
+  const [value, setValue]   = useState(String(current));
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) { setValue(String(current)); setError(null); }
+  }, [visible, current]);
+
+  const save = async () => {
+    const n = Number(value.replace(",", "."));
+    if (!n || n <= 0) { setError("Enter a valid amount"); return; }
+    setSaving(true);
+    try { await onSave(n); }
+    catch { setError("Could not save"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <View style={s.modalCard}>
+          <Text style={s.modalTitle}>Monthly Budget</Text>
+          <Text style={s.modalSub}>Default spending limit for each month.</Text>
+          {error ? <Text style={s.modalError}>{error}</Text> : null}
+          <TextInput
+            style={s.modalInput}
+            keyboardType="decimal-pad"
+            placeholder="1000"
+            placeholderTextColor={C.t3}
+            value={value}
+            onChangeText={setValue}
+            autoFocus
+          />
+          <View style={s.modalBtns}>
+            <PressableScale style={s.modalCancel} onPress={onClose}>
+              <Text style={s.modalCancelText}>Cancel</Text>
+            </PressableScale>
+            <PressableScale style={s.modalSave} onPress={save} disabled={saving}>
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={s.modalSaveText}>Save</Text>}
+            </PressableScale>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── About Modal ─────────────────────────────────────────────────────────────
+
+function AboutModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <View style={s.aboutCard}>
+          <View style={s.aboutLogoWrap}>
+            <View style={s.aboutLogo}>
+              <Text style={s.aboutLogoText}>DP</Text>
+            </View>
+          </View>
+          <Text style={s.aboutTitle}>Dance Planner</Text>
+          <View style={s.aboutBadge}>
+            <Text style={s.aboutBadgeText}>✦ Premium · v0.2</Text>
+          </View>
+          <Text style={s.aboutDesc}>
+            The all-in-one companion for competitive dancesport athletes. Manage your finances, track
+            events, sync with your partner, and stay on top of every competition.
+          </Text>
+
+          <View style={s.aboutDivider} />
+
+          <View style={s.aboutRow}>
+            <Text style={s.aboutRowLabel}>Version</Text>
+            <Text style={s.aboutRowValue}>0.2.0 (Alpha)</Text>
+          </View>
+          <View style={s.aboutRow}>
+            <Text style={s.aboutRowLabel}>Platform</Text>
+            <Text style={s.aboutRowValue}>iOS · Android</Text>
+          </View>
+          <View style={s.aboutRow}>
+            <Text style={s.aboutRowLabel}>Built with</Text>
+            <Text style={s.aboutRowValue}>Expo · React Native</Text>
+          </View>
+
+          <PressableScale style={s.aboutCloseBtn} onPress={onClose}>
+            <Text style={s.aboutCloseBtnText}>Close</Text>
+          </PressableScale>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Contact Modal ────────────────────────────────────────────────────────────
+
+function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent,    setSent]    = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) { setMessage(""); setSent(false); setError(null); }
+  }, [visible]);
+
+  const send = async () => {
+    if (!message.trim()) { setError("Please write a message first"); return; }
+    setSending(true);
+    setError(null);
+    try {
+      await api.post("/contact", { message: message.trim() });
+      setSent(true);
+    } catch {
+      setError("Failed to send. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <View style={s.modalCard}>
+          {sent ? (
+            <>
+              <Text style={s.sentIcon}>✓</Text>
+              <Text style={s.modalTitle}>Message sent!</Text>
+              <Text style={s.modalSub}>
+                We received your message and will get back to you via Telegram soon.
+              </Text>
+              <PressableScale style={[s.modalSave, { marginTop: 16 }]} onPress={onClose}>
+                <Text style={s.modalSaveText}>Done</Text>
+              </PressableScale>
+            </>
+          ) : (
+            <>
+              <Text style={s.modalTitle}>Contact us</Text>
+              <Text style={s.modalSub}>
+                Tell us anything — feedback, bugs, feature requests. We'll reply on Telegram.
+              </Text>
+              {error ? <Text style={s.modalError}>{error}</Text> : null}
+              <TextInput
+                style={[s.modalInput, s.contactTextArea]}
+                placeholder="Your message..."
+                placeholderTextColor={C.t3}
+                value={message}
+                onChangeText={setMessage}
+                multiline
+                numberOfLines={5}
+                textAlignVertical="top"
+                autoFocus
+              />
+              <View style={s.modalBtns}>
+                <PressableScale style={s.modalCancel} onPress={onClose}>
+                  <Text style={s.modalCancelText}>Cancel</Text>
+                </PressableScale>
+                <PressableScale style={s.modalSave} onPress={send} disabled={sending}>
+                  {sending
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={s.modalSaveText}>Send</Text>}
+                </PressableScale>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  screen:  { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 20, paddingTop: 24 },
 
-  // Hero
-  hero: {
+  profileCard: {
     alignItems: "center",
-    marginBottom: 32,
-    paddingHorizontal: 8,
+    paddingTop: 36,
+    paddingBottom: 28,
+    backgroundColor: C.card,
+    borderRadius: 28,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: C.borderStrong,
+    overflow: "hidden",
   },
-  logoWrap: {
-    marginBottom: 20,
-    shadowColor: "#10b981",
-    shadowOpacity: 0.55,
-    shadowRadius: 44,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 20,
-  },
-  appName: {
-    color: C.t1,
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: -1.2,
-    marginBottom: 10,
-  },
-  versionChip: {
+  profileCardTopBand: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
+    height: 72,
     backgroundColor: C.accentFade,
-    borderWidth: 1,
-    borderColor: C.accentBorder,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  avatarWrap: { position: "relative", width: 80, height: 80, marginBottom: 16 },
+  avatarGlow: {
+    position: "absolute",
+    top: -10, left: -10, right: -10, bottom: -10,
+    borderRadius: 50,
+    backgroundColor: C.accentGlow,
+  },
+  avatar: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: C.elevated,
+    borderWidth: 2.5, borderColor: C.accentBorder,
+    alignItems: "center", justifyContent: "center",
+  },
+  avatarText:  { color: C.accent, fontSize: 28, fontWeight: "800" },
+  userName:    { color: C.t1, fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginBottom: 4 },
+  userEmail:   { color: C.t3, fontSize: 13, marginBottom: 14 },
+  premiumBadge: {
+    backgroundColor: C.goldFade,
     borderRadius: 20,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 5,
-    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: C.goldBorder,
   },
-  versionText: {
-    color: C.accent,
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 0.3,
-  },
-  mission: {
-    color: C.t2,
-    fontSize: 15,
-    lineHeight: 24,
-    textAlign: "center",
-    fontWeight: "400",
-  },
+  premiumBadgeText: { color: C.gold, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
 
-  // Section divider
-  sectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 16,
-  },
-  sectionLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: C.border,
-  },
   sectionLabel: {
-    color: C.t3,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.4,
+    color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 1.2,
+    marginBottom: 8, marginLeft: 4,
   },
+  settingsCard: {
+    backgroundColor: C.card, borderRadius: 22,
+    borderWidth: 1, borderColor: C.borderStrong,
+    marginBottom: 22, overflow: "hidden",
+  },
+  settingsRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20, paddingVertical: 18,
+  },
+  settingsRowTitle:   { color: C.t1, fontSize: 15, fontWeight: "600", marginBottom: 2 },
+  settingsRowSub:     { color: C.t3, fontSize: 12 },
+  settingsRowRight:   { flexDirection: "row", alignItems: "center", gap: 6 },
+  settingsRowValue:   { color: C.t2, fontSize: 14, fontWeight: "600" },
+  settingsRowChevron: { color: C.t3, fontSize: 18, fontWeight: "300" },
+  rowDivider:         { height: 1, backgroundColor: C.border, marginHorizontal: 18 },
+  syncDot:            { width: 10, height: 10, borderRadius: 5 },
+  wdsfStatusDot:      { width: 8, height: 8, borderRadius: 4, marginRight: 4 },
 
-  // Feature cards
-  featureCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
+  modalOverlay: {
+    flex: 1, justifyContent: "center",
+    backgroundColor: "rgba(5,5,10,0.82)", paddingHorizontal: 22,
   },
-  featureIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+  modalCard: {
+    backgroundColor: C.card, borderRadius: 28,
+    padding: 26, borderWidth: 1, borderColor: C.borderStrong,
   },
-  featureEmoji: { fontSize: 22 },
-  featureBody: { flex: 1 },
-  featureTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 4,
-    letterSpacing: -0.2,
+  modalTitle:     { color: C.t1, fontSize: 18, fontWeight: "700", marginBottom: 4 },
+  modalSub:       { color: C.t2, fontSize: 14, marginBottom: 16 },
+  modalError:     { color: C.red, fontSize: 13, marginBottom: 10 },
+  modalInput: {
+    backgroundColor: C.elevated, color: C.t1,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 16, fontWeight: "500", marginBottom: 16,
+    borderWidth: 1, borderColor: C.border,
   },
-  featureDesc: {
-    color: C.t2,
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: "400",
+  contactTextArea: { height: 130, fontSize: 15 },
+  modalBtns:      { flexDirection: "row", gap: 10 },
+  modalCancel: {
+    flex: 1, paddingVertical: 14, borderRadius: 14,
+    alignItems: "center", backgroundColor: C.elevated,
   },
+  modalCancelText: { color: C.t2, fontWeight: "600" },
+  modalSave: {
+    flex: 1, paddingVertical: 14, borderRadius: 14,
+    alignItems: "center", backgroundColor: C.accent,
+  },
+  modalSaveText: { color: "#fff", fontWeight: "700" },
+  sentIcon: { color: C.accent, fontSize: 40, textAlign: "center", marginBottom: 8 },
 
-  // Footer
-  footer: {
+  // About modal
+  aboutCard: {
+    backgroundColor: C.card, borderRadius: 24,
+    padding: 26, borderWidth: 1, borderColor: C.border,
     alignItems: "center",
-    paddingTop: 8,
-    paddingHorizontal: 16,
   },
-  footerDivider: {
-    width: 40,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: C.border,
-    marginBottom: 20,
+  aboutLogoWrap: { marginBottom: 14 },
+  aboutLogo: {
+    width: 68, height: 68, borderRadius: 20,
+    backgroundColor: C.elevated,
+    borderWidth: 2, borderColor: C.accentBorder,
+    alignItems: "center", justifyContent: "center",
   },
-  footerHeart: {
-    color: C.t2,
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 6,
+  aboutLogoText:  { color: C.accent, fontSize: 22, fontWeight: "900", letterSpacing: -1 },
+  aboutTitle:     { color: C.t1, fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginBottom: 10 },
+  aboutBadge: {
+    backgroundColor: C.goldFade, borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 5,
+    borderWidth: 1, borderColor: C.goldBorder, marginBottom: 16,
   },
-  footerCopy: {
-    color: C.t3,
-    fontSize: 13,
-    fontWeight: "500",
-    marginBottom: 6,
+  aboutBadgeText: { color: C.gold, fontSize: 12, fontWeight: "700" },
+  aboutDesc: {
+    color: C.t2, fontSize: 14, textAlign: "center",
+    lineHeight: 21, marginBottom: 20,
   },
-  footerSub: {
-    color: C.t3,
-    fontSize: 11,
-    textAlign: "center",
-    lineHeight: 17,
-    letterSpacing: 0.2,
+  aboutDivider:   { height: 1, backgroundColor: C.border, width: "100%", marginBottom: 16 },
+  aboutRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    width: "100%", paddingVertical: 7,
   },
+  aboutRowLabel: { color: C.t3, fontSize: 14 },
+  aboutRowValue: { color: C.t1, fontSize: 14, fontWeight: "600" },
+  aboutCloseBtn: {
+    marginTop: 22, paddingVertical: 14, borderRadius: 14,
+    alignItems: "center", backgroundColor: C.elevated,
+    width: "100%",
+  },
+  aboutCloseBtnText: { color: C.t2, fontWeight: "600", fontSize: 15 },
 });

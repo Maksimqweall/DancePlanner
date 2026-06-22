@@ -83,20 +83,34 @@ router.patch(
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    await getOwnedEvent(param(req, "id"), req.userId!);
-    // Remove attached files from disk before deleting the project.
-    const attachments = await prisma.attachment.findMany({
-      where: { eventId: param(req, "id") },
+    const eventId = param(req, "id");
+    await getOwnedEvent(eventId, req.userId!);
+
+    // Remove attached files from disk (best-effort, outside transaction).
+    const attachments = await prisma.attachment.findMany({ where: { eventId } });
+    for (const att of attachments) removeUploadedFile(att.fileUrl);
+
+    await prisma.$transaction(async (tx) => {
+      // Find all expenses linked to this event.
+      const eventExpenses = await tx.expense.findMany({
+        where: { eventId },
+        select: { id: true },
+      });
+      const expenseIds = eventExpenses.map((e) => e.id);
+
+      if (expenseIds.length > 0) {
+        // Null out ScheduleEntry.expenseId before deleting (FK points expense→scheduleEntry).
+        await tx.scheduleEntry.updateMany({
+          where: { expenseId: { in: expenseIds } },
+          data: { expenseId: null },
+        });
+        await tx.expense.deleteMany({ where: { id: { in: expenseIds } } });
+      }
+
+      // Attachments + checklist cascade via onDelete: Cascade in the schema.
+      await tx.event.delete({ where: { id: eventId } });
     });
-    for (const att of attachments) {
-      removeUploadedFile(att.fileUrl);
-    }
-    // Detach expenses (keep them, just unlink from the deleted project).
-    await prisma.expense.updateMany({
-      where: { eventId: param(req, "id") },
-      data: { eventId: null },
-    });
-    await prisma.event.delete({ where: { id: param(req, "id") } });
+
     res.status(204).end();
   })
 );

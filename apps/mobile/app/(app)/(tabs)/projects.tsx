@@ -78,9 +78,13 @@ export default function ProjectsScreen() {
 function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress: () => void; index?: number }) {
   const meta = EVENT_TYPE_META[project.type] ?? EVENT_TYPE_META.TOURNAMENT;
   const counts = project._count;
+  const isPast = new Date(project.endDate ?? project.date) < new Date();
 
   return (
-    <Animated.View entering={index < 8 ? FadeInDown.delay(index * 60 + 80).duration(380) : undefined}>
+    <Animated.View
+      entering={index < 8 ? FadeInDown.delay(index * 60 + 80).duration(380) : undefined}
+      style={{ opacity: isPast ? 0.55 : 1 }}
+    >
       <PressableScale onPress={onPress} style={styles.projectCard}>
         <View style={styles.projectHeader}>
           <View style={styles.projectLeft}>
@@ -88,7 +92,14 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
               <Text style={styles.projectIcon}>{meta.icon}</Text>
             </View>
             <View style={styles.projectInfo}>
-              <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
+                {isPast ? (
+                  <View style={styles.pastBadge}>
+                    <Text style={styles.pastBadgeText}>Past</Text>
+                  </View>
+                ) : null}
+              </View>
               <Text style={styles.projectMeta}>{meta.label} · {formatDate(project.date)}</Text>
               {project.location ? (
                 <Text style={styles.projectLocation}>📍 {project.location}</Text>
@@ -99,11 +110,17 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
             <Text style={styles.projectBudget}>{formatMoney(project.budget)}</Text>
           )}
         </View>
-        {counts ? (
+        {counts && (counts.attachments > 0 || counts.checklist > 0 || counts.expenses > 0) ? (
           <View style={styles.projectStats}>
-            <StatChip label={`${counts.attachments} files`} />
-            <StatChip label={`${counts.checklist} tasks`} />
-            <StatChip label={`${counts.expenses} expenses`} />
+            {counts.attachments > 0 ? (
+              <StatChip label={`${counts.attachments} file${counts.attachments !== 1 ? 's' : ''}`} />
+            ) : null}
+            {counts.checklist > 0 ? (
+              <StatChip label={`${counts.checklist} task${counts.checklist !== 1 ? 's' : ''}`} />
+            ) : null}
+            {counts.expenses > 0 ? (
+              <StatChip label={`${counts.expenses} expense${counts.expenses !== 1 ? 's' : ''}`} />
+            ) : null}
           </View>
         ) : null}
       </PressableScale>
@@ -287,12 +304,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  pageTitle: { color: C.t1, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  pageTitle: { color: C.t1, fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
   addBtn: {
     backgroundColor: C.accent,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   emptyCard: {
@@ -307,11 +324,11 @@ const styles = StyleSheet.create({
   emptyText: { color: C.t2, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   projectCard: {
     backgroundColor: C.card,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.borderStrong,
   },
   projectHeader: {
     flexDirection: 'row',
@@ -344,16 +361,25 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   statChipText: { color: C.t3, fontSize: 12 },
+  pastBadge: {
+    backgroundColor: C.elevated,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  pastBadgeText: { color: C.t3, fontSize: 10, fontWeight: '600', letterSpacing: 0.2 },
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
   modalSheet: {
     backgroundColor: C.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 22,
     maxHeight: '92%',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: C.borderStrong,
     borderBottomWidth: 0,
   },
   modalHandle: {

@@ -69,8 +69,8 @@ export default function ProgressBar({ spent, limit }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: C.card,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: C.border,
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   track: {
-    height: 6,
+    height: 8,
     backgroundColor: C.elevated,
     borderRadius: 999,
     overflow: 'hidden',

@@ -33,6 +33,7 @@ interface ScheduleState {
   createEntry: (input: CreateScheduleInput) => Promise<void>;
   updateEntry: (id: string, input: Partial<CreateScheduleInput>) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
+  deleteDay: (date: string) => Promise<void>;
 }
 
 export const useScheduleStore = create<ScheduleState>((set, get) => ({
@@ -66,6 +67,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
 
   deleteEntry: async (id) => {
     await api.del(`/schedule/${id}`);
+    await get().fetchMonth(get().viewMonth);
+  },
+
+  deleteDay: async (date) => {
+    await api.del(`/schedule?date=${date}`);
     await get().fetchMonth(get().viewMonth);
   },
 }));

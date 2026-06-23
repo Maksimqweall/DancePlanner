@@ -205,23 +205,32 @@ function buildMarkColumnMap($table: Cheerio<Element>, $: CheerioAPI): ColInfo[] 
             map[idx].type = "total";
           } else if (lower === "rank" || lower === "place" || lower === "pos" || lower === "rk") {
             map[idx].type = "rank";
+          } else if (raw === "=") {
+            map[idx].type = "danceTotal";
           } else {
             // Treat as dance name
             map[idx].dance = raw;
             map[idx].type = "judge"; // will be refined in row 2
           }
         } else {
-          // Second header row fills in judge letters
+          // Second header row fills in judge letters.
+          // Only modify columns that are still "judge" (set as dance header in row 0) or "skip".
+          // Never override couple/round/total/rank/danceTotal already identified in row 0.
           if (raw === "=") {
             map[idx].type = "danceTotal";
           } else if (lower === "rank" || lower === "place") {
             map[idx].type = "rank";
           } else if (lower === "total" || lower === "tot") {
             map[idx].type = "total";
-          } else {
-            map[idx].judge = raw;
-            map[idx].type = "judge";
+          } else if (map[idx].type === "judge") {
+            // Fill in the judge letter only for columns already tagged as judge in row 0
+            if (raw) {
+              map[idx].judge = raw;
+            } else {
+              map[idx].type = "skip"; // empty cell in judge position → not a real judge column
+            }
           }
+          // For any other pre-classified type (couple, round, total, rank, danceTotal) — leave unchanged
         }
 
         if (rowspan > 1) rowspanned.add(idx);
@@ -388,11 +397,36 @@ async function scrapeMarksPage(
     "slow fox", "v. waltz", "q.step",
   ];
 
+  // Build a map: table element → preceding heading text, so we can detect final tables.
+  const tablePrevHeading = new Map<Element, string>();
+  {
+    let curHeading = "";
+    $("h1, h2, h3, h4, h5, h6, table, caption").each((_, el) => {
+      if ($(el).is("table")) {
+        tablePrevHeading.set(el as Element, curHeading);
+      } else {
+        const t = $(el).text().trim();
+        if (t && t.length < 120) curHeading = t;
+      }
+    });
+  }
+
+  // Regex that matches "Final" but not "Semi-Final", "Quarter-Final", "1/2 Final", etc.
+  const FINAL_HEADING_RE = /\bfinal\b/i;
+  const QUALIFYING_PREFIX_RE = /\b(semi|quarter|1\/2|1\/4|preliminary|prelim)\b/i;
+
   $("table").each((_, table) => {
     const $t = $(table);
     const hdrText = $t.find("thead").text().toLowerCase();
 
     if (!danceWords.some(d => hdrText.includes(d))) return;
+
+    // Skip tables whose preceding heading indicates the Final round
+    const prevHeading = tablePrevHeading.get(table as Element) ?? "";
+    if (FINAL_HEADING_RE.test(prevHeading) && !QUALIFYING_PREFIX_RE.test(prevHeading)) return;
+    // Also skip if the table caption itself says "final"
+    const captionText = $t.find("caption").text();
+    if (FINAL_HEADING_RE.test(captionText) && !QUALIFYING_PREFIX_RE.test(captionText)) return;
 
     const colMap = buildMarkColumnMap($t, $);
 
@@ -446,7 +480,10 @@ async function scrapeMarksPage(
       let roundNum: number;
       const adjustedRoundIdx = roundCellIdx >= 0 ? roundCellIdx - rowspanShift : -1;
       if (adjustedRoundIdx >= 0 && adjustedRoundIdx < cells.length) {
-        roundNum = parseInt(cells[adjustedRoundIdx], 10);
+        const rawRoundStr = cells[adjustedRoundIdx].trim();
+        // Skip rows whose round column explicitly labels this as the Final
+        if (/^f$/i.test(rawRoundStr) || /\bfinal\b/i.test(rawRoundStr)) return;
+        roundNum = parseInt(rawRoundStr, 10);
         if (isNaN(roundNum) || roundNum < 1) {
           // Round column exists but value isn't a valid round number (e.g. "Total", "Sum" rows) — skip
           if (roundCellIdx >= 0) return;
@@ -522,8 +559,14 @@ async function scrapeOfficialsPage(officialsUrl: string): Promise<Record<string,
         $(el).text().trim().toLowerCase()
       ).get();
 
-      const idxName       = headers.findIndex(h => h === "name" || h.includes("adjudicator"));
-      const idxIdentifier = headers.indexOf("identifier");
+      const idxName = headers.findIndex(h =>
+        h === "name" || h === "full name" || h === "fullname" ||
+        h.includes("adjudicator") || h.includes("judge")
+      );
+      const idxIdentifier = headers.findIndex(h =>
+        h === "identifier" || h === "letter" || h === "code" ||
+        h === "sign" || h === "abbr" || h === "id" || h === "nr" || h === "no"
+      );
       if (idxName < 0 || idxIdentifier < 0) return;
 
       $t.find("tbody tr").each((_, row) => {
@@ -715,11 +758,23 @@ export async function scrapeCompetitionAnalytics(
       }
     }
   }
-  const judgeStats = Object.entries(judgeMap).map(([judge, { total, possible }]) => ({
-    judge,
-    totalCrosses: total,
-    pct: possible > 0 ? Math.round((total / possible) * 100) : 0,
-  })).sort((a, b) => b.totalCrosses - a.totalCrosses);
+  const totalRounds = rounds.length;
+  const judgeStats = Object.entries(judgeMap)
+    .filter(([judge, { possible }]) => {
+      // Drop empty-string judge keys (parsing artifact)
+      if (!judge) return false;
+      // Drop judges that appear in far fewer dances than expected —
+      // typically these are phantom entries from a misidentified column.
+      // A real judge should appear in at least one dance per round.
+      // Allow some slack (0.3 threshold) for judges absent in early rounds.
+      const minExpected = Math.max(1, totalRounds * 0.3);
+      return possible >= minExpected;
+    })
+    .map(([judge, { total, possible }]) => ({
+      judge,
+      totalCrosses: total,
+      pct: possible > 0 ? Math.round((total / possible) * 100) : 0,
+    })).sort((a, b) => b.totalCrosses - a.totalCrosses);
 
   const totalPossible = judgeStats.reduce((s, j) => s + j.totalCrosses, 0);
 

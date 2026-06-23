@@ -1,10 +1,12 @@
+import { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Expense } from "../lib/types";
 import { CATEGORY_META, formatMoney, formatShortDate } from "../lib/display";
 import PressableScale from "./ui/PressableScale";
-import { C } from "../lib/theme";
+import { useC } from "../lib/useTheme";
+import type { Palette } from "../lib/theme";
 
 interface Props {
   expense: Expense;
@@ -13,6 +15,8 @@ interface Props {
 }
 
 export default function TransactionCard({ expense, onDelete, index = 0 }: Props) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const meta = CATEGORY_META[expense.category] ?? CATEGORY_META.OTHER;
   const isPlanned = expense.status === "PLANNED";
   const title = expense.title || meta.label;
@@ -64,7 +68,8 @@ export default function TransactionCard({ expense, onDelete, index = 0 }: Props)
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -102,4 +107,5 @@ const styles = StyleSheet.create({
   amountPaid: { color: C.t1 },
   amountPlanned: { color: C.gold },
   deleteBtn: { marginTop: 6 },
-});
+  });
+}

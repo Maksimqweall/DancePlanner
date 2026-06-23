@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
@@ -10,6 +10,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useSegments } from "expo-router";
 import Svg, { Path, Rect, Circle, Line } from "react-native-svg";
 import { C } from "../lib/theme";
+import type { Palette } from "../lib/theme";
+import { useC } from "../lib/useTheme";
 import { useDrawer } from "../lib/DrawerContext";
 import { useAuthStore } from "../store/useAuthStore";
 import { usePartnerStore } from "../store/usePartnerStore";
@@ -88,18 +90,20 @@ const NAV_MAIN = [
 ] as const;
 
 const NAV_SECONDARY = [
-  { key: "about", label: "About Us", href: "/about", icon: InfoIcon, accent: C.purple },
+  { key: "about-app", label: "About Us", href: "/about-app", icon: InfoIcon, accent: C.purple },
 ] as const;
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function SideDrawer() {
   const { isOpen, close } = useDrawer();
+  const T         = useC();
+  const s         = useMemo(() => makeStyles(T), [T]);
   const router    = useRouter();
   const segments  = useSegments();
   const insets    = useSafeAreaInsets();
-  const user      = useAuthStore((s) => s.user);
-  const logout    = useAuthStore((s) => s.logout);
-  const pending   = usePartnerStore((s) => s.pendingCount);
+  const user      = useAuthStore((st) => st.user);
+  const logout    = useAuthStore((st) => st.logout);
+  const pending   = usePartnerStore((st) => st.pendingCount);
 
   const translateX     = useSharedValue(-DRAWER_W - 24);
   const backdropO      = useSharedValue(0);
@@ -179,7 +183,7 @@ export default function SideDrawer() {
                 active={active}
                 accent={accent}
                 badge={badge ? pending : 0}
-                icon={<Icon color={active ? "#fff" : C.t2} size={20} />}
+                icon={<Icon color={active ? "#fff" : T.t2} size={20} />}
                 onPress={() => navigate(href)}
               />
             );
@@ -198,7 +202,7 @@ export default function SideDrawer() {
                 active={active}
                 accent={accent}
                 badge={0}
-                icon={<Icon color={active ? "#fff" : C.t2} size={20} />}
+                icon={<Icon color={active ? "#fff" : T.t2} size={20} />}
                 onPress={() => navigate(href)}
               />
             );
@@ -212,7 +216,7 @@ export default function SideDrawer() {
           onPress={handleLogout}
           style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.7 }]}
         >
-          <LogoutIcon color={C.red} size={20} />
+          <LogoutIcon color={T.red} size={20} />
           <Text style={s.logoutText}>Sign out</Text>
         </Pressable>
 
@@ -227,6 +231,8 @@ function NavItem({
 }: {
   label: string; active: boolean; accent: string; badge: number; icon: React.ReactNode; onPress: () => void;
 }) {
+  const T = useC();
+  const s = useMemo(() => makeStyles(T), [T]);
   return (
     <Pressable
       onPress={onPress}
@@ -247,7 +253,8 @@ function NavItem({
   );
 }
 
-const s = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   backdropFill: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -382,4 +389,5 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-});
+  });
+}

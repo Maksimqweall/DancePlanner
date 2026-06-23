@@ -19,10 +19,10 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
   smtp: {
-    host:     process.env.SMTP_HOST ?? "",
+    host:     (process.env.SMTP_HOST ?? "").trim(),
     port:     Number(process.env.SMTP_PORT ?? 587),
-    user:     process.env.SMTP_USER ?? "",
-    pass:     process.env.SMTP_PASS ?? "",
-    from:     process.env.SMTP_FROM ?? "",
+    user:     (process.env.SMTP_USER ?? "").trim(),
+    pass:     (process.env.SMTP_PASS ?? "").trim(),
+    from:     (process.env.SMTP_FROM ?? "").trim(),
   },
 };

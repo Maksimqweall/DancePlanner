@@ -54,8 +54,15 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+// Supported display currencies (several European + US Dollar). Keep in sync with
+// CURRENCIES in apps/mobile/lib/display.ts.
+export const CURRENCY_CODES = [
+  "EUR", "USD", "GBP", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK",
+] as const;
+
 export const updateMeSchema = z.object({
   monthlyBudget: z.number().positive().nullable().optional(),
+  currency: z.enum(CURRENCY_CODES).optional(),
 });
 
 export const forgotPasswordSchema = z.object({

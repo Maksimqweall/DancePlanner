@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import { CATEGORY_META, CATEGORY_ORDER } from "../lib/display";
+import { CATEGORY_META, CATEGORY_ORDER, currencySymbol } from "../lib/display";
 import type { Category, Expense, ExpenseStatus } from "../lib/types";
 import type { CreateExpenseInput } from "../store/useFinanceStore";
 import type { CreateProposalInput } from "../store/usePartnerStore";
@@ -17,7 +17,8 @@ import { useTemplateStore } from "../store/useTemplateStore";
 import { ApiError } from "../lib/api";
 import { DateField } from "./DateTimeField";
 import PressableScale from "./ui/PressableScale";
-import { C } from "../lib/theme";
+import type { Palette } from "../lib/theme";
+import { useC } from "../lib/useTheme";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -63,6 +64,8 @@ export default function ExpenseFormModal({
   hideDate = false,
 }: Props) {
   const isEditing = !!initialExpense;
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
   const { templates, addTemplate, deleteTemplate } = useTemplateStore();
   const [mode, setMode] = useState<"add" | "proposal">("add");
   const [title, setTitle] = useState("");
@@ -333,7 +336,7 @@ export default function ExpenseFormModal({
             ) : null}
 
             {/* Amount */}
-            <Text style={s.label}>Amount (€)</Text>
+            <Text style={s.label}>Amount ({currencySymbol()})</Text>
             <TextInput
               style={s.input}
               placeholder="0"
@@ -493,7 +496,8 @@ export default function ExpenseFormModal({
   );
 }
 
-const s = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" },
   sheet: {
     backgroundColor: C.card,
@@ -703,4 +707,5 @@ const s = StyleSheet.create({
     elevation: 6,
   },
   submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-});
+  });
+}

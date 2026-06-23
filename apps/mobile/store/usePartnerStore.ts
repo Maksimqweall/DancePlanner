@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
+import { useAuthStore } from "./useAuthStore";
 import type { Couple, Proposal, SplitView } from "../lib/types";
 
 export interface CreateProposalInput {
@@ -67,8 +68,10 @@ export const usePartnerStore = create<PartnerState>((set, get) => ({
     const { proposals } = await api.get<{ proposals: Proposal[] }>(
       `/proposals?direction=${direction}`
     );
+    // Inbox badge = proposals awaiting MY response, i.e. ones I did not send.
+    const myId = useAuthStore.getState().user?.id;
     const pending = proposals.filter(
-      (p) => p.status === "PENDING" && p.senderId !== get().couple?.partner.id
+      (p) => p.status === "PENDING" && p.senderId !== myId
     ).length;
     set({ proposals, pendingCount: pending });
   },

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,11 +13,14 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import PressableScale from "../../components/ui/PressableScale";
-import { C } from "../../lib/theme";
+import type { Palette } from "../../lib/theme";
+import { useC } from "../../lib/useTheme";
 
 export default function ForgotPassword() {
   const router = useRouter();
-  const forgotPassword = useAuthStore((s) => s.forgotPassword);
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
+  const forgotPassword = useAuthStore((st) => st.forgotPassword);
 
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +115,8 @@ export default function ForgotPassword() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   root:  { flex: 1, backgroundColor: C.bg },
   inner: { flex: 1, paddingHorizontal: 24, paddingTop: 64 },
   header: { marginBottom: 36 },
@@ -144,7 +148,7 @@ const styles = StyleSheet.create({
     borderColor: C.border,
     marginBottom: 16,
   },
-  inputFocused: { borderColor: C.accentBorder, backgroundColor: "#1a1f1e" },
+  inputFocused: { borderColor: C.accentBorder, backgroundColor: C.elevated },
   button: {
     backgroundColor: C.accent,
     borderRadius: 14,
@@ -174,4 +178,5 @@ const styles = StyleSheet.create({
   successIcon:  { fontSize: 40, color: C.accent, marginBottom: 12 },
   successTitle: { color: C.t1, fontSize: 20, fontWeight: "700", marginBottom: 8 },
   successText:  { color: C.t2, fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 24 },
-});
+  });
+}

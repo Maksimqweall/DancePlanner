@@ -108,14 +108,55 @@ export function monthShort(monthKey: string): string {
   return new Date(`${monthKey}-01T00:00:00`).toLocaleDateString("en-US", { month: "short" });
 }
 
-const money = new Intl.NumberFormat("en-GB", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
+// ─── Currency ──────────────────────────────────────────────────────────────
+// Supported display currencies (several European + US Dollar). Keep the codes
+// in sync with CURRENCY_CODES in apps/server/src/lib/validation.ts.
+export interface CurrencyMeta {
+  code: string;
+  symbol: string;
+  label: string;
+  position: "prefix" | "suffix";
+}
+
+export const CURRENCIES: Record<string, CurrencyMeta> = {
+  EUR: { code: "EUR", symbol: "€",   label: "Euro",            position: "prefix" },
+  USD: { code: "USD", symbol: "$",   label: "US Dollar",       position: "prefix" },
+  GBP: { code: "GBP", symbol: "£",   label: "British Pound",   position: "prefix" },
+  CHF: { code: "CHF", symbol: "CHF", label: "Swiss Franc",     position: "prefix" },
+  SEK: { code: "SEK", symbol: "kr",  label: "Swedish Krona",   position: "suffix" },
+  NOK: { code: "NOK", symbol: "kr",  label: "Norwegian Krone", position: "suffix" },
+  DKK: { code: "DKK", symbol: "kr",  label: "Danish Krone",    position: "suffix" },
+  PLN: { code: "PLN", symbol: "zł",  label: "Polish Złoty",    position: "suffix" },
+  CZK: { code: "CZK", symbol: "Kč",  label: "Czech Koruna",    position: "suffix" },
+};
+
+export const CURRENCY_ORDER: string[] = ["EUR", "USD", "GBP", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK"];
+
+// Module-level display currency, updated from the signed-in user's preference
+// (see useAuthStore). formatMoney() reads this so all amounts re-format together.
+let currentCurrency = "EUR";
+
+export function setDisplayCurrency(code: string | null | undefined): void {
+  if (code && CURRENCIES[code]) currentCurrency = code;
+}
+
+export function getDisplayCurrency(): CurrencyMeta {
+  return CURRENCIES[currentCurrency] ?? CURRENCIES.EUR;
+}
+
+// Symbol of the active currency — handy for input-field labels like "Amount (€)".
+export function currencySymbol(): string {
+  return getDisplayCurrency().symbol;
+}
+
+const decimalFmt = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
 
 export function formatMoney(amount: number): string {
-  return money.format(amount);
+  const c = getDisplayCurrency();
+  const n = decimalFmt.format(amount);
+  if (c.position === "suffix") return `${n} ${c.symbol}`;
+  // Multi-letter prefixes (e.g. CHF) read better with a space; symbols hug the number.
+  return c.symbol.length > 1 ? `${c.symbol} ${n}` : `${c.symbol}${n}`;
 }
 
 export function formatDate(iso: string): string {

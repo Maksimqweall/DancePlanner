@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,14 +9,15 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import { SESSION_META, SESSION_ORDER } from "../lib/display";
+import { SESSION_META, SESSION_ORDER, currencySymbol } from "../lib/display";
 import type { ScheduleEntry, SessionType } from "../lib/types";
 import type { CreateScheduleInput } from "../store/useScheduleStore";
 import type { CreateProposalInput } from "../store/usePartnerStore";
 import { ApiError } from "../lib/api";
 import { DateField, TimeField } from "./DateTimeField";
 import PressableScale from "./ui/PressableScale";
-import { C } from "../lib/theme";
+import type { Palette } from "../lib/theme";
+import { useC } from "../lib/useTheme";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -54,6 +55,8 @@ export default function SessionFormModal({
   hasPartner = false,
   partnerName = "Partner",
 }: Props) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
   const [mode, setMode] = useState<"add" | "proposal">("add");
   const [title, setTitle] = useState("");
   const [type, setType] = useState<SessionType>("INDIVIDUAL");
@@ -306,7 +309,7 @@ export default function SessionFormModal({
             {/* Cost */}
             {showCost ? (
               <>
-                <Text style={s.label}>Cost € (optional)</Text>
+                <Text style={s.label}>Cost {currencySymbol()} (optional)</Text>
                 <TextInput
                   style={s.input}
                   placeholder="e.g. 70"
@@ -430,7 +433,8 @@ export default function SessionFormModal({
   );
 }
 
-const s = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" },
   sheet: {
     backgroundColor: C.card,
@@ -559,4 +563,5 @@ const s = StyleSheet.create({
   submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   deleteBtn: { paddingVertical: 16, alignItems: "center", marginBottom: 16 },
   deleteBtnText: { color: C.red, fontWeight: "600", fontSize: 15 },
-});
+  });
+}

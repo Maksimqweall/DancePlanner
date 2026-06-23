@@ -22,6 +22,7 @@ function publicUser(user: {
   firstName: string;
   lastName: string;
   monthlyBudget: number | null;
+  currency: string;
 }) {
   return {
     id: user.id,
@@ -29,6 +30,7 @@ function publicUser(user: {
     firstName: user.firstName,
     lastName: user.lastName,
     monthlyBudget: user.monthlyBudget,
+    currency: user.currency,
   };
 }
 
@@ -98,9 +100,10 @@ router.patch(
   requireAuth,
   asyncHandler(async (req, res) => {
     const data = updateMeSchema.parse(req.body);
+    // Prisma skips `undefined` fields, so only provided keys are updated.
     const user = await prisma.user.update({
       where: { id: req.userId },
-      data: { monthlyBudget: data.monthlyBudget },
+      data: { monthlyBudget: data.monthlyBudget, currency: data.currency },
     });
     res.json({ user: publicUser(user) });
   })
@@ -128,7 +131,18 @@ router.post(
       data: { resetToken: token, resetTokenExpiry: expiry },
     });
 
-    await sendPasswordResetEmail(email, token);
+    try {
+      await sendPasswordResetEmail(email, token);
+    } catch (err) {
+      // Roll back the token so a failed send doesn't leave a dangling code.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetToken: null, resetTokenExpiry: null },
+      });
+      console.error("Password reset email failed:", err);
+      throw new HttpError(502, "Could not send the reset email right now. Please try again later.");
+    }
+
     res.json({ ok: true });
   })
 );

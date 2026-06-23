@@ -8,6 +8,7 @@ import SideDrawer from "../../../components/SideDrawer";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
 import { C } from "../../../lib/theme";
+import { useC } from "../../../lib/useTheme";
 
 function HomeIcon({ color, size = 22 }: { color: string; size?: number }) {
   return (
@@ -84,14 +85,15 @@ function TabIcon({ name, color, size }: { name: string; color: string; size: num
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const pendingCount = usePartnerStore((s) => s.pendingCount);
+  const T = useC();
 
   return (
-    <View style={[tb.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[tb.bar, { backgroundColor: T.card, borderTopColor: T.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
       <View style={tb.inner}>
         {state.routes.map((route: { key: string; name: string; params?: object }, index: number) => {
           const isFocused = state.index === index;
           const meta = TAB_META[route.name] ?? { label: route.name, accent: C.accent };
-          const color = isFocused ? meta.accent : C.t3;
+          const color = isFocused ? meta.accent : T.t3;
           const hasBadge = route.name === "partner" && pendingCount > 0;
 
           const onPress = () => {
@@ -116,7 +118,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               <View style={[tb.iconWrap, isFocused && { backgroundColor: `${meta.accent}18` }]}>
                 <TabIcon name={route.name} color={color} size={22} />
                 {hasBadge ? (
-                  <View style={tb.badge}>
+                  <View style={[tb.badge, { backgroundColor: T.red }]}>
                     <Text style={tb.badgeText}>{pendingCount > 9 ? "9+" : pendingCount}</Text>
                   </View>
                 ) : null}
@@ -132,6 +134,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
 function AvatarButton({ onPress }: { onPress: () => void }) {
   const user = useAuthStore((s) => s.user);
+  const T = useC();
   const initials = (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
   return (
     <Pressable
@@ -139,8 +142,8 @@ function AvatarButton({ onPress }: { onPress: () => void }) {
       style={({ pressed }) => [s.avatarBtn, pressed && { opacity: 0.65 }]}
       hitSlop={10}
     >
-      <View style={s.avatarCircle}>
-        <Text style={s.avatarInitials}>{initials || "?"}</Text>
+      <View style={[s.avatarCircle, { backgroundColor: T.elevated, borderColor: T.accentBorder }]}>
+        <Text style={[s.avatarInitials, { color: T.accent }]}>{initials || "?"}</Text>
       </View>
     </Pressable>
   );
@@ -148,18 +151,19 @@ function AvatarButton({ onPress }: { onPress: () => void }) {
 
 function TabsLayoutInner() {
   const { open } = useDrawer();
+  const T = useC();
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: T.bg }]}>
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
-          headerStyle:         { backgroundColor: C.bg },
-          headerTintColor:     C.t1,
+          headerStyle:         { backgroundColor: T.bg },
+          headerTintColor:     T.t1,
           headerShadowVisible: false,
-          headerTitleStyle:    { fontWeight: "700", fontSize: 18, color: C.t1 },
+          headerTitleStyle:    { fontWeight: "700", fontSize: 18, color: T.t1 },
           headerLeft:          () => <AvatarButton onPress={open} />,
-          sceneStyle:          { backgroundColor: C.bg },
+          sceneStyle:          { backgroundColor: T.bg },
         }}
       >
         <Tabs.Screen name="index"    options={{ title: "Dashboard" }} />

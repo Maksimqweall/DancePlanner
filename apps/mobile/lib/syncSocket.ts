@@ -27,7 +27,8 @@ function scheduleReconnect() {
 }
 
 export async function connectSync() {
-  if (stopped) return;
+  // An explicit connect request clears any prior stop (e.g. after logout→login).
+  stopped = false;
   if (socket && socket.readyState === WebSocket.OPEN) return;
 
   const token = await tokenStorage.get();

@@ -26,8 +26,10 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
-  // Module 1: target monthly spending budget (EUR)
+  // Module 1: target monthly spending budget
   monthlyBudget Float?
+  // Preferred display currency (ISO 4217 code, e.g. EUR, USD, GBP)
+  currency      String     @default("EUR")
   
   // Связи
   couplesAsLead   Couple[]   @relation("LeadPartner")

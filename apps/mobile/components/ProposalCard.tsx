@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Proposal } from "../lib/types";
 import { formatMoney, formatShortDate } from "../lib/display";
 import PressableScale from "./ui/PressableScale";
-import { C } from "../lib/theme";
+import type { Palette } from "../lib/theme";
+import { useC } from "../lib/useTheme";
 
 const PROPOSAL_META: Record<string, { icon: string; label: string }> = {
   TRAINING:   { icon: "💃", label: "Training" },
@@ -36,6 +38,8 @@ export default function ProposalCard({
   onDecline,
   onCancel,
 }: Props) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const meta = PROPOSAL_META[proposal.type] ?? PROPOSAL_META.OTHER;
   const status = STATUS_STYLE[proposal.status];
   const isPending = proposal.status === "PENDING";
@@ -104,7 +108,8 @@ export default function ProposalCard({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   card: {
     backgroundColor: C.card,
     borderRadius: 20,
@@ -186,4 +191,5 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   cancelBtnText: { color: C.t3, fontSize: 13 },
-});
+  });
+}

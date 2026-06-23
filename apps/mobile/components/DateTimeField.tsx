@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, Platform, Modal, TextInput } from "react-native";
+import { useC, useScheme } from "../lib/useTheme";
 
 // Native picker is required lazily so the web bundle never executes it.
 let RNDateTimePicker: any = null;
@@ -44,14 +45,25 @@ export function DateField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const C = useC();
+  const scheme = useScheme();
   const [open, setOpen] = useState(false);
+
+  const fieldStyle = {
+    backgroundColor: C.input,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: C.border,
+  } as const;
 
   if (Platform.OS === "web") {
     return (
       <TextInput
-        className="bg-zinc-800 text-white rounded-xl px-4 py-3"
+        style={[fieldStyle, { color: C.t1, fontSize: 15 }]}
         placeholder="YYYY-MM-DD"
-        placeholderTextColor="#71717a"
+        placeholderTextColor={C.t3}
         value={value}
         onChangeText={onChange}
       />
@@ -63,8 +75,8 @@ export function DateField({
       value={parseYmd(value)}
       mode="date"
       display={Platform.OS === "ios" ? "spinner" : "default"}
-      themeVariant="dark"
-      textColor="#ffffff"
+      themeVariant={scheme}
+      textColor={C.t1}
       onChange={(event: any, d?: Date) => {
         if (Platform.OS !== "ios") setOpen(false);
         if (d && (Platform.OS === "ios" || event.type === "set")) onChange(ymd(d));
@@ -74,19 +86,16 @@ export function DateField({
 
   return (
     <>
-      <TouchableOpacity
-        className="bg-zinc-800 rounded-xl px-4 py-3"
-        onPress={() => setOpen(true)}
-      >
-        <Text className="text-white">{prettyDate(value)}</Text>
+      <TouchableOpacity style={fieldStyle} onPress={() => setOpen(true)}>
+        <Text style={{ color: C.t1, fontSize: 15 }}>{prettyDate(value)}</Text>
       </TouchableOpacity>
       {Platform.OS === "ios" ? (
         <Modal visible={open} transparent animationType="slide">
-          <View className="flex-1 justify-end bg-black/60">
-            <View className="bg-zinc-900 rounded-t-3xl p-4">
-              <View className="flex-row justify-end mb-1">
+          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" }}>
+            <View style={{ backgroundColor: C.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16 }}>
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 2 }}>
                 <TouchableOpacity onPress={() => setOpen(false)}>
-                  <Text className="text-emerald-400 font-bold text-base">Done</Text>
+                  <Text style={{ color: C.accent, fontWeight: "700", fontSize: 16 }}>Done</Text>
                 </TouchableOpacity>
               </View>
               {picker}
@@ -110,14 +119,26 @@ export function TimeField({
   onChange: (v: string | null) => void;
   placeholder?: string;
 }) {
+  const C = useC();
+  const scheme = useScheme();
   const [open, setOpen] = useState(false);
+
+  const fieldStyle = {
+    backgroundColor: C.input,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: C.border,
+    flex: 1,
+  } as const;
 
   if (Platform.OS === "web") {
     return (
       <TextInput
-        className="bg-zinc-800 text-white rounded-xl px-4 py-3"
+        style={[fieldStyle, { color: C.t1, fontSize: 15 }]}
         placeholder="HH:MM"
-        placeholderTextColor="#71717a"
+        placeholderTextColor={C.t3}
         value={value ?? ""}
         onChangeText={(t) => onChange(t || null)}
       />
@@ -130,8 +151,8 @@ export function TimeField({
       mode="time"
       is24Hour
       display={Platform.OS === "ios" ? "spinner" : "default"}
-      themeVariant="dark"
-      textColor="#ffffff"
+      themeVariant={scheme}
+      textColor={C.t1}
       onChange={(event: any, d?: Date) => {
         if (Platform.OS !== "ios") setOpen(false);
         if (d && (Platform.OS === "ios" || event.type === "set")) onChange(hm(d));
@@ -141,28 +162,23 @@ export function TimeField({
 
   return (
     <>
-      <View className="flex-row items-center">
-        <TouchableOpacity
-          className="bg-zinc-800 rounded-xl px-4 py-3 flex-1"
-          onPress={() => setOpen(true)}
-        >
-          <Text className={value ? "text-white" : "text-zinc-500"}>
-            {value ?? placeholder}
-          </Text>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <TouchableOpacity style={fieldStyle} onPress={() => setOpen(true)}>
+          <Text style={{ color: value ? C.t1 : C.t3, fontSize: 15 }}>{value ?? placeholder}</Text>
         </TouchableOpacity>
         {value ? (
-          <TouchableOpacity onPress={() => onChange(null)} className="ml-2 px-2" hitSlop={8}>
-            <Text className="text-zinc-500">Clear</Text>
+          <TouchableOpacity onPress={() => onChange(null)} style={{ marginLeft: 8, paddingHorizontal: 8 }} hitSlop={8}>
+            <Text style={{ color: C.t3 }}>Clear</Text>
           </TouchableOpacity>
         ) : null}
       </View>
       {Platform.OS === "ios" ? (
         <Modal visible={open} transparent animationType="slide">
-          <View className="flex-1 justify-end bg-black/60">
-            <View className="bg-zinc-900 rounded-t-3xl p-4">
-              <View className="flex-row justify-end mb-1">
+          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" }}>
+            <View style={{ backgroundColor: C.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16 }}>
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 2 }}>
                 <TouchableOpacity onPress={() => setOpen(false)}>
-                  <Text className="text-emerald-400 font-bold text-base">Done</Text>
+                  <Text style={{ color: C.accent, fontWeight: "700", fontSize: 16 }}>Done</Text>
                 </TouchableOpacity>
               </View>
               {picker}

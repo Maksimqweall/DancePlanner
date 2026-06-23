@@ -39,6 +39,7 @@ export interface User {
   firstName: string;
   lastName: string;
   monthlyBudget: number | null;
+  currency: string;
 }
 
 export interface Expense {

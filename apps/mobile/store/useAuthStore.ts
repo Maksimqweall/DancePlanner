@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api, setAuthToken } from "../lib/api";
 import { tokenStorage } from "../lib/tokenStorage";
+import { setDisplayCurrency } from "../lib/display";
 import type { User } from "../lib/types";
 
 type Status = "loading" | "authenticated" | "unauthenticated";
@@ -18,6 +19,7 @@ interface AuthState {
   }) => Promise<void>;
   logout: () => Promise<void>;
   setMonthlyBudget: (budget: number) => Promise<void>;
+  setCurrency: (currency: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
 }
@@ -41,6 +43,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     setAuthToken(token);
     try {
       const { user } = await api.get<{ user: User }>("/auth/me");
+      setDisplayCurrency(user.currency);
       set({ status: "authenticated", user });
     } catch {
       await tokenStorage.clear();
@@ -56,6 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
     await tokenStorage.set(token);
     setAuthToken(token);
+    setDisplayCurrency(user.currency);
     set({ status: "authenticated", user });
   },
 
@@ -63,6 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const { token, user } = await api.post<AuthResponse>("/auth/signup", input);
     await tokenStorage.set(token);
     setAuthToken(token);
+    setDisplayCurrency(user.currency);
     set({ status: "authenticated", user });
   },
 
@@ -74,6 +79,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setMonthlyBudget: async (budget) => {
     const { user } = await api.patch<{ user: User }>("/auth/me", { monthlyBudget: budget });
+    set({ user });
+  },
+
+  setCurrency: async (currency) => {
+    const { user } = await api.patch<{ user: User }>("/auth/me", { currency });
+    setDisplayCurrency(user.currency);
     set({ user });
   },
 

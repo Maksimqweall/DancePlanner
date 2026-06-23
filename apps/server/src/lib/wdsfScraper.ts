@@ -447,7 +447,11 @@ async function scrapeMarksPage(
       const adjustedRoundIdx = roundCellIdx >= 0 ? roundCellIdx - rowspanShift : -1;
       if (adjustedRoundIdx >= 0 && adjustedRoundIdx < cells.length) {
         roundNum = parseInt(cells[adjustedRoundIdx], 10);
-        if (isNaN(roundNum) || roundNum < 1) roundNum = rounds.length + 1;
+        if (isNaN(roundNum) || roundNum < 1) {
+          // Round column exists but value isn't a valid round number (e.g. "Total", "Sum" rows) — skip
+          if (roundCellIdx >= 0) return;
+          roundNum = rounds.length + 1;
+        }
       } else {
         roundNum = rounds.length + 1;
       }

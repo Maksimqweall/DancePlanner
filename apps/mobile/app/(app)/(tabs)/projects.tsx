@@ -15,6 +15,7 @@ import PressableScale from "../../../components/ui/PressableScale";
 import { AnimatedProgress } from "../../../components/ui/AnimatedProgress";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -35,6 +36,7 @@ function daysUntil(dateStr: string): number {
 export default function ProjectsScreen() {
   const router = useRouter();
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const { projects, refreshProjects, createProject } = useProjectStore();
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,9 +59,9 @@ export default function ProjectsScreen() {
 
         {/* ── Title ────────────────────────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.titleRow}>
-          <Text style={styles.pageTitle}>Events</Text>
+          <Text style={styles.pageTitle}>{T.events.title}</Text>
           <PressableScale style={styles.addBtn} onPress={() => setModalOpen(true)}>
-            <Text style={styles.addBtnText}>+ New</Text>
+            <Text style={styles.addBtnText}>{T.events.addNew}</Text>
           </PressableScale>
         </Animated.View>
 
@@ -67,19 +69,19 @@ export default function ProjectsScreen() {
         {projects.length > 0 && (
           <Animated.View entering={FadeInDown.delay(40).duration(450)}>
             <View style={styles.summaryCard}>
-              <SummaryChip label="Total" value={String(stats.total)} color={C.t1} icon="🏆" />
+              <SummaryChip label={T.events.total} value={String(stats.total)} color={C.t1} icon="🏆" />
               <View style={styles.summaryDivider} />
               {stats.active > 0 ? (
                 <>
-                  <SummaryChip label="Active" value={String(stats.active)} color={C.gold} icon="⚡" />
+                  <SummaryChip label={T.events.active} value={String(stats.active)} color={C.gold} icon="⚡" />
                   <View style={styles.summaryDivider} />
                 </>
               ) : null}
-              <SummaryChip label="Upcoming" value={String(stats.upcoming)} color={C.accent} icon="📅" />
+              <SummaryChip label={T.events.upcoming} value={String(stats.upcoming)} color={C.accent} icon="📅" />
               {stats.totalBudget > 0 ? (
                 <>
                   <View style={styles.summaryDivider} />
-                  <SummaryChip label="Budget" value={formatMoney(stats.totalBudget)} color={C.gold} icon="💰" />
+                  <SummaryChip label={T.events.budget} value={formatMoney(stats.totalBudget)} color={C.gold} icon="💰" />
                 </>
               ) : null}
             </View>
@@ -90,10 +92,8 @@ export default function ProjectsScreen() {
         {projects.length === 0 ? (
           <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.emptyCard}>
             <Text style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🏆</Text>
-            <Text style={styles.emptyTitle}>No events yet</Text>
-            <Text style={styles.emptyText}>
-              Create a tournament or training camp to organize tickets, bookings and a prep checklist.
-            </Text>
+            <Text style={styles.emptyTitle}>{T.events.noEvents}</Text>
+            <Text style={styles.emptyText}>{T.events.noEventsDesc}</Text>
           </Animated.View>
         ) : (
           projects.map((p, i) => (
@@ -128,6 +128,7 @@ function SummaryChip({ label, value, color, icon }: { label: string; value: stri
 
 function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress: () => void; index?: number }) {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const meta = EVENT_TYPE_META[project.type] ?? EVENT_TYPE_META.TOURNAMENT;
   const counts = project._count;
@@ -142,7 +143,7 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
   const daysLeft = status === "upcoming" ? daysUntil(project.date) : 0;
 
   const statusColor = status === "active" ? C.gold : status === "upcoming" ? C.accent : C.t3;
-  const statusLabel = status === "active" ? "Active" : status === "upcoming" ? "Upcoming" : "Past";
+  const statusLabel = status === "active" ? T.events.active : status === "upcoming" ? T.events.upcoming : T.events.past;
   const statusBg = status === "active" ? C.goldFade : status === "upcoming" ? C.accentFade : C.elevated;
 
   return (
@@ -174,7 +175,7 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
             {project.budget != null && <Text style={styles.projectBudget}>{formatMoney(project.budget)}</Text>}
             {status === "upcoming" && daysLeft > 0 && (
               <View style={styles.daysChip}>
-                <Text style={styles.daysText}>in {daysLeft}d</Text>
+                <Text style={styles.daysText}>{T.events.inDays} {daysLeft}d</Text>
               </View>
             )}
           </View>
@@ -184,7 +185,7 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
         {status === "active" && project.endDate && (
           <View style={{ marginTop: 12 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
-              <Text style={styles.progressLabel}>Event progress</Text>
+              <Text style={styles.progressLabel}>{T.events.eventProgress}</Text>
               <Text style={[styles.progressLabel, { color: C.gold }]}>{Math.round(timeProgress * 100)}%</Text>
             </View>
             <AnimatedProgress
@@ -201,9 +202,9 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
         {/* Stat chips */}
         {counts && (counts.attachments > 0 || counts.checklist > 0 || counts.expenses > 0) ? (
           <View style={styles.projectStats}>
-            {counts.attachments > 0 && <StatChip label={`${counts.attachments} file${counts.attachments !== 1 ? "s" : ""}`} />}
-            {counts.checklist > 0 && <StatChip label={`${counts.checklist} task${counts.checklist !== 1 ? "s" : ""}`} />}
-            {counts.expenses > 0 && <StatChip label={`${counts.expenses} expense${counts.expenses !== 1 ? "s" : ""}`} />}
+            {counts.attachments > 0 && <StatChip label={`${counts.attachments} ${T.events.filesLabel}`} />}
+            {counts.checklist > 0 && <StatChip label={`${counts.checklist} ${T.events.tasksLabel}`} />}
+            {counts.expenses > 0 && <StatChip label={`${counts.expenses} ${T.events.expensesLabel}`} />}
           </View>
         ) : null}
       </PressableScale>
@@ -229,6 +230,7 @@ function NewProjectModal({
   onCreated: (id: string) => void;
 }) {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const [title, setTitle] = useState("");
   const [type, setType] = useState<EventType>("TOURNAMENT");
@@ -248,9 +250,9 @@ function NewProjectModal({
 
   const submit = async () => {
     setError(null);
-    if (!title.trim()) { setError("Enter a title"); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError("Date must be YYYY-MM-DD"); return; }
-    if (multiDay && endDate < date) { setError("End date must be on or after start date"); return; }
+    if (!title.trim()) { setError(T.events.errorTitle); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError(T.events.errorDate); return; }
+    if (multiDay && endDate < date) { setError(T.events.errorEndDate); return; }
     const budgetValue = budget ? Number(budget.replace(",", ".")) : null;
     setSubmitting(true);
     try {
@@ -263,7 +265,7 @@ function NewProjectModal({
       });
       close(); onCreated(project.id);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not create project");
+      setError(e instanceof ApiError ? e.message : T.events.errorCreate);
     } finally {
       setSubmitting(false);
     }
@@ -276,7 +278,7 @@ function NewProjectModal({
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New event</Text>
+              <Text style={styles.modalTitle}>{T.events.newEventModal}</Text>
               <PressableScale onPress={close} style={styles.closeBtn}>
                 <Text style={styles.closeBtnText}>✕</Text>
               </PressableScale>
@@ -284,16 +286,16 @@ function NewProjectModal({
 
             {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
-            <Text style={styles.fieldLabel}>Title</Text>
+            <Text style={styles.fieldLabel}>{T.events.titleField}</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Vienna Open Championship"
+              placeholder={T.events.titlePlaceholder}
               placeholderTextColor={C.t3}
               value={title}
               onChangeText={setTitle}
             />
 
-            <Text style={styles.fieldLabel}>Type</Text>
+            <Text style={styles.fieldLabel}>{T.events.typeField}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: "row", gap: 8, paddingVertical: 2 }}>
                 {EVENT_TYPE_ORDER.map(t => {
@@ -314,11 +316,11 @@ function NewProjectModal({
               </View>
             </ScrollView>
 
-            <Text style={styles.fieldLabel}>{multiDay ? "Start date" : "Date"}</Text>
+            <Text style={styles.fieldLabel}>{multiDay ? T.events.startDate : T.events.dateField}</Text>
             <View style={{ marginBottom: 14 }}><DateField value={date} onChange={setDate} /></View>
 
             <View style={styles.switchRow}>
-              <Text style={styles.fieldLabel}>Multi-day event</Text>
+              <Text style={styles.fieldLabel}>{T.events.multiDay}</Text>
               <Switch
                 value={multiDay}
                 onValueChange={v => { setMultiDay(v); if (v && endDate < date) setEndDate(date); }}
@@ -329,19 +331,19 @@ function NewProjectModal({
 
             {multiDay ? (
               <>
-                <Text style={styles.fieldLabel}>End date</Text>
+                <Text style={styles.fieldLabel}>{T.events.endDate}</Text>
                 <View style={{ marginBottom: 14 }}><DateField value={endDate} onChange={setEndDate} /></View>
               </>
             ) : null}
 
-            <Text style={styles.fieldLabel}>Location (optional)</Text>
-            <TextInput style={styles.input} placeholder="City, country" placeholderTextColor={C.t3} value={location} onChangeText={setLocation} />
+            <Text style={styles.fieldLabel}>{T.events.locationField}</Text>
+            <TextInput style={styles.input} placeholder={T.events.locationPlaceholder} placeholderTextColor={C.t3} value={location} onChangeText={setLocation} />
 
-            <Text style={styles.fieldLabel}>Budget {currencySymbol()} (optional)</Text>
-            <TextInput style={styles.input} placeholder="e.g. 1200" placeholderTextColor={C.t3} keyboardType="decimal-pad" value={budget} onChangeText={setBudget} />
+            <Text style={styles.fieldLabel}>{T.events.budgetField} {currencySymbol()} ({T.common.add.toLowerCase()})</Text>
+            <TextInput style={styles.input} placeholder={T.events.budgetPlaceholder} placeholderTextColor={C.t3} keyboardType="decimal-pad" value={budget} onChangeText={setBudget} />
 
             <PressableScale style={styles.submitBtn} onPress={submit} disabled={submitting}>
-              <Text style={styles.submitBtnText}>{submitting ? "Creating…" : "Create event"}</Text>
+              <Text style={styles.submitBtnText}>{submitting ? T.events.creating : T.events.createEvent}</Text>
             </PressableScale>
             <View style={{ height: 24 }} />
           </ScrollView>

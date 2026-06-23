@@ -9,6 +9,7 @@ import { useAuthStore } from "../../../store/useAuthStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
 import { C } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
 
 function HomeIcon({ color, size = 22 }: { color: string; size?: number }) {
   return (
@@ -86,6 +87,15 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const pendingCount = usePartnerStore((s) => s.pendingCount);
   const T = useC();
+  const t = useT();
+  const tabLabels: Record<string, string> = {
+    index:    t.nav.dashboard,
+    calendar: t.nav.calendar,
+    expenses: t.nav.finance,
+    projects: t.nav.events,
+    partner:  t.nav.partner,
+    about:    t.settings.title,
+  };
 
   return (
     <View style={[tb.bar, { backgroundColor: T.card, borderTopColor: T.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -94,6 +104,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           const isFocused = state.index === index;
           const meta = TAB_META[route.name] ?? { label: route.name, accent: C.accent };
           const color = isFocused ? meta.accent : T.t3;
+          const tabLabel = tabLabels[route.name] ?? meta.label;
           const hasBadge = route.name === "partner" && pendingCount > 0;
 
           const onPress = () => {
@@ -123,7 +134,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                   </View>
                 ) : null}
               </View>
-              <Text style={[tb.label, { color }]}>{meta.label}</Text>
+              <Text style={[tb.label, { color }]}>{tabLabel}</Text>
             </Pressable>
           );
         })}
@@ -152,6 +163,7 @@ function AvatarButton({ onPress }: { onPress: () => void }) {
 function TabsLayoutInner() {
   const { open } = useDrawer();
   const T = useC();
+  const t = useT();
 
   return (
     <View style={[s.root, { backgroundColor: T.bg }]}>
@@ -166,12 +178,12 @@ function TabsLayoutInner() {
           sceneStyle:          { backgroundColor: T.bg },
         }}
       >
-        <Tabs.Screen name="index"    options={{ title: "Dashboard" }} />
-        <Tabs.Screen name="calendar" options={{ title: "Calendar"  }} />
-        <Tabs.Screen name="expenses" options={{ title: "Finance"   }} />
-        <Tabs.Screen name="projects" options={{ title: "Events"    }} />
-        <Tabs.Screen name="partner"  options={{ title: "Partner"   }} />
-        <Tabs.Screen name="about"    options={{ title: "Settings"  }} />
+        <Tabs.Screen name="index"    options={{ title: t.nav.dashboard }} />
+        <Tabs.Screen name="calendar" options={{ title: t.nav.calendar  }} />
+        <Tabs.Screen name="expenses" options={{ title: t.nav.finance   }} />
+        <Tabs.Screen name="projects" options={{ title: t.nav.events    }} />
+        <Tabs.Screen name="partner"  options={{ title: t.nav.partner   }} />
+        <Tabs.Screen name="about"    options={{ title: t.settings.title }} />
       </Tabs>
       <SideDrawer />
     </View>

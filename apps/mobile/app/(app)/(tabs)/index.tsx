@@ -33,17 +33,24 @@ import {
 import type { ForecastMonth } from "../../../lib/types";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
+import { useLanguageStore } from "../../../store/useLanguageStore";
+
+const LANG_LOCALE: Record<string, string> = { en: "en-US", ru: "ru-RU", uk: "uk-UA", de: "de-DE" };
 
 const DEFAULT_BUDGET = 1000;
 
 export default function Dashboard() {
   const router = useRouter();
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
 
   const { forecast, expenses, budgets, refresh, setBudget } = useFinanceStore();
   const user = useAuthStore((st) => st.user);
   const { couple, split, fetchPartner, fetchSplit } = usePartnerStore();
+  const { language } = useLanguageStore();
+  const locale = LANG_LOCALE[language] ?? "en-US";
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [refreshing, setRefreshing] = useState(false);
@@ -81,7 +88,7 @@ export default function Dashboard() {
       d.setDate(now.getDate() - i);
       days.push({
         key: d.toISOString().slice(0, 10),
-        label: d.toLocaleDateString("en-US", { weekday: "narrow" }),
+        label: d.toLocaleDateString(locale, { weekday: "narrow" }),
       });
     }
     const sums = days.map((d) =>
@@ -91,7 +98,7 @@ export default function Dashboard() {
     );
     const max = Math.max(1, ...sums);
     return days.map((d, i) => ({ ...d, value: sums[i], ratio: sums[i] / max, today: i === 6 }));
-  }, [expenses]);
+  }, [expenses, locale]);
 
   // Top spending categories for the selected month.
   const categories = useMemo(() => {
@@ -120,12 +127,12 @@ export default function Dashboard() {
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(420)} style={s.header}>
         <View style={{ flex: 1 }}>
-          <Text style={s.welcome}>Welcome back</Text>
+          <Text style={s.welcome}>{T.dashboard.welcomeBack}</Text>
           <Text style={s.userName} numberOfLines={1}>{user?.firstName ?? "Dancer"}</Text>
           {couple ? (
             <View style={s.syncChip}>
               <View style={s.syncDot} />
-              <Text style={s.syncChipText}>Synced with {couple.partner.firstName}</Text>
+              <Text style={s.syncChipText}>{T.dashboard.syncedWith} {couple.partner.firstName}</Text>
             </View>
           ) : null}
         </View>
@@ -141,7 +148,7 @@ export default function Dashboard() {
         </PressableScale>
         <PressableScale onPress={() => setSelectedMonth(currentMonthKey())} style={s.monthCenter}>
           <Text style={s.monthText}>{monthLong(selectedMonth)}</Text>
-          {!isCurrent && <Text style={s.monthHint}>tap for current</Text>}
+          {!isCurrent && <Text style={s.monthHint}>{T.dashboard.tapForCurrent}</Text>}
         </PressableScale>
         <PressableScale onPress={() => setSelectedMonth((m) => shiftMonth(m, 1))} style={s.monthArrow}>
           <Text style={s.arrowText}>›</Text>
@@ -157,15 +164,15 @@ export default function Dashboard() {
           style={s.hero}
         >
           <View style={s.heroTopRow}>
-            <Text style={s.heroLabel}>Spent in {monthLong(selectedMonth).split(" ")[0]}</Text>
+            <Text style={s.heroLabel}>{T.dashboard.spentIn} {monthLong(selectedMonth).split(" ")[0]}</Text>
             <PressableScale onPress={() => setBudgetModal(true)} style={s.heroBudgetBtn}>
-              <Text style={s.heroBudgetBtnText}>Edit budget</Text>
+              <Text style={s.heroBudgetBtnText}>{T.dashboard.editBudget}</Text>
             </PressableScale>
           </View>
           <Text style={s.heroBig}>{formatMoney(summary.paid)}</Text>
           <Text style={s.heroOf}>
-            of {formatMoney(budget)} budget
-            {summary.planned > 0 ? `  ·  +${formatMoney(summary.planned)} planned` : ""}
+            {T.dashboard.ofBudget} {formatMoney(budget)} {T.dashboard.budget.toLowerCase()}
+            {summary.planned > 0 ? `  ·  +${formatMoney(summary.planned)} ${T.finance.planned.toLowerCase()}` : ""}
           </Text>
           <View style={{ marginTop: 16 }}>
             <AnimatedProgress
@@ -176,7 +183,7 @@ export default function Dashboard() {
               delay={250}
             />
           </View>
-          <Text style={s.heroLeft}>{formatMoney(left)} left this month</Text>
+          <Text style={s.heroLeft}>{formatMoney(left)} {T.dashboard.leftThisMonth}</Text>
         </LinearGradient>
       </Animated.View>
 
@@ -189,17 +196,17 @@ export default function Dashboard() {
 
       {/* Stat chips */}
       <Animated.View entering={FadeInDown.delay(180).duration(420)} style={s.statsRow}>
-        <StatChip label="Spent" value={formatMoney(summary.paid)} tint={C.accent} icon="wallet" />
-        <StatChip label="Planned" value={formatMoney(summary.planned)} tint={C.gold} icon="clock" />
-        <StatChip label="Left" value={formatMoney(left)} tint="#10B981" icon="leaf" />
+        <StatChip label={T.budget.spent} value={formatMoney(summary.paid)} tint={C.accent} icon="wallet" />
+        <StatChip label={T.finance.planned} value={formatMoney(summary.planned)} tint={C.gold} icon="clock" />
+        <StatChip label={T.budget.left} value={formatMoney(left)} tint="#10B981" icon="leaf" />
       </Animated.View>
 
       {/* Weekly spend chart */}
       <Animated.View entering={FadeInDown.delay(220).duration(420)}>
         <View style={s.card}>
           <View style={s.cardHeadRow}>
-            <Text style={s.cardTitle}>Weekly spend</Text>
-            <Text style={s.cardHint}>Last 7 days</Text>
+            <Text style={s.cardTitle}>{T.dashboard.weeklySpend}</Text>
+            <Text style={s.cardHint}>{T.dashboard.lastDays}</Text>
           </View>
           <View style={s.chartRow}>
             {weekly.map((d, i) => (
@@ -222,10 +229,10 @@ export default function Dashboard() {
 
       {/* Upcoming forecast */}
       <Animated.View entering={FadeInDown.delay(260).duration(420)}>
-        <Text style={s.sectionTitle}>Upcoming</Text>
+        <Text style={s.sectionTitle}>{T.dashboard.upcoming}</Text>
         {forecast.length === 0 ? (
           <View style={s.emptyCard}>
-            <Text style={s.emptyText}>No upcoming planned spend. Create a tournament or camp to forecast costs.</Text>
+            <Text style={s.emptyText}>{T.dashboard.noUpcoming}</Text>
           </View>
         ) : (
           forecast.slice(0, 3).map((m, i) => (
@@ -237,7 +244,7 @@ export default function Dashboard() {
       {/* Category breakdown */}
       {categories.length > 0 ? (
         <Animated.View entering={FadeInDown.delay(300).duration(420)}>
-          <Text style={s.sectionTitle}>Spending by category</Text>
+          <Text style={s.sectionTitle}>{T.dashboard.spendingByCategory}</Text>
           <View style={s.card}>
             {categories.map((row, i) => {
               const meta = CATEGORY_META[row.c];
@@ -271,13 +278,13 @@ export default function Dashboard() {
       {/* Recent expenses */}
       <Animated.View entering={FadeInDown.delay(340).duration(420)}>
         <View style={s.sectionRow}>
-          <Text style={s.sectionTitle}>Expenses</Text>
+          <Text style={s.sectionTitle}>{T.dashboard.expensesHeader}</Text>
           <PressableScale onPress={() => router.push("/expenses")}>
-            <Text style={s.seeAll}>See all →</Text>
+            <Text style={s.seeAll}>{T.dashboard.seeAll}</Text>
           </PressableScale>
         </View>
         {monthExpenses.length === 0 ? (
-          <Text style={s.emptyText}>No expenses in {monthLong(selectedMonth)}.</Text>
+          <Text style={s.emptyText}>{T.dashboard.noExpensesIn} {monthLong(selectedMonth)}.</Text>
         ) : (
           monthExpenses.map((tx, i) => <TransactionCard key={tx.id} expense={tx} index={i} />)
         )}
@@ -320,6 +327,7 @@ function StatChip({ label, value, tint, icon }: { label: string; value: string; 
 // ─── Partner balance ────────────────────────────────────────────────────────
 function BalanceCard({ split, partnerName }: { split: { balance: number }; partnerName: string }) {
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   const { balance } = split;
   const abs = Math.abs(balance);
@@ -327,13 +335,13 @@ function BalanceCard({ split, partnerName }: { split: { balance: number }; partn
   if (abs < 0.01) {
     return (
       <View style={[s.balanceCard, { backgroundColor: C.accentFade, borderColor: C.accentBorder }]}>
-        <Text style={[s.balanceSquared, { color: C.accent }]}>You and {partnerName} are squared up ✓</Text>
+        <Text style={[s.balanceSquared, { color: C.accent }]}>{T.partner.you} & {partnerName} — {T.partner.balanced} ✓</Text>
       </View>
     );
   }
   const positive = balance > 0;
   const color = positive ? C.accent : C.gold;
-  const label = positive ? `${partnerName} owes you` : `You owe ${partnerName}`;
+  const label = positive ? `${partnerName} ${T.partner.theyOwe}` : `${T.partner.youOwe} ${partnerName}`;
   return (
     <View style={[s.balanceCard, { backgroundColor: positive ? C.accentFade : C.goldFade, borderColor: positive ? C.accentBorder : C.goldBorder }]}>
       <View style={s.balanceLeft}>
@@ -348,6 +356,7 @@ function BalanceCard({ split, partnerName }: { split: { balance: number }; partn
 // ─── Forecast card ──────────────────────────────────────────────────────────
 function ForecastCard({ month, onPressProject, index = 0 }: { month: ForecastMonth; onPressProject: (id: string) => void; index?: number }) {
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   return (
     <View style={s.forecastCard}>
@@ -364,7 +373,7 @@ function ForecastCard({ month, onPressProject, index = 0 }: { month: ForecastMon
           ))}
         </View>
       ) : (
-        <Text style={{ color: C.t3, fontSize: 13 }}>Planned expenses</Text>
+        <Text style={{ color: C.t3, fontSize: 13 }}>{T.finance.planned}</Text>
       )}
     </View>
   );
@@ -381,6 +390,7 @@ function BudgetModal({
   onSave: (value: number) => Promise<void>;
 }) {
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   const [value, setValue] = useState(String(current));
   const [saving, setSaving] = useState(false);
@@ -392,10 +402,10 @@ function BudgetModal({
 
   const save = async () => {
     const n = Number(value.replace(",", "."));
-    if (!n || n <= 0) { setError("Enter a valid amount"); return; }
+    if (!n || n <= 0) { setError(T.budget.errorInvalid); return; }
     setSaving(true);
     try { await onSave(n); onClose(); }
-    catch { setError("Could not save budget"); }
+    catch { setError(T.budget.errorSave); }
     finally { setSaving(false); }
   };
 
@@ -403,8 +413,8 @@ function BudgetModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
         <View style={s.modalCard}>
-          <Text style={s.modalTitle}>Budget · {monthLabel}</Text>
-          <Text style={s.modalSubtitle}>Spending limit for this month.</Text>
+          <Text style={s.modalTitle}>{T.budget.modalTitle} · {monthLabel}</Text>
+          <Text style={s.modalSubtitle}>{T.budget.modalSub}</Text>
           {error ? <Text style={s.modalError}>{error}</Text> : null}
           <TextInput
             style={s.modalInput}
@@ -417,10 +427,10 @@ function BudgetModal({
           />
           <View style={s.modalButtons}>
             <PressableScale style={s.modalCancel} onPress={onClose}>
-              <Text style={s.modalCancelText}>Cancel</Text>
+              <Text style={s.modalCancelText}>{T.common.cancel}</Text>
             </PressableScale>
             <PressableScale style={s.modalSave} onPress={save} disabled={saving}>
-              <Text style={s.modalSaveText}>{saving ? "Saving…" : "Save"}</Text>
+              <Text style={s.modalSaveText}>{saving ? T.common.loading : T.common.save}</Text>
             </PressableScale>
           </View>
         </View>

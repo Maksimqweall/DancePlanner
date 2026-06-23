@@ -17,6 +17,7 @@ import { formatMoney, monthLong } from "../../../lib/display";
 import { ApiError } from "../../../lib/api";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
 import { DateField } from "../../../components/DateTimeField";
 import type { ProposalType } from "../../../lib/types";
 
@@ -33,6 +34,7 @@ function SplitBar({ myTotal, partnerTotal, partnerName }: {
   myTotal: number; partnerTotal: number; partnerName: string;
 }) {
   const C = useC();
+  const T = useT();
   const total = myTotal + partnerTotal;
   const myRatio = total > 0 ? myTotal / total : 0.5;
 
@@ -48,7 +50,7 @@ function SplitBar({ myTotal, partnerTotal, partnerName }: {
     <View>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 14 }}>
         <View>
-          <Text style={{ color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 4 }}>YOU</Text>
+          <Text style={{ color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 4 }}>{T.partner.you.toUpperCase()}</Text>
           <Text style={{ color: C.accent, fontSize: 28, fontWeight: "900", letterSpacing: -0.6 }}>
             {formatMoney(myTotal)}
           </Text>
@@ -81,19 +83,20 @@ function SplitBar({ myTotal, partnerTotal, partnerName }: {
 // ─── Balance Banner ──────────────────────────────────────────────────────────
 function BalanceBanner({ balance, partnerName }: { balance: number; partnerName: string }) {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   if (balance === 0) return null;
   const positive = balance > 0;
   const color = positive ? C.accent : C.gold;
   const bg = positive ? C.accentFade : C.goldFade;
   const border = positive ? C.accentBorder : C.goldBorder;
-  const label = positive ? `${partnerName} owes you` : `You owe ${partnerName}`;
+  const label = positive ? `${partnerName} ${T.partner.theyOwe}` : `${T.partner.youOwe} ${partnerName}`;
 
   return (
     <View style={[styles.balanceBanner, { backgroundColor: bg, borderColor: border }]}>
       <Text style={[styles.balanceWho, { color }]}>{label}</Text>
       <Text style={[styles.balanceAmount, { color }]}>{formatMoney(Math.abs(balance))}</Text>
-      <Text style={styles.balanceSub}>50 / 50 split · {positive ? "you paid more" : "partner paid more"}</Text>
+      <Text style={styles.balanceSub}>{T.partner.splitLabel} · {positive ? T.partner.youPaidMore : T.partner.partnerPaidMore}</Text>
     </View>
   );
 }
@@ -127,6 +130,7 @@ function MonthlySplit({
   partnerName: string;
 }) {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const rows = groupByMonth(myExpenses, partnerExpenses);
   if (rows.length === 0) return null;
@@ -135,11 +139,11 @@ function MonthlySplit({
   return (
     <View style={styles.monthlyBlock}>
       <View style={styles.monthlyLegend}>
-        <Text style={styles.sectionLabel}>BY MONTH</Text>
+        <Text style={styles.sectionLabel}>{T.partner.byMonth}</Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: C.accent }]} />
-            <Text style={styles.legendLabel}>You</Text>
+            <Text style={styles.legendLabel}>{T.partner.you}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: C.purple }]} />
@@ -173,6 +177,7 @@ function MonthlySplit({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function PartnerScreen() {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const myId = useAuthStore(st => st.user?.id);
   const {
@@ -219,26 +224,26 @@ export default function PartnerScreen() {
       await linkPartner(connectEmail.trim());
       setConnectEmail(""); await fetchProposals();
     } catch (e) {
-      setConnectError(e instanceof ApiError ? e.message : "Could not connect");
+      setConnectError(e instanceof ApiError ? e.message : T.partner.errorConnect);
     } finally { setConnecting(false); }
   };
 
   const onDisconnect = () => {
     if (Platform.OS === "web") { unlinkPartner(); return; }
-    Alert.alert("Disconnect partner", "You will no longer share proposals.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Disconnect", style: "destructive", onPress: () => unlinkPartner() },
+    Alert.alert(T.partner.disconnectTitle, T.partner.disconnectSub, [
+      { text: T.common.cancel, style: "cancel" },
+      { text: T.partner.disconnect, style: "destructive", onPress: () => unlinkPartner() },
     ]);
   };
 
   const onApprove = async (id: string) => {
     try { await respondProposal(id, "APPROVE"); await fetchSplit(); }
-    catch (e) { Alert.alert("Error", e instanceof ApiError ? e.message : "Could not approve"); }
+    catch (e) { Alert.alert(T.common.error, e instanceof ApiError ? e.message : T.partner.errorApprove); }
   };
 
   const onDecline = async (id: string) => {
     try { await respondProposal(id, "DECLINE"); }
-    catch (e) { Alert.alert("Error", e instanceof ApiError ? e.message : "Could not decline"); }
+    catch (e) { Alert.alert(T.common.error, e instanceof ApiError ? e.message : T.partner.errorDecline); }
   };
 
   return (
@@ -250,14 +255,12 @@ export default function PartnerScreen() {
           <Animated.View entering={FadeInDown.delay(0).duration(450)}>
             <View style={styles.heroCard}>
               <Text style={styles.heroEmoji}>👥</Text>
-              <Text style={styles.heroTitle}>Connect your dance partner</Text>
-              <Text style={styles.heroSubtitle}>
-                Share proposals, sync your calendar, and track expenses together — just like Splitwise for dancers.
-              </Text>
+              <Text style={styles.heroTitle}>{T.partner.connectTitle}</Text>
+              <Text style={styles.heroSubtitle}>{T.partner.connectSub}</Text>
               {connectError ? <View style={styles.errorBox}><Text style={styles.errorText}>{connectError}</Text></View> : null}
               <TextInput
                 style={styles.emailInput}
-                placeholder="Partner's email address"
+                placeholder={T.partner.emailPlaceholder}
                 placeholderTextColor={C.t3}
                 autoCapitalize="none"
                 keyboardType="email-address"
@@ -271,7 +274,7 @@ export default function PartnerScreen() {
               >
                 {connecting
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.connectBtnText}>Connect Partner</Text>}
+                  : <Text style={styles.connectBtnText}>{T.partner.connectBtn}</Text>}
               </PressableScale>
             </View>
           </Animated.View>
@@ -290,11 +293,11 @@ export default function PartnerScreen() {
                   <Text style={styles.partnerEmail}>{couple.partner.email}</Text>
                   <View style={styles.connectedBadge}>
                     <View style={styles.connectedDot} />
-                    <Text style={styles.connectedText}>Connected</Text>
+                    <Text style={styles.connectedText}>{T.partner.connected}</Text>
                   </View>
                 </View>
                 <PressableScale onPress={onDisconnect} style={styles.disconnectBtn}>
-                  <Text style={styles.disconnectText}>Disconnect</Text>
+                  <Text style={styles.disconnectText}>{T.partner.disconnect}</Text>
                 </PressableScale>
               </View>
             </Animated.View>
@@ -304,7 +307,7 @@ export default function PartnerScreen() {
               <Animated.View entering={FadeInDown.delay(60).duration(400)}>
                 {/* Header + period */}
                 <View style={styles.splitHeader}>
-                  <Text style={styles.sectionLabel}>EXPENSE SPLIT</Text>
+                  <Text style={styles.sectionLabel}>{T.partner.expenseSplit}</Text>
                   <View style={styles.splitPeriodRow}>
                     {(["3M", "6M", "1Y"] as const).map(p => (
                       <PressableScale
@@ -345,14 +348,14 @@ export default function PartnerScreen() {
                   style={[styles.tabBtn, tab === "inbox" && styles.tabBtnActive]}
                 >
                   <Text style={[styles.tabBtnText, tab === "inbox" && styles.tabBtnTextActive]}>
-                    Inbox {pendingCount > 0 ? `(${pendingCount})` : ""}
+                    {T.partner.inbox} {pendingCount > 0 ? `(${pendingCount})` : ""}
                   </Text>
                 </PressableScale>
                 <PressableScale
                   onPress={() => setTab("sent")}
                   style={[styles.tabBtn, tab === "sent" && styles.tabBtnActive]}
                 >
-                  <Text style={[styles.tabBtnText, tab === "sent" && styles.tabBtnTextActive]}>Sent</Text>
+                  <Text style={[styles.tabBtnText, tab === "sent" && styles.tabBtnTextActive]}>{T.partner.sent}</Text>
                 </PressableScale>
               </View>
             </Animated.View>
@@ -361,9 +364,7 @@ export default function PartnerScreen() {
               <Animated.View entering={FadeInDown.delay(150).duration(400)}>
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>
-                    {tab === "inbox"
-                      ? "No proposals received yet. Ask your partner to send one!"
-                      : "You haven't sent any proposals yet. Use the + button below."}
+                    {tab === "inbox" ? T.partner.noInbox : T.partner.noSent}
                   </Text>
                 </View>
               </Animated.View>
@@ -390,7 +391,7 @@ export default function PartnerScreen() {
       {couple ? (
         <Animated.View entering={FadeInUp.delay(300).duration(400)} style={styles.fab}>
           <PressableScale onPress={() => setModalOpen(true)} style={styles.fabBtn} scaleTo={0.94}>
-            <Text style={styles.fabText}>+ New Proposal</Text>
+            <Text style={styles.fabText}>{T.partner.newProposal}</Text>
           </PressableScale>
         </Animated.View>
       ) : null}
@@ -413,6 +414,7 @@ function NewProposalModal({ visible, onClose, onCreate }: {
   onCreate: (input: CreateProposalInput) => Promise<void>;
 }) {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const [title, setTitle] = useState("");
   const [type, setType] = useState<ProposalType>("TRAINING");
@@ -432,9 +434,9 @@ function NewProposalModal({ visible, onClose, onCreate }: {
 
   const submit = async () => {
     setError(null);
-    if (!title.trim()) { setError("Enter a title"); return; }
+    if (!title.trim()) { setError(T.partner.errorTitle); return; }
     const costNum = cost ? Number(cost.replace(",", ".")) : null;
-    if (cost && (!costNum || costNum <= 0)) { setError("Enter a valid cost"); return; }
+    if (cost && (!costNum || costNum <= 0)) { setError(T.partner.errorCost); return; }
     setSubmitting(true);
     try {
       await onCreate({
@@ -443,7 +445,7 @@ function NewProposalModal({ visible, onClose, onCreate }: {
       });
       reset();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not create proposal");
+      setError(e instanceof ApiError ? e.message : T.partner.errorCreate);
     } finally { setSubmitting(false); }
   };
 
@@ -454,45 +456,52 @@ function NewProposalModal({ visible, onClose, onCreate }: {
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Proposal</Text>
+              <Text style={styles.modalTitle}>{T.partner.proposalTitle}</Text>
               <PressableScale onPress={close} style={styles.closeBtn}>
                 <Text style={styles.closeBtnText}>✕</Text>
               </PressableScale>
             </View>
             {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
-            <Text style={styles.fieldLabel}>What are you proposing?</Text>
-            <TextInput style={styles.input} placeholder="e.g. Book a lesson with Coach Anna" placeholderTextColor={C.t3} value={title} onChangeText={setTitle} />
-            <Text style={styles.fieldLabel}>Type</Text>
+            <Text style={styles.fieldLabel}>{T.partner.proposalField}</Text>
+            <TextInput style={styles.input} placeholder={T.partner.proposalPlaceholder} placeholderTextColor={C.t3} value={title} onChangeText={setTitle} />
+            <Text style={styles.fieldLabel}>{T.partner.typeField}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: "row", gap: 8 }}>
-                {PROPOSAL_TYPES.map(({ type: t, icon, label }) => {
+                {PROPOSAL_TYPES.map(({ type: t, icon }) => {
                   const active = t === type;
+                  const typeLabel = ({
+                    TRAINING: T.partner.typeTraining,
+                    HOTEL: T.partner.typeHotel,
+                    TOURNAMENT: T.partner.typeTournament,
+                    TRANSPORT: T.partner.typeTransport,
+                    OTHER: T.partner.typeOther,
+                  } as Record<string, string>)[t] ?? t;
                   return (
                     <PressableScale key={t} onPress={() => setType(t)} style={[styles.typeChip, active && styles.typeChipActive]}>
-                      <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{icon} {label}</Text>
+                      <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{icon} {typeLabel}</Text>
                     </PressableScale>
                   );
                 })}
               </View>
             </ScrollView>
-            <Text style={styles.fieldLabel}>Cost (optional)</Text>
-            <TextInput style={styles.input} placeholder="e.g. 150" placeholderTextColor={C.t3} keyboardType="decimal-pad" value={cost} onChangeText={setCost} />
+            <Text style={styles.fieldLabel}>{T.partner.costField}</Text>
+            <TextInput style={styles.input} placeholder={T.partner.costPlaceholder} placeholderTextColor={C.t3} keyboardType="decimal-pad" value={cost} onChangeText={setCost} />
             <View style={styles.switchRow}>
-              <Text style={styles.fieldLabel}>Has a date</Text>
+              <Text style={styles.fieldLabel}>{T.partner.hasDate}</Text>
               <Switch value={hasDate} onValueChange={setHasDate} trackColor={{ true: C.accent, false: C.elevated }} thumbColor="#fff" />
             </View>
             {hasDate ? (
               <>
-                <Text style={styles.fieldLabel}>Date</Text>
+                <Text style={styles.fieldLabel}>{T.partner.dateField}</Text>
                 <View style={{ marginBottom: 16 }}><DateField value={date} onChange={setDate} /></View>
               </>
             ) : null}
-            <Text style={styles.fieldLabel}>Location (optional)</Text>
-            <TextInput style={styles.input} placeholder="e.g. Vienna Sports Center" placeholderTextColor={C.t3} value={location} onChangeText={setLocation} />
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput style={[styles.input, styles.notesInput]} placeholder="Any extra details…" placeholderTextColor={C.t3} multiline numberOfLines={3} value={notes} onChangeText={setNotes} />
+            <Text style={styles.fieldLabel}>{T.partner.locationField}</Text>
+            <TextInput style={styles.input} placeholder={T.partner.locationPlaceholder} placeholderTextColor={C.t3} value={location} onChangeText={setLocation} />
+            <Text style={styles.fieldLabel}>{T.partner.notesField}</Text>
+            <TextInput style={[styles.input, styles.notesInput]} placeholder={T.partner.notesPlaceholder} placeholderTextColor={C.t3} multiline numberOfLines={3} value={notes} onChangeText={setNotes} />
             <PressableScale onPress={submit} disabled={submitting} style={styles.submitBtn}>
-              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Send Proposal ↗</Text>}
+              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>{T.partner.sendProposal}</Text>}
             </PressableScale>
             <View style={{ height: 32 }} />
           </ScrollView>

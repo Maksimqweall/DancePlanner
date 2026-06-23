@@ -19,7 +19,9 @@ import { formatMoney, CURRENCIES, CURRENCY_ORDER } from "../../../lib/display";
 import PressableScale from "../../../components/ui/PressableScale";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
 import { useThemeStore, type ThemeMode } from "../../../store/useThemeStore";
+import { useLanguageStore, type Language } from "../../../store/useLanguageStore";
 import { api } from "../../../lib/api";
 import { useWdsfStore } from "../../../store/useWdsfStore";
 
@@ -29,15 +31,24 @@ const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string }[] = [
   { key: "system", label: "System", icon: "⚙" },
 ];
 
+const LANG_OPTIONS: { key: Language; flag: string }[] = [
+  { key: "en", flag: "🇬🇧" },
+  { key: "ru", flag: "🇷🇺" },
+  { key: "uk", flag: "🇺🇦" },
+  { key: "de", flag: "🇩🇪" },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
+  const T = useT();
   const user   = useAuthStore((st) => st.user);
   const logout = useAuthStore((st) => st.logout);
   const setCurrency = useAuthStore((st) => st.setCurrency);
   const mode = useThemeStore((st) => st.mode);
   const setMode = useThemeStore((st) => st.setMode);
+  const { language, setLanguage } = useLanguageStore();
   const { budgets, refresh, setBudget } = useFinanceStore();
   const { couple } = usePartnerStore();
   const wdsfProfile = useWdsfStore((st) => st.profile);
@@ -58,9 +69,9 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
     if (Platform.OS === "web") { logout(); return; }
-    Alert.alert("Sign out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: logout },
+    Alert.alert(T.nav.signOut, T.settings.signOutConfirm, [
+      { text: T.common.cancel, style: "cancel" },
+      { text: T.nav.signOut, style: "destructive", onPress: logout },
     ]);
   };
 
@@ -85,17 +96,17 @@ export default function SettingsScreen() {
 
       {/* WDSF Profile */}
       <Animated.View entering={FadeInDown.delay(40).duration(400)}>
-        <Text style={s.sectionLabel}>WDSF PROFILE</Text>
+        <Text style={s.sectionLabel}>{T.settings.wdsfSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={() => router.push("/wdsf-profile")} style={s.settingsRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.settingsRowTitle}>
-                {wdsfProfile ? wdsfProfile.name : "Connect WDSF Profile"}
+                {wdsfProfile ? wdsfProfile.name : T.settings.wdsfConnect}
               </Text>
               <Text style={s.settingsRowSub}>
                 {wdsfProfile
                   ? `MIN: ${wdsfProfile.min} · ${wdsfProfile.represents || wdsfProfile.nationality}`
-                  : "Link your WorldDanceSport profile"}
+                  : T.settings.wdsfConnectSub}
               </Text>
             </View>
             {wdsfProfile ? (
@@ -112,12 +123,12 @@ export default function SettingsScreen() {
 
       {/* Finance */}
       <Animated.View entering={FadeInDown.delay(60).duration(400)}>
-        <Text style={s.sectionLabel}>FINANCE</Text>
+        <Text style={s.sectionLabel}>{T.settings.financeSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={() => setBudgetModal(true)} style={s.settingsRow}>
             <View>
-              <Text style={s.settingsRowTitle}>Monthly Budget</Text>
-              <Text style={s.settingsRowSub}>Default spending limit per month</Text>
+              <Text style={s.settingsRowTitle}>{T.settings.budget}</Text>
+              <Text style={s.settingsRowSub}>{T.settings.budgetSub}</Text>
             </View>
             <View style={s.settingsRowRight}>
               <Text style={s.settingsRowValue}>{formatMoney(monthBudget)}</Text>
@@ -129,8 +140,8 @@ export default function SettingsScreen() {
 
           <PressableScale onPress={() => setCurrencyModal(true)} style={s.settingsRow}>
             <View>
-              <Text style={s.settingsRowTitle}>Currency</Text>
-              <Text style={s.settingsRowSub}>All amounts displayed in</Text>
+              <Text style={s.settingsRowTitle}>{T.settings.currency}</Text>
+              <Text style={s.settingsRowSub}>{T.settings.currencySub}</Text>
             </View>
             <View style={s.settingsRowRight}>
               <Text style={s.settingsRowValue}>{currencyMeta.code} {currencyMeta.symbol}</Text>
@@ -142,11 +153,16 @@ export default function SettingsScreen() {
 
       {/* Appearance */}
       <Animated.View entering={FadeInDown.delay(80).duration(400)}>
-        <Text style={s.sectionLabel}>APPEARANCE</Text>
+        <Text style={s.sectionLabel}>{T.settings.appearanceSection}</Text>
         <View style={s.settingsCard}>
           <View style={s.appearanceRow}>
             {THEME_OPTIONS.map((opt) => {
               const active = mode === opt.key;
+              const themeLabel = opt.key === "light"
+                ? T.settings.themeLight
+                : opt.key === "dark"
+                  ? T.settings.themeDark
+                  : T.settings.themeSystem;
               return (
                 <PressableScale
                   key={opt.key}
@@ -154,7 +170,38 @@ export default function SettingsScreen() {
                   style={[s.themeBtn, active && s.themeBtnActive]}
                 >
                   <Text style={[s.themeIcon, active && s.themeIconActive]}>{opt.icon}</Text>
-                  <Text style={[s.themeLabel, active && s.themeLabelActive]}>{opt.label}</Text>
+                  <Text style={[s.themeLabel, active && s.themeLabelActive]}>{themeLabel}</Text>
+                </PressableScale>
+              );
+            })}
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Language */}
+      <Animated.View entering={FadeInDown.delay(90).duration(400)}>
+        <Text style={s.sectionLabel}>{T.settings.languageSection}</Text>
+        <View style={s.settingsCard}>
+          <View style={s.settingsRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.settingsRowTitle}>{T.settings.language}</Text>
+              <Text style={s.settingsRowSub}>{T.settings.languageSub}</Text>
+            </View>
+          </View>
+          <View style={s.rowDivider} />
+          <View style={s.appearanceRow}>
+            {LANG_OPTIONS.map(({ key, flag }) => {
+              const active = language === key;
+              return (
+                <PressableScale
+                  key={key}
+                  onPress={() => setLanguage(key)}
+                  style={[s.themeBtn, active && s.themeBtnActive]}
+                >
+                  <Text style={s.themeIcon}>{flag}</Text>
+                  <Text style={[s.themeLabel, active && s.themeLabelActive]}>
+                    {T.languages[key]}
+                  </Text>
                 </PressableScale>
               );
             })}
@@ -164,15 +211,15 @@ export default function SettingsScreen() {
 
       {/* Partner */}
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-        <Text style={s.sectionLabel}>PARTNER</Text>
+        <Text style={s.sectionLabel}>{T.settings.partnerSection}</Text>
         <View style={s.settingsCard}>
           <View style={s.settingsRow}>
             <View>
-              <Text style={s.settingsRowTitle}>Partner sync</Text>
+              <Text style={s.settingsRowTitle}>{T.settings.partnerSync}</Text>
               <Text style={s.settingsRowSub}>
                 {couple
-                  ? `Synced with ${couple.partner.firstName} ${couple.partner.lastName}`
-                  : "No partner connected"}
+                  ? `${T.settings.partnerSynced} ${couple.partner.firstName} ${couple.partner.lastName}`
+                  : T.settings.partnerNone}
               </Text>
             </View>
             <View style={[s.syncDot, { backgroundColor: couple ? C.accent : C.t3 }]} />
@@ -182,12 +229,12 @@ export default function SettingsScreen() {
 
       {/* Support */}
       <Animated.View entering={FadeInDown.delay(140).duration(400)}>
-        <Text style={s.sectionLabel}>SUPPORT</Text>
+        <Text style={s.sectionLabel}>{T.settings.supportSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={() => setContactModal(true)} style={s.settingsRow}>
             <View>
-              <Text style={s.settingsRowTitle}>Contact us</Text>
-              <Text style={s.settingsRowSub}>Send us a message via Telegram</Text>
+              <Text style={s.settingsRowTitle}>{T.settings.contactUs}</Text>
+              <Text style={s.settingsRowSub}>{T.settings.contactUsSub}</Text>
             </View>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
@@ -196,8 +243,8 @@ export default function SettingsScreen() {
 
           <PressableScale onPress={() => router.push("/about-app")} style={s.settingsRow}>
             <View>
-              <Text style={s.settingsRowTitle}>About Dance Planner</Text>
-              <Text style={s.settingsRowSub}>Version, info & more</Text>
+              <Text style={s.settingsRowTitle}>{T.settings.aboutApp}</Text>
+              <Text style={s.settingsRowSub}>{T.settings.aboutAppSub}</Text>
             </View>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
@@ -206,10 +253,10 @@ export default function SettingsScreen() {
 
       {/* Account */}
       <Animated.View entering={FadeInDown.delay(180).duration(400)}>
-        <Text style={s.sectionLabel}>ACCOUNT</Text>
+        <Text style={s.sectionLabel}>{T.settings.accountSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={handleLogout} style={s.settingsRow}>
-            <Text style={[s.settingsRowTitle, { color: C.red }]}>Sign out</Text>
+            <Text style={[s.settingsRowTitle, { color: C.red }]}>{T.settings.signOut}</Text>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
         </View>
@@ -247,6 +294,7 @@ function BudgetModal({
   onSave: (v: number) => Promise<void>;
 }) {
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   const [value, setValue]   = useState(String(current));
   const [saving, setSaving] = useState(false);
@@ -258,10 +306,10 @@ function BudgetModal({
 
   const save = async () => {
     const n = Number(value.replace(",", "."));
-    if (!n || n <= 0) { setError("Enter a valid amount"); return; }
+    if (!n || n <= 0) { setError(T.budget.errorInvalid); return; }
     setSaving(true);
     try { await onSave(n); }
-    catch { setError("Could not save"); }
+    catch { setError(T.budget.errorSave); }
     finally { setSaving(false); }
   };
 
@@ -269,8 +317,8 @@ function BudgetModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
         <View style={s.modalCard}>
-          <Text style={s.modalTitle}>Monthly Budget</Text>
-          <Text style={s.modalSub}>Default spending limit for each month.</Text>
+          <Text style={s.modalTitle}>{T.budget.modalTitle}</Text>
+          <Text style={s.modalSub}>{T.budget.modalSub}</Text>
           {error ? <Text style={s.modalError}>{error}</Text> : null}
           <TextInput
             style={s.modalInput}
@@ -283,12 +331,12 @@ function BudgetModal({
           />
           <View style={s.modalBtns}>
             <PressableScale style={s.modalCancel} onPress={onClose}>
-              <Text style={s.modalCancelText}>Cancel</Text>
+              <Text style={s.modalCancelText}>{T.common.cancel}</Text>
             </PressableScale>
             <PressableScale style={s.modalSave} onPress={save} disabled={saving}>
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={s.modalSaveText}>Save</Text>}
+                : <Text style={s.modalSaveText}>{T.common.save}</Text>}
             </PressableScale>
           </View>
         </View>
@@ -308,6 +356,7 @@ function CurrencyModal({
   onSelect: (code: string) => Promise<void>;
 }) {
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   const [savingCode, setSavingCode] = useState<string | null>(null);
   const [error, setError]           = useState<string | null>(null);
@@ -321,7 +370,7 @@ function CurrencyModal({
     try {
       await onSelect(code);
     } catch {
-      setError("Could not change currency. Please try again.");
+      setError(T.currency.errorChange);
       setSavingCode(null);
     }
   };
@@ -330,8 +379,8 @@ function CurrencyModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
         <View style={s.modalCard}>
-          <Text style={s.modalTitle}>Display currency</Text>
-          <Text style={s.modalSub}>All amounts across the app are shown in this currency.</Text>
+          <Text style={s.modalTitle}>{T.currency.modalTitle}</Text>
+          <Text style={s.modalSub}>{T.currency.modalSub}</Text>
           {error ? <Text style={s.modalError}>{error}</Text> : null}
           <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
             {CURRENCY_ORDER.map((code) => {
@@ -358,7 +407,7 @@ function CurrencyModal({
             })}
           </ScrollView>
           <PressableScale style={[s.aboutCloseBtn, { marginTop: 16 }]} onPress={onClose}>
-            <Text style={s.aboutCloseBtnText}>Close</Text>
+            <Text style={s.aboutCloseBtnText}>{T.common.close}</Text>
           </PressableScale>
         </View>
       </View>
@@ -370,6 +419,7 @@ function CurrencyModal({
 
 function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const C = useC();
+  const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -381,14 +431,14 @@ function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => v
   }, [visible]);
 
   const send = async () => {
-    if (!message.trim()) { setError("Please write a message first"); return; }
+    if (!message.trim()) { setError(T.contact.errorEmpty); return; }
     setSending(true);
     setError(null);
     try {
       await api.post("/contact", { message: message.trim() });
       setSent(true);
     } catch {
-      setError("Failed to send. Please try again.");
+      setError(T.contact.errorSend);
     } finally {
       setSending(false);
     }
@@ -401,24 +451,20 @@ function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => v
           {sent ? (
             <>
               <Text style={s.sentIcon}>✓</Text>
-              <Text style={s.modalTitle}>Message sent!</Text>
-              <Text style={s.modalSub}>
-                We received your message and will get back to you via Telegram soon.
-              </Text>
+              <Text style={s.modalTitle}>{T.contact.sentTitle}</Text>
+              <Text style={s.modalSub}>{T.contact.sentSub}</Text>
               <PressableScale style={[s.modalSave, { marginTop: 16 }]} onPress={onClose}>
-                <Text style={s.modalSaveText}>Done</Text>
+                <Text style={s.modalSaveText}>{T.common.done}</Text>
               </PressableScale>
             </>
           ) : (
             <>
-              <Text style={s.modalTitle}>Contact us</Text>
-              <Text style={s.modalSub}>
-                Tell us anything — feedback, bugs, feature requests. We'll reply on Telegram.
-              </Text>
+              <Text style={s.modalTitle}>{T.contact.modalTitle}</Text>
+              <Text style={s.modalSub}>{T.contact.modalSub}</Text>
               {error ? <Text style={s.modalError}>{error}</Text> : null}
               <TextInput
                 style={[s.modalInput, s.contactTextArea]}
-                placeholder="Your message..."
+                placeholder={T.contact.placeholder}
                 placeholderTextColor={C.t3}
                 value={message}
                 onChangeText={setMessage}
@@ -429,12 +475,12 @@ function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => v
               />
               <View style={s.modalBtns}>
                 <PressableScale style={s.modalCancel} onPress={onClose}>
-                  <Text style={s.modalCancelText}>Cancel</Text>
+                  <Text style={s.modalCancelText}>{T.common.cancel}</Text>
                 </PressableScale>
                 <PressableScale style={s.modalSave} onPress={send} disabled={sending}>
                   {sending
                     ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={s.modalSaveText}>Send</Text>}
+                    : <Text style={s.modalSaveText}>{T.contact.send}</Text>}
                 </PressableScale>
               </View>
             </>

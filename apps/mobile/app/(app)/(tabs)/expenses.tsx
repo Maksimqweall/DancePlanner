@@ -26,6 +26,7 @@ import type { Category, Expense } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
 
 type Period = "3M" | "6M" | "1Y";
 
@@ -73,6 +74,7 @@ function BudgetRing({ progress, color, size = 72 }: { progress: number; color: s
 
 export default function ExpensesScreen() {
   const C = useC();
+  const T = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const catChipStyles = useMemo(() => makeCatStyles(C), [C]);
 
@@ -161,9 +163,9 @@ export default function ExpensesScreen() {
 
   const confirmDelete = (id: string) => {
     if (Platform.OS === "web") { deleteExpense(id); return; }
-    Alert.alert("Delete expense", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => deleteExpense(id) },
+    Alert.alert(T.finance.deleteExpense, T.finance.deleteConfirm, [
+      { text: T.common.cancel, style: "cancel" },
+      { text: T.common.delete, style: "destructive", onPress: () => deleteExpense(id) },
     ]);
   };
 
@@ -177,9 +179,9 @@ export default function ExpensesScreen() {
 
         {/* ── Title ────────────────────────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.titleRow}>
-          <Text style={styles.pageTitle}>Finance</Text>
+          <Text style={styles.pageTitle}>{T.finance.title}</Text>
           <PressableScale style={styles.addBtn} onPress={() => setModalOpen(true)}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+            <Text style={styles.addBtnText}>+ {T.common.add}</Text>
           </PressableScale>
         </Animated.View>
 
@@ -192,19 +194,19 @@ export default function ExpensesScreen() {
           >
             <View style={styles.heroTop}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.heroLabel}>THIS MONTH</Text>
+                <Text style={styles.heroLabel}>{T.finance.thisMonth}</Text>
                 <Text style={styles.heroAmount}>{formatMoney(summary.paid)}</Text>
                 <View style={styles.heroChipsRow}>
                   {monthPlanned > 0 && (
                     <View style={styles.heroChip}>
-                      <Text style={styles.heroChipText}>+{formatMoney(monthPlanned)} planned</Text>
+                      <Text style={styles.heroChipText}>+{formatMoney(monthPlanned)} {T.finance.planned.toLowerCase()}</Text>
                     </View>
                   )}
                   <View style={[styles.heroChip, isOverBudget && styles.heroChipOver]}>
                     <Text style={styles.heroChipText}>
                       {isOverBudget
-                        ? `▲ Over ${formatMoney(summary.paid - monthBudget)}`
-                        : `${formatMoney(budgetLeft)} left`}
+                        ? `▲ ${T.finance.overBudget} ${formatMoney(summary.paid - monthBudget)}`
+                        : `${formatMoney(budgetLeft)} ${T.finance.leftLabel}`}
                     </Text>
                   </View>
                 </View>
@@ -212,7 +214,7 @@ export default function ExpensesScreen() {
               <BudgetRing progress={budgetProgress} color="#fff" size={80} />
             </View>
             <View style={{ marginTop: 16 }}>
-              <Text style={styles.heroBarLabel}>Budget usage · {formatMoney(summary.paid)} of {formatMoney(monthBudget)}</Text>
+              <Text style={styles.heroBarLabel}>{T.finance.budgetUsage} · {formatMoney(summary.paid)} {T.finance.of} {formatMoney(monthBudget)}</Text>
               <AnimatedProgress
                 progress={Math.min(1, budgetProgress)}
                 track="rgba(255,255,255,0.18)"
@@ -244,7 +246,7 @@ export default function ExpensesScreen() {
         {categoryBreakdown.length > 0 && (
           <Animated.View entering={FadeInDown.delay(110).duration(400)}>
             <View style={styles.breakdownCard}>
-              <Text style={styles.sectionLabel}>CATEGORY BREAKDOWN</Text>
+              <Text style={styles.sectionLabel}>{T.finance.categoryBreakdown}</Text>
               {categoryBreakdown.map((item, i) => {
                 const meta = CATEGORY_META[item.cat];
                 const color = CAT_COLORS[i % CAT_COLORS.length];
@@ -279,7 +281,7 @@ export default function ExpensesScreen() {
           <Animated.View entering={FadeInDown.delay(130).duration(400)}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={catChipStyles.scroll} contentContainerStyle={catChipStyles.row}>
               <PressableScale onPress={() => setFilterCat(null)} style={[catChipStyles.chip, !filterCat && catChipStyles.chipActive]}>
-                <Text style={[catChipStyles.chipText, !filterCat && catChipStyles.chipTextActive]}>All</Text>
+                <Text style={[catChipStyles.chipText, !filterCat && catChipStyles.chipTextActive]}>{T.finance.allCategories}</Text>
               </PressableScale>
               {presentCategories.map(c => {
                 const m = CATEGORY_META[c];
@@ -303,14 +305,14 @@ export default function ExpensesScreen() {
           <Animated.View entering={FadeInDown.delay(150).duration(400)}>
             <View style={styles.totalsRow}>
               <View style={styles.totalItem}>
-                <Text style={styles.totalLabel}>PAID</Text>
+                <Text style={styles.totalLabel}>{T.finance.paid.toUpperCase()}</Text>
                 <Text style={styles.totalAmount}>{formatMoney(periodTotals.paid)}</Text>
               </View>
               {periodTotals.planned > 0 && (
                 <>
                   <View style={styles.totalDivider} />
                   <View style={styles.totalItem}>
-                    <Text style={styles.totalLabel}>PLANNED</Text>
+                    <Text style={styles.totalLabel}>{T.finance.planned.toUpperCase()}</Text>
                     <Text style={[styles.totalAmount, { color: C.gold }]}>{formatMoney(periodTotals.planned)}</Text>
                   </View>
                 </>
@@ -332,8 +334,8 @@ export default function ExpensesScreen() {
         {groups.length === 0 ? (
           <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.emptyCard}>
             <Text style={styles.emptyEmoji}>💳</Text>
-            <Text style={styles.emptyTitle}>No expenses in this period</Text>
-            <Text style={styles.emptyText}>Tap "+ Add" to record your first expense.</Text>
+            <Text style={styles.emptyTitle}>{T.finance.noExpensesInPeriod}</Text>
+            <Text style={styles.emptyText}>{T.finance.tapToRecord}</Text>
           </Animated.View>
         ) : (
           groups.map((g, gi) => (
@@ -346,7 +348,7 @@ export default function ExpensesScreen() {
                   <Text style={styles.monthLabel}>{monthLong(g.month)}</Text>
                   <View style={styles.monthAmounts}>
                     <Text style={styles.monthPaid}>{formatMoney(g.paid)}</Text>
-                    {g.planned > 0 && <Text style={styles.monthPlanned}>+{formatMoney(g.planned)} planned</Text>}
+                    {g.planned > 0 && <Text style={styles.monthPlanned}>+{formatMoney(g.planned)} {T.finance.planned.toLowerCase()}</Text>}
                   </View>
                 </View>
                 <Text style={styles.monthChevron}>{expanded.has(g.month) ? "▼" : "▶"}</Text>

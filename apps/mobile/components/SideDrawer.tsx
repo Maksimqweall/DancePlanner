@@ -12,6 +12,7 @@ import Svg, { Path, Rect, Circle, Line } from "react-native-svg";
 import { C } from "../lib/theme";
 import type { Palette } from "../lib/theme";
 import { useC } from "../lib/useTheme";
+import { useT } from "../lib/i18n";
 import { useDrawer } from "../lib/DrawerContext";
 import { useAuthStore } from "../store/useAuthStore";
 import { usePartnerStore } from "../store/usePartnerStore";
@@ -97,6 +98,7 @@ const NAV_SECONDARY = [
 export default function SideDrawer() {
   const { isOpen, close } = useDrawer();
   const T         = useC();
+  const lang      = useT();
   const s         = useMemo(() => makeStyles(T), [T]);
   const router    = useRouter();
   const segments  = useSegments();
@@ -104,6 +106,15 @@ export default function SideDrawer() {
   const user      = useAuthStore((st) => st.user);
   const logout    = useAuthStore((st) => st.logout);
   const pending   = usePartnerStore((st) => st.pendingCount);
+
+  const navLabels: Record<string, string> = {
+    index:     lang.nav.dashboard,
+    calendar:  lang.nav.calendar,
+    expenses:  lang.nav.finance,
+    projects:  lang.nav.events,
+    partner:   lang.nav.partner,
+    "about-app": lang.nav.aboutUs,
+  };
 
   const translateX     = useSharedValue(-DRAWER_W - 24);
   const backdropO      = useSharedValue(0);
@@ -172,14 +183,14 @@ export default function SideDrawer() {
 
         {/* ── Main navigation ── */}
         <View style={s.navGroup}>
-          <Text style={s.navGroupLabel}>NAVIGATION</Text>
-          {NAV_MAIN.map(({ key, label, href, icon: Icon, accent }) => {
+          <Text style={s.navGroupLabel}>{lang.nav.navSection}</Text>
+          {NAV_MAIN.map(({ key, href, icon: Icon, accent }) => {
             const active = key === activeKey;
             const badge  = key === "partner" && pending > 0;
             return (
               <NavItem
                 key={key}
-                label={label}
+                label={navLabels[key] ?? key}
                 active={active}
                 accent={accent}
                 badge={badge ? pending : 0}
@@ -192,13 +203,13 @@ export default function SideDrawer() {
 
         {/* ── Secondary navigation ── */}
         <View style={[s.navGroup, { marginTop: 8 }]}>
-          <Text style={s.navGroupLabel}>MORE</Text>
-          {NAV_SECONDARY.map(({ key, label, href, icon: Icon, accent }) => {
+          <Text style={s.navGroupLabel}>{lang.nav.moreSection}</Text>
+          {NAV_SECONDARY.map(({ key, href, icon: Icon, accent }) => {
             const active = key === activeKey;
             return (
               <NavItem
                 key={key}
-                label={label}
+                label={navLabels[key] ?? key}
                 active={active}
                 accent={accent}
                 badge={0}
@@ -217,7 +228,7 @@ export default function SideDrawer() {
           style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.7 }]}
         >
           <LogoutIcon color={T.red} size={20} />
-          <Text style={s.logoutText}>Sign out</Text>
+          <Text style={s.logoutText}>{lang.nav.signOut}</Text>
         </Pressable>
 
       </Animated.View>
@@ -289,7 +300,10 @@ function makeStyles(C: Palette) {
   },
   avatarGlow: {
     position: "absolute",
-    inset: -6,
+    top: -6,
+    right: -6,
+    bottom: -6,
+    left: -6,
     borderRadius: 32,
     backgroundColor: C.accentGlow,
   },
@@ -343,6 +357,7 @@ function makeStyles(C: Palette) {
   navItem: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "stretch",
     gap: 14,
     paddingVertical: 13,
     paddingHorizontal: 14,

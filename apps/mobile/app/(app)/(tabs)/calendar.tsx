@@ -17,8 +17,11 @@ import { AnimatedBar } from "../../../components/ui/AnimatedProgress";
 import { C } from "../../../lib/theme";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useLanguageStore } from "../../../store/useLanguageStore";
 
 const PROJECT_COLOR = C.purple;
+
+const LANG_LOCALE: Record<string, string> = { en: "en-US", ru: "ru-RU", uk: "uk-UA", de: "de-DE" };
 
 function daysBetweenIso(startIso: string, endIso: string): string[] {
   const out: string[] = [];
@@ -36,12 +39,12 @@ function todayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function monthLabel(monthKey: string): string {
-  return new Date(`${monthKey}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+function monthLabel(monthKey: string, locale = "en-US"): string {
+  return new Date(`${monthKey}-01T00:00:00`).toLocaleDateString(locale, { month: "long", year: "numeric" });
 }
 
-function dayHeading(day: string): string {
-  return new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+function dayHeading(day: string, locale = "en-US"): string {
+  return new Date(`${day}T00:00:00`).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
 }
 
 function makeCalendarTheme(C: Palette) {
@@ -68,6 +71,8 @@ export default function CalendarScreen() {
   const C = useC();
   const styles = useMemo(() => makeStyles(C), [C]);
   const calendarTheme = useMemo(() => makeCalendarTheme(C), [C]);
+  const { language } = useLanguageStore();
+  const locale = LANG_LOCALE[language] ?? "en-US";
 
   const { viewMonth, entries, monthExpenses, fetchMonth, createEntry, updateEntry, deleteEntry, deleteDay } =
     useScheduleStore();
@@ -158,7 +163,7 @@ export default function CalendarScreen() {
     if (Platform.OS === "web") { doDelete(); return; }
     Alert.alert(
       "Clear day",
-      `Delete all ${myDayEntries.length} session${myDayEntries.length > 1 ? "s" : ""} for ${dayHeading(selectedDay)}?`,
+      `Delete all ${myDayEntries.length} session${myDayEntries.length > 1 ? "s" : ""} for ${dayHeading(selectedDay, locale)}?`,
       [
         { text: "Cancel", style: "cancel" },
         { text: "Delete all", style: "destructive", onPress: doDelete },
@@ -183,7 +188,7 @@ export default function CalendarScreen() {
 
           {/* ── Header ───────────────────────────────────────────────────── */}
           <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.calHeader}>
-            <Text style={styles.monthTitle} numberOfLines={1}>{monthLabel(viewMonth)}</Text>
+            <Text style={styles.monthTitle} numberOfLines={1}>{monthLabel(viewMonth, locale)}</Text>
             <View style={styles.zoomRow}>
               <ZoomBtn label="−" disabled={zoom === 0} onPress={() => setZoom(z => Math.max(0, z - 1))} />
               <ZoomBtn label="+" disabled={zoom === MAX_ZOOM} onPress={() => setZoom(z => Math.min(MAX_ZOOM, z + 1))} />
@@ -278,7 +283,7 @@ export default function CalendarScreen() {
         {/* ── Day Agenda ───────────────────────────────────────────────────── */}
         <View style={styles.agenda}>
           <View style={styles.agendaHeader}>
-            <Text style={styles.agendaTitle} numberOfLines={1}>{dayHeading(selectedDay)}</Text>
+            <Text style={styles.agendaTitle} numberOfLines={1}>{dayHeading(selectedDay, locale)}</Text>
             <View style={styles.agendaActions}>
               {myDayEntries.length > 0 && (
                 <PressableScale style={styles.clearBtn} onPress={clearDay}>

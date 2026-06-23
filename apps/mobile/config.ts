@@ -26,7 +26,7 @@ function resolveApiBaseUrl(): string {
 }
 
 // Временно хардкодим ссылку на Render
-export const API_BASE_URL = "https://danceplanner-api.onrender.com";
+export const API_BASE_URL = "https://danceplanner.onrender.com";
 
 // WebSocket base URL — same host/port as API, different protocol
 export const WS_BASE_URL = API_BASE_URL.replace(/^http/, "ws");

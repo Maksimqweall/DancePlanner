@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,23 +15,39 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { useFinanceStore } from "../../../store/useFinanceStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
-import { formatMoney } from "../../../lib/display";
+import { formatMoney, CURRENCIES, CURRENCY_ORDER } from "../../../lib/display";
 import PressableScale from "../../../components/ui/PressableScale";
-import { C } from "../../../lib/theme";
+import type { Palette } from "../../../lib/theme";
+import { useC } from "../../../lib/useTheme";
+import { useThemeStore, type ThemeMode } from "../../../store/useThemeStore";
 import { api } from "../../../lib/api";
 import { useWdsfStore } from "../../../store/useWdsfStore";
 
+const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string }[] = [
+  { key: "light",  label: "Light",  icon: "☀" },
+  { key: "dark",   label: "Dark",   icon: "☾" },
+  { key: "system", label: "System", icon: "⚙" },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const user   = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const user   = useAuthStore((st) => st.user);
+  const logout = useAuthStore((st) => st.logout);
+  const setCurrency = useAuthStore((st) => st.setCurrency);
+  const mode = useThemeStore((st) => st.mode);
+  const setMode = useThemeStore((st) => st.setMode);
   const { budgets, refresh, setBudget } = useFinanceStore();
   const { couple } = usePartnerStore();
-  const wdsfProfile = useWdsfStore((s) => s.profile);
+  const wdsfProfile = useWdsfStore((st) => st.profile);
 
-  const [budgetModal,  setBudgetModal]  = useState(false);
-  const [aboutModal,   setAboutModal]   = useState(false);
-  const [contactModal, setContactModal] = useState(false);
+  const [budgetModal,   setBudgetModal]   = useState(false);
+  const [contactModal,  setContactModal]  = useState(false);
+  const [currencyModal, setCurrencyModal] = useState(false);
+
+  const currencyCode = user?.currency ?? "EUR";
+  const currencyMeta = CURRENCIES[currencyCode] ?? CURRENCIES.EUR;
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
@@ -111,12 +127,37 @@ export default function SettingsScreen() {
 
           <View style={s.rowDivider} />
 
-          <View style={s.settingsRow}>
+          <PressableScale onPress={() => setCurrencyModal(true)} style={s.settingsRow}>
             <View>
               <Text style={s.settingsRowTitle}>Currency</Text>
               <Text style={s.settingsRowSub}>All amounts displayed in</Text>
             </View>
-            <Text style={s.settingsRowValue}>EUR €</Text>
+            <View style={s.settingsRowRight}>
+              <Text style={s.settingsRowValue}>{currencyMeta.code} {currencyMeta.symbol}</Text>
+              <Text style={s.settingsRowChevron}>›</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </Animated.View>
+
+      {/* Appearance */}
+      <Animated.View entering={FadeInDown.delay(80).duration(400)}>
+        <Text style={s.sectionLabel}>APPEARANCE</Text>
+        <View style={s.settingsCard}>
+          <View style={s.appearanceRow}>
+            {THEME_OPTIONS.map((opt) => {
+              const active = mode === opt.key;
+              return (
+                <PressableScale
+                  key={opt.key}
+                  onPress={() => setMode(opt.key)}
+                  style={[s.themeBtn, active && s.themeBtnActive]}
+                >
+                  <Text style={[s.themeIcon, active && s.themeIconActive]}>{opt.icon}</Text>
+                  <Text style={[s.themeLabel, active && s.themeLabelActive]}>{opt.label}</Text>
+                </PressableScale>
+              );
+            })}
           </View>
         </View>
       </Animated.View>
@@ -153,10 +194,10 @@ export default function SettingsScreen() {
 
           <View style={s.rowDivider} />
 
-          <PressableScale onPress={() => setAboutModal(true)} style={s.settingsRow}>
+          <PressableScale onPress={() => router.push("/about-app")} style={s.settingsRow}>
             <View>
               <Text style={s.settingsRowTitle}>About Dance Planner</Text>
-              <Text style={s.settingsRowSub}>Version, info & licenses</Text>
+              <Text style={s.settingsRowSub}>Version, info & more</Text>
             </View>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
@@ -183,7 +224,12 @@ export default function SettingsScreen() {
         onSave={async (val) => { await setBudget(currentMonth, val); setBudgetModal(false); }}
       />
 
-      <AboutModal visible={aboutModal} onClose={() => setAboutModal(false)} />
+      <CurrencyModal
+        visible={currencyModal}
+        current={currencyCode}
+        onClose={() => setCurrencyModal(false)}
+        onSelect={async (code) => { await setCurrency(code); setCurrencyModal(false); }}
+      />
 
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
     </ScrollView>
@@ -200,6 +246,8 @@ function BudgetModal({
   onClose: () => void;
   onSave: (v: number) => Promise<void>;
 }) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
   const [value, setValue]   = useState(String(current));
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
@@ -249,43 +297,67 @@ function BudgetModal({
   );
 }
 
-// ─── About Modal ─────────────────────────────────────────────────────────────
+// ─── Currency Modal ──────────────────────────────────────────────────────────
 
-function AboutModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function CurrencyModal({
+  visible, current, onClose, onSelect,
+}: {
+  visible: boolean;
+  current: string;
+  onClose: () => void;
+  onSelect: (code: string) => Promise<void>;
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const [savingCode, setSavingCode] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+
+  useEffect(() => { if (visible) { setSavingCode(null); setError(null); } }, [visible]);
+
+  const choose = async (code: string) => {
+    if (code === current) { onClose(); return; }
+    setSavingCode(code);
+    setError(null);
+    try {
+      await onSelect(code);
+    } catch {
+      setError("Could not change currency. Please try again.");
+      setSavingCode(null);
+    }
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
-        <View style={s.aboutCard}>
-          <View style={s.aboutLogoWrap}>
-            <View style={s.aboutLogo}>
-              <Text style={s.aboutLogoText}>DP</Text>
-            </View>
-          </View>
-          <Text style={s.aboutTitle}>Dance Planner</Text>
-          <View style={s.aboutBadge}>
-            <Text style={s.aboutBadgeText}>✦ Premium · v0.2</Text>
-          </View>
-          <Text style={s.aboutDesc}>
-            The all-in-one companion for competitive dancesport athletes. Manage your finances, track
-            events, sync with your partner, and stay on top of every competition.
-          </Text>
-
-          <View style={s.aboutDivider} />
-
-          <View style={s.aboutRow}>
-            <Text style={s.aboutRowLabel}>Version</Text>
-            <Text style={s.aboutRowValue}>0.2.0 (Alpha)</Text>
-          </View>
-          <View style={s.aboutRow}>
-            <Text style={s.aboutRowLabel}>Platform</Text>
-            <Text style={s.aboutRowValue}>iOS · Android</Text>
-          </View>
-          <View style={s.aboutRow}>
-            <Text style={s.aboutRowLabel}>Built with</Text>
-            <Text style={s.aboutRowValue}>Expo · React Native</Text>
-          </View>
-
-          <PressableScale style={s.aboutCloseBtn} onPress={onClose}>
+        <View style={s.modalCard}>
+          <Text style={s.modalTitle}>Display currency</Text>
+          <Text style={s.modalSub}>All amounts across the app are shown in this currency.</Text>
+          {error ? <Text style={s.modalError}>{error}</Text> : null}
+          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+            {CURRENCY_ORDER.map((code) => {
+              const c = CURRENCIES[code];
+              const active = code === current;
+              return (
+                <PressableScale
+                  key={code}
+                  onPress={() => choose(code)}
+                  style={[s.currencyRow, active && s.currencyRowActive]}
+                >
+                  <View style={s.currencySymbolBox}>
+                    <Text style={s.currencySymbolText}>{c.symbol}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.currencyLabel}>{c.label}</Text>
+                    <Text style={s.currencyCode}>{c.code}</Text>
+                  </View>
+                  {savingCode === code
+                    ? <ActivityIndicator color={C.accent} size="small" />
+                    : active ? <Text style={s.currencyCheck}>✓</Text> : null}
+                </PressableScale>
+              );
+            })}
+          </ScrollView>
+          <PressableScale style={[s.aboutCloseBtn, { marginTop: 16 }]} onPress={onClose}>
             <Text style={s.aboutCloseBtnText}>Close</Text>
           </PressableScale>
         </View>
@@ -297,6 +369,8 @@ function AboutModal({ visible, onClose }: { visible: boolean; onClose: () => voi
 // ─── Contact Modal ────────────────────────────────────────────────────────────
 
 function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent,    setSent]    = useState(false);
@@ -373,9 +447,19 @@ function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => v
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   screen:  { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 20, paddingTop: 24 },
+
+  // Appearance theme picker
+  appearanceRow: { flexDirection: "row", gap: 8, padding: 12 },
+  themeBtn: { flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 14, backgroundColor: C.elevated, borderWidth: 1, borderColor: C.border, gap: 4 },
+  themeBtnActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
+  themeIcon: { fontSize: 18, color: C.t2 },
+  themeIconActive: { color: C.accent },
+  themeLabel: { fontSize: 12, fontWeight: "600", color: C.t2 },
+  themeLabelActive: { color: C.accent },
 
   profileCard: {
     alignItems: "center",
@@ -476,42 +560,30 @@ const s = StyleSheet.create({
   modalSaveText: { color: "#fff", fontWeight: "700" },
   sentIcon: { color: C.accent, fontSize: 40, textAlign: "center", marginBottom: 8 },
 
-  // About modal
-  aboutCard: {
-    backgroundColor: C.card, borderRadius: 24,
-    padding: 26, borderWidth: 1, borderColor: C.border,
-    alignItems: "center",
-  },
-  aboutLogoWrap: { marginBottom: 14 },
-  aboutLogo: {
-    width: 68, height: 68, borderRadius: 20,
+  // Currency picker
+  currencyRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 12, paddingHorizontal: 12,
+    borderRadius: 14, marginBottom: 6,
     backgroundColor: C.elevated,
-    borderWidth: 2, borderColor: C.accentBorder,
-    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: C.border,
   },
-  aboutLogoText:  { color: C.accent, fontSize: 22, fontWeight: "900", letterSpacing: -1 },
-  aboutTitle:     { color: C.t1, fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginBottom: 10 },
-  aboutBadge: {
-    backgroundColor: C.goldFade, borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 5,
-    borderWidth: 1, borderColor: C.goldBorder, marginBottom: 16,
+  currencyRowActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
+  currencySymbolBox: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: C.card, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: C.border,
   },
-  aboutBadgeText: { color: C.gold, fontSize: 12, fontWeight: "700" },
-  aboutDesc: {
-    color: C.t2, fontSize: 14, textAlign: "center",
-    lineHeight: 21, marginBottom: 20,
-  },
-  aboutDivider:   { height: 1, backgroundColor: C.border, width: "100%", marginBottom: 16 },
-  aboutRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    width: "100%", paddingVertical: 7,
-  },
-  aboutRowLabel: { color: C.t3, fontSize: 14 },
-  aboutRowValue: { color: C.t1, fontSize: 14, fontWeight: "600" },
+  currencySymbolText: { color: C.t1, fontSize: 16, fontWeight: "800" },
+  currencyLabel: { color: C.t1, fontSize: 15, fontWeight: "600" },
+  currencyCode:  { color: C.t3, fontSize: 12, marginTop: 1 },
+  currencyCheck: { color: C.accent, fontSize: 18, fontWeight: "800" },
+
   aboutCloseBtn: {
     marginTop: 22, paddingVertical: 14, borderRadius: 14,
     alignItems: "center", backgroundColor: C.elevated,
     width: "100%",
   },
   aboutCloseBtnText: { color: C.t2, fontWeight: "600", fontSize: 15 },
-});
+  });
+}

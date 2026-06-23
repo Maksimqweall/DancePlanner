@@ -2,6 +2,7 @@ import "dotenv/config";
 import http from "http";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { env } from "./lib/env";
@@ -20,7 +21,33 @@ import wdsfRoutes     from "./routes/wdsf";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    // Native mobile requests have no Origin header — always allow.
+    if (!origin) return callback(null, true);
+    if (env.allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
+
+// General rate limit: 300 req / 15 min per IP
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
+
+// Strict rate limit on auth endpoints: 15 req / 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 app.use(express.json());
 
 // Serve uploaded files (PDF tickets, bookings, etc.)
@@ -30,6 +57,10 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.use("/api/auth/login",            authLimiter);
+app.use("/api/auth/signup",           authLimiter);
+app.use("/api/auth/forgot-password",  authLimiter);
+app.use("/api/auth/reset-password",   authLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/events", eventRoutes);

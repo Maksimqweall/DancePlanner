@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 
+// ─── Base Profile Types ───────────────────────────────────────────────────────
+
 export interface WdsfCompetition {
   date: string;
   event: string;
@@ -9,6 +11,7 @@ export interface WdsfCompetition {
   category: string;
   place: string | null;
   points: string | null;
+  competitionUrl: string | null;
 }
 
 export interface WdsfPartner {
@@ -24,7 +27,6 @@ export interface WdsfPartner {
 export interface WdsfProfile {
   uuid: string;
   profileUrl: string;
-  // General section
   firstName: string;
   lastName: string;
   name: string;
@@ -41,22 +43,91 @@ export interface WdsfProfile {
   fetchedAt: string;
 }
 
+// ─── Competition Analytics Types ──────────────────────────────────────────────
+
+export interface JudgeCross {
+  judge: string;
+  marked: boolean;
+}
+
+export interface DancePrelimMarks {
+  dance: string;
+  crosses: JudgeCross[];
+  totalCrosses: number;
+}
+
+export interface PrelimRound {
+  roundNumber: number;
+  dances: DancePrelimMarks[];
+  totalCrosses: number;
+}
+
+export interface FinalJudgePlacement {
+  judge: string;
+  place: number;
+}
+
+export interface FinalDanceResult {
+  dance: string;
+  judgeEntries: FinalJudgePlacement[];
+  dancePlace: number;
+}
+
+export interface FinalResult {
+  dances: FinalDanceResult[];
+  overallPlace: number;
+  judgeAvgPlaces: { judge: string; avgPlace: number }[];
+}
+
+export interface RankingEntry {
+  rank: number;
+  coupleName: string;
+  country: string;
+  coupleNumber: string;
+  points: string;
+  athleteUrls: string[];
+}
+
+export interface CompetitionAnalytics {
+  competitionSlug: string;
+  competitionName: string;
+  rankingUrl: string;
+  coupleNumber: string;
+  coupleName: string;
+  rounds: PrelimRound[];
+  final: FinalResult | null;
+  danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
+  judgeStats: { judge: string; totalCrosses: number; pct: number }[];
+  totalPossibleCrosses: number;
+  reachedFinal: boolean;
+  allCouples: RankingEntry[];
+  judgeNames: Record<string, string>;
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
 interface WdsfState {
   profile: WdsfProfile | null;
   loading: boolean;
   error: string | null;
+  analyticsCache: Record<string, CompetitionAnalytics | null>;
+  analyticsLoading: Record<string, boolean>;
 
   fetchProfile: () => Promise<void>;
   linkByMin: (min: string) => Promise<void>;
   linkByUrl: (url: string, min?: string) => Promise<void>;
   refresh: () => Promise<void>;
   unlink: () => Promise<void>;
+  fetchAnalytics: (competitionUrl: string) => Promise<CompetitionAnalytics | null>;
+  clearAnalyticsCache: (competitionUrl: string) => void;
 }
 
-export const useWdsfStore = create<WdsfState>((set) => ({
+export const useWdsfStore = create<WdsfState>((set, get) => ({
   profile: null,
   loading: false,
   error: null,
+  analyticsCache: {},
+  analyticsLoading: {},
 
   fetchProfile: async () => {
     set({ loading: true, error: null });
@@ -100,7 +171,7 @@ export const useWdsfStore = create<WdsfState>((set) => ({
     set({ loading: true, error: null });
     try {
       const { profile } = await api.post<{ profile: WdsfProfile }>("/wdsf/refresh");
-      set({ profile });
+      set({ profile, analyticsCache: {} }); // clear analytics cache on refresh
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Refresh failed" });
     } finally {
@@ -112,11 +183,43 @@ export const useWdsfStore = create<WdsfState>((set) => ({
     set({ loading: true, error: null });
     try {
       await api.del("/wdsf/unlink");
-      set({ profile: null });
+      set({ profile: null, analyticsCache: {}, analyticsLoading: {} });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Failed to unlink" });
     } finally {
       set({ loading: false });
+    }
+  },
+
+  clearAnalyticsCache: (competitionUrl: string) => {
+    set(s => {
+      const next = { ...s.analyticsCache };
+      delete next[competitionUrl];
+      return { analyticsCache: next };
+    });
+  },
+
+  fetchAnalytics: async (competitionUrl: string) => {
+    const cached = get().analyticsCache[competitionUrl];
+    if (cached !== undefined) return cached;
+
+    set(s => ({ analyticsLoading: { ...s.analyticsLoading, [competitionUrl]: true } }));
+    try {
+      const params = new URLSearchParams({ competitionUrl });
+      const { analytics } = await api.get<{ analytics: CompetitionAnalytics }>(
+        `/wdsf/competition-analytics?${params}`
+      );
+      set(s => ({
+        analyticsCache: { ...s.analyticsCache, [competitionUrl]: analytics },
+        analyticsLoading: { ...s.analyticsLoading, [competitionUrl]: false },
+      }));
+      return analytics;
+    } catch {
+      set(s => ({
+        analyticsCache: { ...s.analyticsCache, [competitionUrl]: null },
+        analyticsLoading: { ...s.analyticsLoading, [competitionUrl]: false },
+      }));
+      return null;
     }
   },
 }));

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,10 +13,12 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import PressableScale from "../../components/ui/PressableScale";
-import { C } from "../../lib/theme";
+import type { Palette } from "../../lib/theme";
+import { useC } from "../../lib/useTheme";
 import Svg, { Path, Circle, Defs, RadialGradient, Stop, Ellipse } from "react-native-svg";
 
 function LogoMark() {
+  const C = useC();
   return (
     <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
       <Circle cx="32" cy="32" r="32" fill={C.accentFade} />
@@ -29,7 +31,9 @@ function LogoMark() {
 }
 
 export default function Login() {
-  const login = useAuthStore((s) => s.login);
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
+  const login = useAuthStore((st) => st.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +107,10 @@ export default function Login() {
             )}
           </PressableScale>
 
+          <View style={styles.forgotRow}>
+            <Link href="/forgot-password" style={styles.forgotLink}>Forgot password?</Link>
+          </View>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>No account? </Text>
             <Link href="/signup" style={styles.footerLink}>Create one</Link>
@@ -113,7 +121,8 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.bg,
@@ -175,7 +184,7 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: C.accentBorder,
-    backgroundColor: '#1a1f1e',
+    backgroundColor: C.elevated,
   },
   button: {
     backgroundColor: C.accent,
@@ -190,10 +199,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.2,
   },
+  forgotRow: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  forgotLink: {
+    color: C.t3,
+    fontSize: 13,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   footerText: {
     color: C.t2,
@@ -204,4 +221,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -14,12 +14,15 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import PressableScale from "../../components/ui/PressableScale";
-import { C } from "../../lib/theme";
+import type { Palette } from "../../lib/theme";
+import { useC } from "../../lib/useTheme";
 
 function InputField({
   label,
   ...props
 }: React.ComponentProps<typeof TextInput> & { label: string }) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const [focused, setFocused] = useState(false);
   return (
     <View>
@@ -36,7 +39,9 @@ function InputField({
 }
 
 export default function Signup() {
-  const signup = useAuthStore((s) => s.signup);
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
+  const signup = useAuthStore((st) => st.signup);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -137,7 +142,8 @@ export default function Signup() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 },
   header: { marginBottom: 36 },
@@ -167,7 +173,7 @@ const styles = StyleSheet.create({
     borderColor: C.border,
     marginBottom: 16,
   },
-  inputFocused: { borderColor: C.accentBorder, backgroundColor: '#1a1f1e' },
+  inputFocused: { borderColor: C.accentBorder, backgroundColor: C.elevated },
   button: {
     backgroundColor: C.accent,
     borderRadius: 14,
@@ -179,4 +185,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   footerText: { color: C.t2, fontSize: 14 },
   footerLink: { color: C.accent, fontWeight: '600', fontSize: 14 },
-});
+  });
+}

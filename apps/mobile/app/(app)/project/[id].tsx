@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import {
   CATEGORY_ORDER,
   formatDate,
   formatMoney,
+  currencySymbol,
 } from "../../../lib/display";
 import type { Attachment, Category, ChecklistItem, Expense, EventType, Project } from "../../../lib/types";
 import { ApiError } from "../../../lib/api";
@@ -31,11 +32,14 @@ import { DateField } from "../../../components/DateTimeField";
 import ExpenseFormModal from "../../../components/ExpenseFormModal";
 import CategoryDonut, { type DonutSlice } from "../../../components/CategoryDonut";
 import PressableScale from "../../../components/ui/PressableScale";
-import { C } from "../../../lib/theme";
+import type { Palette } from "../../../lib/theme";
+import { useC } from "../../../lib/useTheme";
 
 export default function ProjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const {
     current, loading, fetchProject, deleteProject, updateProject,
     addChecklistItem, toggleChecklistItem, deleteChecklistItem,
@@ -341,6 +345,8 @@ export default function ProjectDetail() {
 }
 
 function Section({ title, children, delay = 0 }: { title: string; children: React.ReactNode; delay?: number }) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <Animated.View entering={FadeInDown.delay(delay).duration(400)} style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -350,6 +356,8 @@ function Section({ title, children, delay = 0 }: { title: string; children: Reac
 }
 
 function BudgetStat({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <View style={styles.budgetStat}>
       <Text style={styles.budgetStatLabel}>{label}</Text>
@@ -361,6 +369,8 @@ function BudgetStat({ label, value, gold }: { label: string; value: string; gold
 function ChecklistRow({
   item, onToggle, onDelete,
 }: { item: ChecklistItem; onToggle: () => void; onDelete: () => void }) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <View style={styles.checkRow}>
       <PressableScale onPress={onToggle} style={styles.checkLeft}>
@@ -379,6 +389,8 @@ function ChecklistRow({
 function AttachmentRow({
   attachment, onOpen, onDelete,
 }: { attachment: Attachment; onOpen: () => void; onDelete: () => void }) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const isPdf = attachment.mimeType === "application/pdf";
   return (
     <View style={styles.attachRow}>
@@ -404,6 +416,8 @@ function EditProjectModal({
   onClose: () => void;
   onSave: (input: Partial<CreateProjectInput>) => Promise<void>;
 }) {
+  const C = useC();
+  const editStyles = useMemo(() => makeEditStyles(C), [C]);
   const [title, setTitle] = useState(project.title);
   const [type, setType] = useState<EventType>(project.type);
   const [date, setDate] = useState(project.date.slice(0, 10));
@@ -516,7 +530,7 @@ function EditProjectModal({
               onChangeText={setLocation}
             />
 
-            <Text style={editStyles.label}>Budget € (optional)</Text>
+            <Text style={editStyles.label}>Budget {currencySymbol()} (optional)</Text>
             <TextInput
               style={editStyles.input}
               placeholder="e.g. 1200"
@@ -537,7 +551,8 @@ function EditProjectModal({
   );
 }
 
-const editStyles = StyleSheet.create({
+function makeEditStyles(C: Palette) {
+  return StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" },
   sheet: {
     backgroundColor: C.card,
@@ -585,9 +600,11 @@ const editStyles = StyleSheet.create({
     paddingVertical: 16, alignItems: "center", marginTop: 8,
   },
   saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-});
+  });
+}
 
-const styles = StyleSheet.create({
+function makeStyles(C: Palette) {
+  return StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 20, paddingTop: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
@@ -747,4 +764,5 @@ const styles = StyleSheet.create({
   // Delete
   deleteBtn: { paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   deleteBtnText: { color: C.red, fontWeight: '600', fontSize: 15 },
-});
+  });
+}

@@ -7,6 +7,7 @@ import {
   findAthleteUrlByName,
   scrapeAthleteProfile,
   verifyAndScrape,
+  scrapeCompetitionAnalytics,
   extractUuid,
   type WdsfProfile,
 } from "../lib/wdsfScraper";
@@ -150,6 +151,29 @@ router.post(
     });
 
     res.json({ profile });
+  })
+);
+
+// GET /api/wdsf/competition-analytics — fetch full analytics for one competition
+// Query: competitionUrl (any /Competitions/ URL for the event)
+router.get(
+  "/competition-analytics",
+  asyncHandler(async (req, res) => {
+    const { competitionUrl } = z.object({
+      competitionUrl: z.string().min(10),
+    }).parse(req.query);
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { wdsfProfileUrl: true, wdsfData: true },
+    });
+    if (!user?.wdsfProfileUrl) throw new HttpError(400, "No WDSF profile linked");
+
+    const uuid = extractUuid(user.wdsfProfileUrl);
+    if (!uuid) throw new HttpError(400, "Could not extract UUID from profile URL");
+
+    const analytics = await scrapeCompetitionAnalytics(competitionUrl, uuid);
+    res.json({ analytics });
   })
 );
 

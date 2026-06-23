@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "../store/useAuthStore";
+import { useC, useScheme } from "../lib/useTheme";
 import SplashScreen from "../components/SplashScreen";
 
 export default function RootLayout() {
@@ -12,6 +13,9 @@ export default function RootLayout() {
   const hydrate  = useAuthStore((s) => s.hydrate);
   const router   = useRouter();
   const segments = useSegments();
+  const C        = useC();
+  const scheme   = useScheme();
+  const statusBarStyle = scheme === "light" ? "dark" : "light";
 
   const [splashDone, setSplashDone] = useState(false);
 
@@ -28,7 +32,7 @@ export default function RootLayout() {
   if (!splashDone) {
     return (
       <>
-        <StatusBar style="light" />
+        <StatusBar style={statusBarStyle} />
         <SplashScreen onFinish={() => setSplashDone(true)} />
       </>
     );
@@ -36,12 +40,12 @@ export default function RootLayout() {
 
   // Brief blank while auth state resolves (rare — usually < 50 ms after splash)
   if (status === "loading") {
-    return <View style={{ flex: 1, backgroundColor: "#07070a" }} />;
+    return <View style={{ flex: 1, backgroundColor: C.bg }} />;
   }
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style={statusBarStyle} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(app)" />

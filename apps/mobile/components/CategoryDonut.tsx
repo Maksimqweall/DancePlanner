@@ -1,6 +1,7 @@
 import { View, Text } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
 import { formatMoney } from "../lib/display";
+import { useC } from "../lib/useTheme";
 
 export interface DonutSlice {
   key: string;
@@ -22,11 +23,12 @@ export default function CategoryDonut({
   strokeWidth = 26,
   centerLabel = "Total",
 }: Props) {
+  const T = useC();
   const total = data.reduce((s, d) => s + d.value, 0);
   const r = (size - strokeWidth) / 2;
   const cx = size / 2;
   const cy = size / 2;
-  const C = 2 * Math.PI * r;
+  const circ = 2 * Math.PI * r;
 
   let cumulative = 0;
 
@@ -34,15 +36,13 @@ export default function CategoryDonut({
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
         <G>
-          {/* Track */}
-          <Circle cx={cx} cy={cy} r={r} stroke="#27272a" strokeWidth={strokeWidth} fill="none" />
+          <Circle cx={cx} cy={cy} r={r} stroke={T.elevated} strokeWidth={strokeWidth} fill="none" />
           {total > 0 &&
             data.map((d) => {
               const fraction = d.value / total;
-              const seg = fraction * C;
+              const seg = fraction * circ;
               const angle = (cumulative / total) * 360 - 90;
               cumulative += d.value;
-              // Tiny gap between slices for legibility.
               const gap = data.length > 1 ? 1.5 : 0;
               return (
                 <Circle
@@ -53,7 +53,7 @@ export default function CategoryDonut({
                   stroke={d.color}
                   strokeWidth={strokeWidth}
                   fill="none"
-                  strokeDasharray={`${Math.max(seg - gap, 0)} ${C - Math.max(seg - gap, 0)}`}
+                  strokeDasharray={`${Math.max(seg - gap, 0)} ${circ - Math.max(seg - gap, 0)}`}
                   strokeLinecap="butt"
                   transform={`rotate(${angle} ${cx} ${cy})`}
                 />
@@ -62,11 +62,10 @@ export default function CategoryDonut({
         </G>
       </Svg>
       <View
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-        className="items-center justify-center"
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
       >
-        <Text className="text-zinc-400 text-xs">{centerLabel}</Text>
-        <Text className="text-white text-xl font-bold">{formatMoney(total)}</Text>
+        <Text style={{ color: T.t2, fontSize: 12 }}>{centerLabel}</Text>
+        <Text style={{ color: T.t1, fontSize: 20, fontWeight: "800" }}>{formatMoney(total)}</Text>
       </View>
     </View>
   );

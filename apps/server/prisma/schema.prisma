@@ -23,8 +23,13 @@ model User {
   wdsfUpdatedAt   DateTime?  // When WDSF data was last fetched
   dtvId           String?    // DTV ID номер
 
-  // Module 1: target monthly spending budget (EUR)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  // Module 1: target monthly spending budget
   monthlyBudget Float?
+  // Preferred display currency (ISO 4217 code, e.g. EUR, USD, GBP)
+  currency      String     @default("EUR")
   
   // Связи
   couplesAsLead   Couple[]   @relation("LeadPartner")

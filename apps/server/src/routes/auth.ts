@@ -1,10 +1,18 @@
+import crypto from "crypto";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
 import { signToken } from "../lib/jwt";
 import { asyncHandler, HttpError } from "../lib/http";
-import { signupSchema, loginSchema, updateMeSchema } from "../lib/validation";
+import {
+  signupSchema,
+  loginSchema,
+  updateMeSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "../lib/validation";
 import { requireAuth } from "../middleware/auth";
+import { sendPasswordResetEmail } from "../lib/mailer";
 
 const router = Router();
 
@@ -14,6 +22,7 @@ function publicUser(user: {
   firstName: string;
   lastName: string;
   monthlyBudget: number | null;
+  currency: string;
 }) {
   return {
     id: user.id,
@@ -21,6 +30,7 @@ function publicUser(user: {
     firstName: user.firstName,
     lastName: user.lastName,
     monthlyBudget: user.monthlyBudget,
+    currency: user.currency,
   };
 }
 
@@ -90,11 +100,77 @@ router.patch(
   requireAuth,
   asyncHandler(async (req, res) => {
     const data = updateMeSchema.parse(req.body);
+    // Prisma skips `undefined` fields, so only provided keys are updated.
     const user = await prisma.user.update({
       where: { id: req.userId },
-      data: { monthlyBudget: data.monthlyBudget },
+      data: { monthlyBudget: data.monthlyBudget, currency: data.currency },
     });
     res.json({ user: publicUser(user) });
+  })
+);
+
+// POST /api/auth/forgot-password
+router.post(
+  "/forgot-password",
+  asyncHandler(async (req, res) => {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Always 200 — don't reveal whether the email is registered.
+    if (!user) {
+      res.json({ ok: true });
+      return;
+    }
+
+    // 6-character uppercase hex code, e.g. "A3F9C2"
+    const token = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { resetToken: token, resetTokenExpiry: expiry },
+    });
+
+    try {
+      await sendPasswordResetEmail(email, token);
+    } catch (err) {
+      // Roll back the token so a failed send doesn't leave a dangling code.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetToken: null, resetTokenExpiry: null },
+      });
+      console.error("Password reset email failed:", err);
+      throw new HttpError(502, "Could not send the reset email right now. Please try again later.");
+    }
+
+    res.json({ ok: true });
+  })
+);
+
+// POST /api/auth/reset-password
+router.post(
+  "/reset-password",
+  asyncHandler(async (req, res) => {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token.toUpperCase(),
+        resetTokenExpiry: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
+      throw new HttpError(400, "Invalid or expired reset code");
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, resetToken: null, resetTokenExpiry: null },
+    });
+
+    res.json({ ok: true });
   })
 );
 

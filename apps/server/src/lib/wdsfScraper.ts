@@ -1,4 +1,6 @@
 import { load } from "cheerio";
+import type { CheerioAPI, Cheerio } from "cheerio";
+import type { Element } from "domhandler";
 
 const WDSF_BASE = "https://www.worlddancesport.org";
 
@@ -8,6 +10,8 @@ const FETCH_HEADERS = {
   "Accept-Language": "en-US,en;q=0.5",
 };
 
+// ─── Base Profile Types ──────────────────────────────────────────────────────
+
 export interface WdsfCompetition {
   date: string;
   event: string;
@@ -16,6 +20,7 @@ export interface WdsfCompetition {
   category: string;
   place: string | null;
   points: string | null;
+  competitionUrl: string | null; // e.g. /Competitions/Ranking/slug
 }
 
 export interface WdsfPartner {
@@ -31,25 +36,84 @@ export interface WdsfPartner {
 export interface WdsfProfile {
   uuid: string;
   profileUrl: string;
-  // General section — all fields
   firstName: string;
   lastName: string;
-  name: string;           // firstName + lastName
-  nationality: string;    // personal nationality
-  represents: string;     // competing country
+  name: string;
+  nationality: string;
+  represents: string;
   min: string;
   ageGroup: string | null;
   licenseDivision: string | null;
   licenseStatus: string | null;
   licenseExpiry: string | null;
   photoUrl: string;
-  // Relations
   competitions: WdsfCompetition[];
   partners: WdsfPartner[];
   fetchedAt: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Competition Analytics Types ─────────────────────────────────────────────
+
+export interface JudgeCross {
+  judge: string;
+  marked: boolean;
+}
+
+export interface DancePrelimMarks {
+  dance: string;
+  crosses: JudgeCross[];
+  totalCrosses: number;
+}
+
+export interface PrelimRound {
+  roundNumber: number;
+  dances: DancePrelimMarks[];
+  totalCrosses: number;
+}
+
+export interface FinalJudgePlacement {
+  judge: string;
+  place: number;
+}
+
+export interface FinalDanceResult {
+  dance: string;
+  judgeEntries: FinalJudgePlacement[];
+  dancePlace: number;
+}
+
+export interface FinalResult {
+  dances: FinalDanceResult[];
+  overallPlace: number;
+  judgeAvgPlaces: { judge: string; avgPlace: number }[];
+}
+
+export interface RankingEntry {
+  rank: number;
+  coupleName: string;
+  country: string;
+  coupleNumber: string;
+  points: string;
+  athleteUrls: string[];
+}
+
+export interface CompetitionAnalytics {
+  competitionSlug: string;
+  competitionName: string;
+  rankingUrl: string;
+  coupleNumber: string;
+  coupleName: string;
+  rounds: PrelimRound[];
+  final: FinalResult | null;
+  danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
+  judgeStats: { judge: string; totalCrosses: number; pct: number }[];
+  totalPossibleCrosses: number;
+  reachedFinal: boolean;
+  allCouples: RankingEntry[];
+  judgeNames: Record<string, string>;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export function extractUuid(url: string): string | null {
   const m = url.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
@@ -60,7 +124,619 @@ export function buildPhotoUrl(uuid: string): string {
   return `${WDSF_BASE}/api/picture/person/${uuid}?useAlternate=False`;
 }
 
-// ─── Main scraper ────────────────────────────────────────────────────────────
+/** Returns true when a table cell value represents a cross (marked by judge). */
+function isCross(raw: string): boolean {
+  const t = raw.trim();
+  if (!t || t === "-" || t === "–" || t === "0" || t === "n/a") return false;
+  // Multi-digit numbers = totals column — not a cross mark
+  if (/^\d{2,}$/.test(t)) return false;
+  // Single digit in a JUDGE column could be 1 (rare). Treat non-zero single digit as cross.
+  if (/^\d$/.test(t)) return t !== "0";
+  // Any symbol: *, +, ×, x, X, ✓, ✗ etc.
+  return true;
+}
+
+// Extract competition slug from any /Competitions/{type}/slug URL
+function extractSlug(url: string): string {
+  const m = url.match(/\/Competitions\/[^/]+\/(.+)/);
+  return m?.[1] ?? url;
+}
+
+/** Build URL variants for a competition */
+function buildCompUrls(slugOrUrl: string) {
+  const slug = extractSlug(slugOrUrl);
+  return {
+    slug,
+    ranking:  `${WDSF_BASE}/Competitions/Ranking/${slug}`,
+    marks:    `${WDSF_BASE}/Competitions/Marks/${slug}`,
+    final:    `${WDSF_BASE}/Competitions/Final/${slug}`,
+    officials:`${WDSF_BASE}/Competitions/Officials/${slug}`,
+  };
+}
+
+// ─── Column-map builder for multi-level mark tables ──────────────────────────
+
+interface ColInfo {
+  type: "couple" | "round" | "total" | "rank" | "judge" | "danceTotal" | "skip";
+  dance: string | null;
+  judge: string | null;
+}
+
+function buildMarkColumnMap($table: Cheerio<Element>, $: CheerioAPI): ColInfo[] {
+  const headerRows = $table.find("thead tr").toArray();
+  if (!headerRows.length) return [];
+
+  // Estimate total columns from all cells in first row
+  const totalCols = $(headerRows[0]).find("th, td").toArray()
+    .reduce((s, el) => s + parseInt($(el).attr("colspan") ?? "1", 10), 0);
+
+  const map: ColInfo[] = Array.from({ length: totalCols }, () => ({
+    type: "skip" as const,
+    dance: null,
+    judge: null,
+  }));
+
+  // rowspan=2 columns don't appear in the second row
+  const rowspanned = new Set<number>();
+
+  for (let ri = 0; ri < Math.min(headerRows.length, 2); ri++) {
+    const ths = $(headerRows[ri]).find("th, td").toArray();
+    let ci = 0;
+
+    for (const th of ths) {
+      // Skip positions filled by rowspan
+      while (rowspanned.has(ci)) ci++;
+
+      const raw = $(th).text().trim();
+      const lower = raw.toLowerCase();
+      const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
+      const rowspan = parseInt($(th).attr("rowspan") ?? "1", 10);
+
+      for (let k = 0; k < colspan; k++) {
+        const idx = ci + k;
+        if (idx >= map.length) break;
+
+        if (ri === 0) {
+          if (lower === "couple" || lower === "#" || lower === "st." || lower === "start" || lower === "nr" || idx === 0) {
+            map[idx].type = "couple";
+          } else if (lower === "round" || lower === "rnd" || lower === "rd" || idx === 1) {
+            map[idx].type = "round";
+          } else if (lower === "total" || lower === "tot" || lower === "sum") {
+            map[idx].type = "total";
+          } else if (lower === "rank" || lower === "place" || lower === "pos" || lower === "rk") {
+            map[idx].type = "rank";
+          } else {
+            // Treat as dance name
+            map[idx].dance = raw;
+            map[idx].type = "judge"; // will be refined in row 2
+          }
+        } else {
+          // Second header row fills in judge letters
+          if (raw === "=") {
+            map[idx].type = "danceTotal";
+          } else if (lower === "rank" || lower === "place") {
+            map[idx].type = "rank";
+          } else if (lower === "total" || lower === "tot") {
+            map[idx].type = "total";
+          } else {
+            map[idx].judge = raw;
+            map[idx].type = "judge";
+          }
+        }
+
+        if (rowspan > 1) rowspanned.add(idx);
+      }
+
+      ci += colspan;
+    }
+  }
+
+  return map;
+}
+
+// ─── Ranking page scraper ─────────────────────────────────────────────────────
+
+async function scrapeRankingPage(rankingUrl: string): Promise<{
+  competitionName: string;
+  entries: RankingEntry[];
+}> {
+  const res = await fetch(rankingUrl, { headers: FETCH_HEADERS });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ranking page`);
+  const $ = load(await res.text());
+
+  const competitionName = $("h1, h2").first().text().trim() || "";
+  const entries: RankingEntry[] = [];
+
+  // Track seen couples across ALL tables — WDSF shows one table per round
+  // (Final=6, 1/2 Final=6, 1/4 Final=12, …) each with its own local rank 1-N.
+  // We deduplicate and assign a GLOBAL rank counter so compare tab shows 1, 2, 3… not 1,2,3,4,5,6,1,2,3…
+  const seenCoupleNames = new Set<string>();
+  let globalRank = 0;
+
+  $("table").each((_, table) => {
+    const $t = $(table);
+    const headers = $t.find("thead th, thead td").map((_, el) =>
+      $(el).text().trim().toLowerCase()
+    ).get();
+
+    // Must have at least a couple/name column or athlete links in rows
+    const hasCouple = headers.some(h =>
+      h.includes("couple") || h.includes("athlete") || h.includes("name")
+    );
+    const hasStart = headers.some(h =>
+      h.includes("start") || h === "st." || h === "nr." || h === "nr" || h === "no."
+    );
+    // Accept table if it has athlete links even if headers don't match
+    const hasAthleteLinks = $t.find('a[href*="/Athletes/"]').length > 0;
+    if (!hasCouple && !hasStart && !hasAthleteLinks) return;
+
+    // Identify column indices — "start #" must NOT match a pure "#" rank column
+    const idxCouple  = headers.findIndex(h =>
+      h.includes("couple") || h.includes("athlete") || h.includes("name")
+    );
+    // "start #" or "st." but NOT a bare "#" which is usually rank
+    const idxStart   = headers.findIndex(h =>
+      h.includes("start") || h === "st." || h === "nr." || h === "nr" || h === "no."
+    );
+    const idxCountry = headers.findIndex(h =>
+      h.includes("country") || h.includes("nation") || h === "cnt" || h === "ctr"
+    );
+    const idxPoints  = headers.findIndex(h =>
+      h.includes("point") || h.includes("score") || h.includes("pts")
+    );
+
+    $t.find("tbody tr").each((_, row) => {
+      const $row = $(row);
+      const cells = $row.find("td").map((_, td) => $(td).text().trim()).get();
+      if (cells.length < 2) return;
+
+      // Athlete links → extract names and URLs
+      const athleteUrls: string[] = [];
+      const nameFromLinks: string[] = [];
+      $row.find('a[href*="/Athletes/"]').each((_, a) => {
+        const href = $(a).attr("href") ?? "";
+        const full = href.startsWith("http") ? href : `${WDSF_BASE}${href}`;
+        athleteUrls.push(full);
+        const text = $(a).text().trim();
+        if (text) nameFromLinks.push(text);
+      });
+
+      // Couple name: prefer links (most reliable), then cell text
+      let coupleName = nameFromLinks.length
+        ? nameFromLinks.join(" - ")
+        : idxCouple >= 0 ? cells[idxCouple] ?? "" : cells[0] ?? "";
+      coupleName = coupleName.trim();
+      if (!coupleName) return;
+
+      // Deduplication: WDSF shows the same couple in each round table it competed in.
+      // Keep only the FIRST appearance (= best result / highest-ranked table).
+      const nameKey = coupleName.toLowerCase().replace(/\s+/g, " ");
+      if (seenCoupleNames.has(nameKey)) return;
+      seenCoupleNames.add(nameKey);
+
+      globalRank++;
+
+      // Couple number: look for Start # column; fall back to scanning first 5 cells
+      let coupleNumber = idxStart >= 0 ? (cells[idxStart] ?? "").trim() : "";
+      if (!coupleNumber || !/^\d+$/.test(coupleNumber)) {
+        // Scan first 5 cells for a pure numeric value that looks like a start number (1–999)
+        for (let i = 0; i < Math.min(5, cells.length); i++) {
+          const v = cells[i].trim();
+          if (/^\d{1,3}$/.test(v) && parseInt(v) >= 1 && parseInt(v) <= 999) {
+            // Make sure it's not the rank value we already computed
+            if (parseInt(v) !== globalRank) {
+              coupleNumber = v;
+              break;
+            }
+          }
+        }
+      }
+
+      const country = idxCountry >= 0 ? (cells[idxCountry] ?? "").trim() : "";
+      const points  = idxPoints  >= 0 ? (cells[idxPoints]  ?? "").trim() : "";
+
+      entries.push({
+        rank: globalRank,
+        coupleName,
+        country,
+        coupleNumber,
+        points,
+        athleteUrls,
+      });
+    });
+  });
+
+  return { competitionName, entries };
+}
+
+// ─── Marks page scraper ───────────────────────────────────────────────────────
+
+/** Normalize a cell value to a plain integer string — strips leading zeros, dots, spaces */
+function normNum(v: string): string {
+  const clean = v.trim().replace(/[.\s]/g, "");
+  return clean.replace(/^0+/, "") || "0";
+}
+
+/** Scan first maxCol cells of a row for the couple number. Returns column index or -1. */
+function rowHasCoupleNum(cells: string[], coupleNumber: string, maxCol = 5): number {
+  const target = normNum(coupleNumber);
+  for (let i = 0; i < Math.min(maxCol, cells.length); i++) {
+    const raw = cells[i].trim();
+    // Must be a numeric-only cell (possibly with leading zeros or trailing dot)
+    if (!/^\d+\.?$/.test(raw)) continue;
+    if (normNum(raw) === target) return i;
+  }
+  return -1;
+}
+
+async function scrapeMarksPage(
+  marksUrl: string,
+  coupleNumber: string,
+  coupleName: string,
+): Promise<PrelimRound[]> {
+  const res = await fetch(marksUrl, { headers: FETCH_HEADERS });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const $ = load(html);
+
+  const rounds: PrelimRound[] = [];
+  const seenRounds = new Set<number>();
+
+  const danceWords = [
+    "waltz", "tango", "foxtrot", "quickstep", "viennese",
+    "cha", "samba", "rumba", "paso", "jive", "polka", "blues",
+    "slow fox", "v. waltz", "q.step",
+  ];
+
+  $("table").each((_, table) => {
+    const $t = $(table);
+    const hdrText = $t.find("thead").text().toLowerCase();
+
+    if (!danceWords.some(d => hdrText.includes(d))) return;
+
+    const colMap = buildMarkColumnMap($t, $);
+
+    // Determine which column to use for "couple" and "round"
+    const coupleCellIdx = colMap.findIndex(c => c.type === "couple");
+    const roundCellIdx  = colMap.findIndex(c => c.type === "round");
+
+    // WDSF uses rowspan on the Rank and Couple columns so that for round 2, 3, …
+    // of the same couple those cells are absent from the row. We track whether we
+    // are inside such a "continuation block" for our target couple.
+    let trackingCouple = false;
+    const expectedCellCount = colMap.length; // logical column count from thead
+
+    $t.find("tbody tr").each((rowIdx, row) => {
+      const rawCells = $(row).find("td").toArray();
+      if (!rawCells.length) return;
+      const cells = rawCells.map(td => $(td).text().trim());
+
+      // How many logical columns are missing due to rowspan in the first row of
+      // this couple group (e.g. Rank + Couple = 2 cols → shift = 2).
+      // Cap at 5: larger deficits mean a colspan header/footer row, not a continuation.
+      const deficit = expectedCellCount - cells.length;
+      const rowspanShift = (deficit > 0 && deficit <= 5) ? deficit : 0;
+      const isContinuation = rowspanShift > 0;
+
+      // ── Couple matching ──────────────────────────────────────────────────
+      let coupleFound = false;
+
+      if (isContinuation) {
+        // Rank/Couple cells are rowspanned from the "anchor" row above.
+        // Trust the tracking flag set when we found the anchor row.
+        coupleFound = trackingCouple;
+      } else {
+        // Full row — reset tracking, then check if this is our couple.
+        trackingCouple = false;
+        if (coupleCellIdx >= 0) {
+          coupleFound = normNum(cells[coupleCellIdx]) === normNum(coupleNumber);
+        }
+        if (!coupleFound) {
+          coupleFound = rowHasCoupleNum(cells, coupleNumber, 4) >= 0;
+        }
+        if (coupleFound) trackingCouple = true;
+      }
+
+      if (!coupleFound) return;
+
+      // ── Round number ─────────────────────────────────────────────────────
+      // In continuation rows the Round column index shifts left by rowspanShift
+      // (because the rowspanned cols are not present in rawCells).
+      // When there is no Round column at all, fall back to rounds.length + 1.
+      let roundNum: number;
+      const adjustedRoundIdx = roundCellIdx >= 0 ? roundCellIdx - rowspanShift : -1;
+      if (adjustedRoundIdx >= 0 && adjustedRoundIdx < cells.length) {
+        roundNum = parseInt(cells[adjustedRoundIdx], 10);
+        if (isNaN(roundNum) || roundNum < 1) roundNum = rounds.length + 1;
+      } else {
+        roundNum = rounds.length + 1;
+      }
+
+      if (seenRounds.has(roundNum)) return;
+      seenRounds.add(roundNum);
+
+      // ── Judge marks ───────────────────────────────────────────────────────
+      const danceBuckets: Record<string, JudgeCross[]> = {};
+      colMap.forEach((col, idx) => {
+        if (col.type !== "judge" || !col.dance || !col.judge) return;
+        const adjustedIdx = idx - rowspanShift;
+        if (adjustedIdx < 0 || adjustedIdx >= rawCells.length) return;
+        const cell = rawCells[adjustedIdx];
+        if (!cell) return;
+        const raw = $(cell).text().trim();
+        if (!danceBuckets[col.dance]) danceBuckets[col.dance] = [];
+        danceBuckets[col.dance].push({ judge: col.judge, marked: isCross(raw) });
+      });
+
+      let dances: DancePrelimMarks[] = Object.entries(danceBuckets).map(([dance, crosses]) => ({
+        dance,
+        crosses,
+        totalCrosses: crosses.filter(c => c.marked).length,
+      }));
+
+      // Fallback: use per-dance total (= column) if individual judge columns weren't parsed
+      if (!dances.length) {
+        colMap.forEach((col, idx) => {
+          if (col.type !== "danceTotal" || !col.dance) return;
+          const adjustedIdx = idx - rowspanShift;
+          if (adjustedIdx < 0 || adjustedIdx >= rawCells.length) return;
+          const cell = rawCells[adjustedIdx];
+          if (!cell) return;
+          const total = parseInt($(cell).text().trim(), 10);
+          if (!isNaN(total)) {
+            dances.push({ dance: col.dance, crosses: [], totalCrosses: total });
+          }
+        });
+      }
+
+      // Skip rows with no parseable judge data (header/total rows that slipped through)
+      if (dances.length === 0) return;
+
+      rounds.push({
+        roundNumber: roundNum,
+        dances,
+        totalCrosses: dances.reduce((s, d) => s + d.totalCrosses, 0),
+      });
+    });
+  });
+
+  return rounds.sort((a, b) => a.roundNumber - b.roundNumber);
+}
+
+// ─── Officials page scraper ───────────────────────────────────────────────────
+
+async function scrapeOfficialsPage(officialsUrl: string): Promise<Record<string, string>> {
+  try {
+    const res = await fetch(officialsUrl, { headers: FETCH_HEADERS });
+    if (!res.ok) return {};
+    const $ = load(await res.text());
+    const judgeMap: Record<string, string> = {};
+
+    $("table").each((_, table) => {
+      const $t = $(table);
+      const headers = $t.find("thead th, thead td").map((_, el) =>
+        $(el).text().trim().toLowerCase()
+      ).get();
+
+      const idxName       = headers.findIndex(h => h === "name" || h.includes("adjudicator"));
+      const idxIdentifier = headers.indexOf("identifier");
+      if (idxName < 0 || idxIdentifier < 0) return;
+
+      $t.find("tbody tr").each((_, row) => {
+        const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+        const name   = cells[idxName]?.trim() ?? "";
+        const letter = cells[idxIdentifier]?.trim() ?? "";
+        if (name && letter) judgeMap[letter] = name;
+      });
+    });
+
+    return judgeMap;
+  } catch {
+    return {};
+  }
+}
+
+// ─── Final page scraper ───────────────────────────────────────────────────────
+
+const FINAL_DANCE_RE = /viennese\s+waltz|slow\s+foxtrot|cha.?cha|waltz|tango|foxtrot|quickstep|samba|rumba|paso\s+doble|jive|polka/i;
+
+async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<FinalResult | null> {
+  const res = await fetch(finalUrl, { headers: FETCH_HEADERS });
+  if (!res.ok) return null;
+  const $ = load(await res.text());
+
+  // Map each <table> to the dance name announced by the nearest preceding heading
+  const tableDanceMap = new Map<Element, string>();
+  {
+    let cur = "";
+    $("h2, h3, h4, h5, table").each((_, el) => {
+      if ($(el).is("table")) {
+        tableDanceMap.set(el as Element, cur);
+      } else {
+        const t = $(el).text().trim();
+        if (t) cur = t;
+      }
+    });
+  }
+
+  const danceResults: FinalDanceResult[] = [];
+  let overallPlace = 0;
+
+  $("table").each((_, table) => {
+    const $t       = $(table);
+    const danceName = tableDanceMap.get(table as Element) ?? "";
+    const theadText = $t.find("thead").text();
+    const sourceText = danceName || theadText;
+
+    const isRuleNine = /sum|rule.?9|resolved/i.test(sourceText)
+      || /sum|resolved/i.test(theadText);
+    const danceMatch = isRuleNine ? null : sourceText.match(FINAL_DANCE_RE);
+
+    if (!danceMatch) {
+      // Summary / Rule 9 table — extract overall place for this couple
+      const headers: string[] = [];
+      $t.find("thead th, thead td").each((_, el) => { headers.push($(el).text().trim().toLowerCase()); });
+      let placeColIdx = -1;
+      for (let i = headers.length - 1; i >= 0; i--) {
+        if (headers[i] === "place" || headers[i] === "rank") { placeColIdx = i; break; }
+      }
+
+      $t.find("tbody tr").each((_, row) => {
+        const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+        if (!cells.length || rowHasCoupleNum(cells, coupleNumber, 3) < 0) return;
+
+        if (placeColIdx >= 0 && placeColIdx < cells.length) {
+          const p = parseInt(cells[placeColIdx], 10);
+          if (!isNaN(p) && p >= 1) overallPlace = p;
+        } else {
+          // Scan last 4 cells for a place 1–6
+          for (let i = cells.length - 1; i >= Math.max(0, cells.length - 4); i--) {
+            const p = parseInt(cells[i], 10);
+            if (!isNaN(p) && p >= 1 && p <= 6) { overallPlace = p; break; }
+          }
+        }
+      });
+      return;
+    }
+
+    // Per-dance final table (single-row thead: Couple | judge letters | Place colspan=N)
+    const judgeColMap: { letter: string; colIdx: number }[] = [];
+    let ci = 0;
+    $t.find("thead tr").first().find("th, td").each((_, th) => {
+      const raw     = $(th).text().trim();
+      const lower   = raw.toLowerCase();
+      const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
+      if (raw && lower !== "couple" && lower !== "place" && lower !== "rank" && lower !== "#" && lower !== "nr") {
+        judgeColMap.push({ letter: raw, colIdx: ci });
+      }
+      ci += colspan;
+    });
+
+    $t.find("tbody tr").each((_, row) => {
+      const rawCells  = $(row).find("td").toArray();
+      if (!rawCells.length) return;
+      const cellTexts = rawCells.map(td => $(td).text().trim());
+      if (rowHasCoupleNum(cellTexts, coupleNumber, 3) < 0) return;
+
+      const judgeEntries: FinalJudgePlacement[] = [];
+      for (const { letter, colIdx } of judgeColMap) {
+        if (colIdx >= rawCells.length) continue;
+        const place = parseInt(cellTexts[colIdx].replace(/\.$/, ""), 10);
+        if (!isNaN(place) && place >= 1 && place <= 6) {
+          judgeEntries.push({ judge: letter, place });
+        }
+      }
+
+      // Dance place: last numeric 1–6 in the row (skating result)
+      let dancePlace = 0;
+      for (let i = cellTexts.length - 1; i >= 0; i--) {
+        const p = parseInt(cellTexts[i].replace(/\.$/, ""), 10);
+        if (!isNaN(p) && p >= 1 && p <= 6) { dancePlace = p; break; }
+      }
+
+      const canonical = danceMatch[0].replace(/\b\w/g, c => c.toUpperCase());
+      danceResults.push({ dance: canonical, judgeEntries, dancePlace });
+    });
+  });
+
+  if (!danceResults.length && !overallPlace) return null;
+
+  const judgeMap: Record<string, number[]> = {};
+  for (const dr of danceResults) {
+    for (const je of dr.judgeEntries) {
+      if (!judgeMap[je.judge]) judgeMap[je.judge] = [];
+      judgeMap[je.judge].push(je.place);
+    }
+  }
+  const judgeAvgPlaces = Object.entries(judgeMap)
+    .map(([judge, places]) => ({
+      judge,
+      avgPlace: places.reduce((s, p) => s + p, 0) / places.length,
+    }))
+    .sort((a, b) => a.avgPlace - b.avgPlace);
+
+  return { dances: danceResults, overallPlace, judgeAvgPlaces };
+}
+
+// ─── Main analytics scraper ───────────────────────────────────────────────────
+
+export async function scrapeCompetitionAnalytics(
+  competitionUrl: string,
+  athleteUuid: string,
+): Promise<CompetitionAnalytics> {
+  const urls = buildCompUrls(competitionUrl);
+
+  // Step 1: Ranking page → find couple number + all couples
+  const { competitionName, entries } = await scrapeRankingPage(urls.ranking);
+
+  const myEntry = entries.find(e =>
+    e.athleteUrls.some(u => u.toLowerCase().includes(athleteUuid.toLowerCase()))
+  );
+  if (!myEntry) {
+    throw new Error(`Athlete UUID ${athleteUuid} not found in competition ranking`);
+  }
+
+  const coupleNumber = myEntry.coupleNumber;
+  const coupleName   = myEntry.coupleName;
+
+  // Step 2: Marks + Final + Officials (parallel)
+  const [rounds, final, judgeNames] = await Promise.all([
+    scrapeMarksPage(urls.marks, coupleNumber, coupleName),
+    scrapeFinalPage(urls.final, coupleNumber),
+    scrapeOfficialsPage(urls.officials),
+  ]);
+
+  // Step 3: Compute dance stats
+  const danceMap: Record<string, number[]> = {};
+  for (const round of rounds) {
+    for (const d of round.dances) {
+      if (!danceMap[d.dance]) danceMap[d.dance] = [];
+      danceMap[d.dance].push(d.totalCrosses);
+    }
+  }
+  const danceStats = Object.entries(danceMap).map(([dance, vals]) => ({
+    dance,
+    totalCrosses: vals.reduce((s, v) => s + v, 0),
+    avgPerRound: vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0,
+  })).sort((a, b) => b.totalCrosses - a.totalCrosses);
+
+  // Step 4: Compute judge stats (prelim rounds)
+  const judgeMap: Record<string, { total: number; possible: number }> = {};
+  for (const round of rounds) {
+    for (const d of round.dances) {
+      for (const c of d.crosses) {
+        if (!judgeMap[c.judge]) judgeMap[c.judge] = { total: 0, possible: 0 };
+        judgeMap[c.judge].possible++;
+        if (c.marked) judgeMap[c.judge].total++;
+      }
+    }
+  }
+  const judgeStats = Object.entries(judgeMap).map(([judge, { total, possible }]) => ({
+    judge,
+    totalCrosses: total,
+    pct: possible > 0 ? Math.round((total / possible) * 100) : 0,
+  })).sort((a, b) => b.totalCrosses - a.totalCrosses);
+
+  const totalPossible = judgeStats.reduce((s, j) => s + j.totalCrosses, 0);
+
+  return {
+    competitionSlug: urls.slug,
+    competitionName,
+    rankingUrl: urls.ranking,
+    coupleNumber,
+    coupleName,
+    rounds,
+    final,
+    danceStats,
+    judgeStats,
+    totalPossibleCrosses: totalPossible,
+    reachedFinal: final !== null,
+    allCouples: entries,
+    judgeNames,
+  };
+}
+
+// ─── Main profile scraper ─────────────────────────────────────────────────────
 
 export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProfile> {
   const uuid = extractUuid(profileUrl);
@@ -71,28 +747,21 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
   const html = await res.text();
   const $ = load(html);
 
-  // ── Generic label→value lookup ────────────────────────────────────────────
-  // Handles: <th>Label</th><td>Value</td>, <dt>/<dd>, and plain-text "Label: Value"
-
   function findValue(labels: string[]): string | null {
     const bodyText = $("body").text();
     for (const label of labels) {
-      // Pattern 1: th/td or dt/dd
       const cell = $("th, td, dt, strong, b, label, span").filter((_, el) => {
         const t = $(el).text().trim().replace(/[:\s]+$/, "");
         return t.toLowerCase() === label.toLowerCase();
       }).first();
 
       if (cell.length) {
-        // Next sibling td/dd
         const next = cell.next("td, dd");
         if (next.length && next.text().trim()) return next.text().trim();
-        // Next sibling in same row
         const rowSib = cell.parent("tr").find("td").not(cell).first();
         if (rowSib.length && rowSib.text().trim()) return rowSib.text().trim();
       }
 
-      // Pattern 2: plain text "Label: Value" (handles colon + whitespace)
       const re = new RegExp(
         label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[:\\(]?\\s*([^\\n]{1,100})",
         "i"
@@ -103,26 +772,20 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
     return null;
   }
 
-  // ── General section ───────────────────────────────────────────────────────
-
   const firstName = findValue(["Name", "First name", "Firstname"]) ?? "";
   const lastName  = findValue(["Surname", "Last name", "Lastname"])  ?? "";
 
-  // h1 often has "FirstName LastName"
   const h1Name = $("h1").first().text().trim();
   const name   = h1Name || [firstName, lastName].filter(Boolean).join(" ")
     || $("title").text().replace(/\s*[-|].*$/, "").trim();
 
-  const min           = findValue(["Member Id number", "Member Id Number (MIN)", "MIN", "Member ID"]) ?? "";
-  const nationality   = findValue(["Nationality"])           ?? "";
-  const represents    = findValue(["Represents", "Country"]) ?? "";
-  const ageGroup      = findValue(["Current age group", "Age group", "Age Group"]);
+  const min             = findValue(["Member Id number", "Member Id Number (MIN)", "MIN", "Member ID"]) ?? "";
+  const nationality     = findValue(["Nationality"])           ?? "";
+  const represents      = findValue(["Represents", "Country"]) ?? "";
+  const ageGroup        = findValue(["Current age group", "Age group", "Age Group"]);
   const licenseDivision = findValue(["Division"]);
-
-  // License status & expiry — WDSF shows them as separate rows under "Licenses"
-  // "Status" row and "Expiration date" row
-  const licenseStatus = findValue(["Status"]);
-  const licenseExpiry = findValue(["Expiration date", "Expiry date", "Expiration", "Valid until"]);
+  const licenseStatus   = findValue(["Status"]);
+  const licenseExpiry   = findValue(["Expiration date", "Expiry date", "Expiration", "Valid until"]);
 
   // ── Competition results ────────────────────────────────────────────────────
 
@@ -140,27 +803,36 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
     if (!isCompTable) return;
 
     $t.find("tbody tr").each((_, row) => {
-      const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+      const $row = $(row);
+      const cells = $row.find("td").map((_, td) => $(td).text().trim()).get();
       if (cells.length < 2) return;
 
       const idx = (keywords: string[]) =>
         headers.findIndex(h => keywords.some(k => h.includes(k)));
 
+      // Extract competition URL from any /Competitions/ link in this row
+      let competitionUrl: string | null = null;
+      $row.find('a[href*="/Competitions/"]').each((_, a) => {
+        const href = $(a).attr("href") ?? "";
+        if (href && !competitionUrl) {
+          competitionUrl = href.startsWith("http") ? href : `${WDSF_BASE}${href}`;
+        }
+      });
+
       competitions.push({
-        date:       cellAt(cells, idx(["date"]),                    cells[0]),
-        event:      cellAt(cells, idx(["event", "competition", "tournament"]), cells[1]),
-        location:   cellAt(cells, idx(["location", "city", "venue", "place"]), ""),
-        discipline: cellAt(cells, idx(["discipline", "dance", "style"]),       ""),
-        category:   cellAt(cells, idx(["category", "age group"]),              ""),
-        place:      cells[idx(["rank", "place", "result", "position"])] || null,
-        points:     cells[idx(["point", "score"])]                    || null,
+        date:           cellAt(cells, idx(["date"]),                                  cells[0]),
+        event:          cellAt(cells, idx(["event", "competition", "tournament"]),    cells[1]),
+        location:       cellAt(cells, idx(["location", "city", "venue", "place"]),   ""),
+        discipline:     cellAt(cells, idx(["discipline", "dance", "style"]),          ""),
+        category:       cellAt(cells, idx(["category", "age group"]),                 ""),
+        place:          cells[idx(["rank", "place", "result", "position"])] || null,
+        points:         cells[idx(["point", "score"])]                      || null,
+        competitionUrl,
       });
     });
   });
 
   // ── Partners ───────────────────────────────────────────────────────────────
-  // Strategy: look for tables where a column header is "partner", "couple", "since", "status".
-  // Also collect all /Athletes/ links that are NOT this athlete's own UUID.
 
   const partners: WdsfPartner[] = [];
   const seenPartnerUuids = new Set<string>();
@@ -171,7 +843,6 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
       $(el).text().trim().toLowerCase()
     ).get();
 
-    // Identify partner table
     const isPartnerTable = headers.some(h =>
       h === "partner" || h === "athlete" || h === "since" ||
       h.includes("partner") || h.includes("couple")
@@ -186,7 +857,6 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
       const idx = (keywords: string[]) =>
         headers.findIndex(h => keywords.some(k => h.includes(k)));
 
-      // Partner name — look for the /Athletes/ link in this row that isn't ourselves
       let partnerName = "";
       let partnerHref: string | null = null;
       $row.find('a[href*="/Athletes/"]').each((_, a) => {
@@ -200,7 +870,7 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
       if (!partnerName) partnerName = cells[idx(["partner", "athlete", "name"])] ?? cells[0] ?? "";
 
       const partnerUuid = partnerHref ? extractUuid(partnerHref) : null;
-      if (partnerUuid && seenPartnerUuids.has(partnerUuid)) return; // dedupe
+      if (partnerUuid && seenPartnerUuids.has(partnerUuid)) return;
       if (partnerUuid) seenPartnerUuids.add(partnerUuid);
 
       const nationalityI = idx(["nationality", "nation"]);
@@ -213,18 +883,17 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
       const isCurrent  = statusText.toLowerCase().includes("active");
 
       partners.push({
-        name:       partnerName,
+        name:        partnerName,
         nationality: nationalityI >= 0 ? (cells[nationalityI] || null) : null,
         represents:  representsI  >= 0 ? (cells[representsI]  || null) : null,
-        status:     isCurrent ? "current" : "former",
-        since:      sinceI >= 0  ? (cells[sinceI]  || null) : null,
-        until:      untilI >= 0  ? (cells[untilI]  || null) : null,
-        profileUrl: partnerHref,
+        status:      isCurrent ? "current" : "former",
+        since:       sinceI >= 0 ? (cells[sinceI]  || null) : null,
+        until:       untilI >= 0 ? (cells[untilI]  || null) : null,
+        profileUrl:  partnerHref,
       });
     });
   });
 
-  // Fallback: scan all /Athletes/ links not belonging to self
   if (partners.length === 0) {
     $('a[href*="/Athletes/"]').each((_, a) => {
       const href = $(a).attr("href") ?? "";
@@ -232,17 +901,15 @@ export async function scrapeAthleteProfile(profileUrl: string): Promise<WdsfProf
       if (!pUuid || pUuid === uuid || seenPartnerUuids.has(pUuid)) return;
       seenPartnerUuids.add(pUuid);
 
-      const name = $(a).text().trim();
-      if (!name) return;
+      const aName = $(a).text().trim();
+      if (!aName) return;
 
-      // Look for status text near this link
-      const parentText = $(a).closest("tr, li, div").text().toLowerCase();
-      const isCurrent  = parentText.includes("active") && !parentText.includes("retired");
-
+      const parentText  = $(a).closest("tr, li, div").text().toLowerCase();
+      const isCurrent   = parentText.includes("active") && !parentText.includes("retired");
       const dateMatches = parentText.match(/\d{2}\/\d{2}\/\d{4}/g) ?? [];
 
       partners.push({
-        name,
+        name:        aName,
         nationality: null,
         represents:  null,
         status:      isCurrent ? "current" : "former",
@@ -281,7 +948,7 @@ function cellAt(cells: string[], idx: number, fallback: string): string {
 
 export async function findAthleteUrlByName(
   firstName: string,
-  lastName: string
+  lastName: string,
 ): Promise<string | null> {
   for (let i = 1; i <= 9; i++) {
     try {
@@ -295,22 +962,18 @@ export async function findAthleteUrlByName(
       );
       const m = xml.match(re);
       if (m) return m[0];
-    } catch {
-      // skip
-    }
+    } catch { /* skip */ }
   }
   return null;
 }
 
 export async function verifyAndScrape(
   profileUrl: string,
-  expectedMin: string
+  expectedMin: string,
 ): Promise<WdsfProfile> {
   const profile = await scrapeAthleteProfile(profileUrl);
   if (profile.min && profile.min !== expectedMin) {
-    throw new Error(
-      `MIN mismatch: expected ${expectedMin}, got ${profile.min}.`
-    );
+    throw new Error(`MIN mismatch: expected ${expectedMin}, got ${profile.min}.`);
   }
   return profile;
 }

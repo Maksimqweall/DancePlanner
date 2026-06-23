@@ -13,7 +13,7 @@ const CHART_HEIGHT = 120;
 const BAR_WIDTH = 30;
 const COL_WIDTH = 46;
 
-// Horizontal bar chart of monthly spend. Paid (solid) stacked with planned (amber).
+// Horizontal bar chart of monthly spend. Paid (solid) stacked with planned 
 // A dashed budget marker is drawn per column. Tap a column to select that month.
 export default function MonthlyBarChart({ data, selectedMonth, onSelect, budgetForMonth }: Props) {
   const budgets = budgetForMonth ? data.map((d) => budgetForMonth(d.month)) : [];

@@ -677,7 +677,9 @@ async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<
       const raw     = $(th).text().trim();
       const lower   = raw.toLowerCase();
       const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
-      if (raw && lower !== "couple" && lower !== "place" && lower !== "rank" && lower !== "#" && lower !== "nr") {
+      // Skip non-judge columns: empty, known keyword headers, and anything with no
+      // alphabetic character (e.g. "1.", "2." positional columns that are not judge codes).
+      if (raw && /[a-zA-Z]/.test(raw) && lower !== "couple" && lower !== "place" && lower !== "rank" && lower !== "#" && lower !== "nr" && lower !== "total" && lower !== "sum") {
         judgeColMap.push({ letter: raw, colIdx: ci });
       }
       ci += colspan;
@@ -720,6 +722,7 @@ async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<
     }
   }
   const judgeAvgPlaces = Object.entries(judgeMap)
+    .filter(([judge]) => judge && /[a-zA-Z]/.test(judge))
     .map(([judge, places]) => ({
       judge,
       avgPlace: places.reduce((s, p) => s + p, 0) / places.length,
@@ -787,10 +790,11 @@ export async function scrapeCompetitionAnalytics(
     .filter(([judge, { possible }]) => {
       // Drop empty-string judge keys (parsing artifact)
       if (!judge) return false;
+      // Drop purely non-alphabetic identifiers: "1.", "2." etc. are positional
+      // column markers, not real judge codes. Real WDSF codes always contain letters.
+      if (!/[a-zA-Z]/.test(judge)) return false;
       // Drop judges that appear in far fewer dances than expected —
       // typically these are phantom entries from a misidentified column.
-      // A real judge should appear in at least one dance per round.
-      // Allow some slack (0.3 threshold) for judges absent in early rounds.
       const minExpected = Math.max(1, totalRounds * 0.3);
       return possible >= minExpected;
     })

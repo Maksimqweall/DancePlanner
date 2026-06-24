@@ -370,10 +370,19 @@ function normNum(v: string): string {
   return clean.replace(/^0+/, "") || "0";
 }
 
-/** Scan first maxCol cells of a row for the couple number. Returns column index or -1. */
-function rowHasCoupleNum(cells: string[], coupleNumber: string, maxCol = 5): number {
+/**
+ * Scan first maxCol cells of a row for the couple number. Returns column index or -1.
+ * skipIndices: known non-couple columns (e.g. rank, round) that should never match.
+ */
+function rowHasCoupleNum(
+  cells: string[],
+  coupleNumber: string,
+  maxCol = 5,
+  skipIndices: Set<number> = new Set(),
+): number {
   const target = normNum(coupleNumber);
   for (let i = 0; i < Math.min(maxCol, cells.length); i++) {
+    if (skipIndices.has(i)) continue;
     const raw = cells[i].trim();
     // Must be a numeric-only cell (possibly with leading zeros or trailing dot)
     if (!/^\d+\.?$/.test(raw)) continue;
@@ -434,9 +443,16 @@ async function scrapeMarksPage(
 
     const colMap = buildMarkColumnMap($t, $);
 
-    // Determine which column to use for "couple" and "round"
+    // Determine which column to use for "couple", "round", and "rank"
     const coupleCellIdx = colMap.findIndex(c => c.type === "couple");
     const roundCellIdx  = colMap.findIndex(c => c.type === "round");
+    const rankCellIdx   = colMap.findIndex(c => c.type === "rank");
+
+    // When falling back to rowHasCoupleNum (no couple column identified), skip
+    // known non-couple columns so we don't match rank or round values.
+    const fallbackSkipIndices = new Set<number>(
+      [rankCellIdx, roundCellIdx].filter(i => i >= 0)
+    );
 
     // WDSF uses rowspan on the Rank and Couple columns so that for round 2, 3, …
     // of the same couple those cells are absent from the row. We track whether we
@@ -471,8 +487,9 @@ async function scrapeMarksPage(
           // which would create false positives from rank/draw columns with the same number).
           coupleFound = normNum(cells[coupleCellIdx]) === normNum(coupleNumber);
         } else {
-          // No couple column identified — scan first few cells as a fallback.
-          coupleFound = rowHasCoupleNum(cells, coupleNumber, 4) >= 0;
+          // No couple column identified — scan first few cells as a fallback,
+          // but skip known rank/round columns to avoid false positives.
+          coupleFound = rowHasCoupleNum(cells, coupleNumber, 4, fallbackSkipIndices) >= 0;
         }
         if (coupleFound) trackingCouple = true;
       }
@@ -490,8 +507,9 @@ async function scrapeMarksPage(
         // Skip rows whose round column explicitly labels this as the Final
         if (/^f$/i.test(rawRoundStr) || /\bfinal\b/i.test(rawRoundStr)) return;
         roundNum = parseInt(rawRoundStr, 10);
-        if (isNaN(roundNum) || roundNum < 1) {
-          // Round column exists but value isn't a valid round number (e.g. "Total", "Sum" rows) — skip
+        if (isNaN(roundNum) || roundNum < 1 || roundNum > 30) {
+          // Round column exists but value isn't a valid round number (e.g. "Total", "Sum" rows,
+          // or a spurious large number from reading the wrong column) — skip.
           if (roundCellIdx >= 0) return;
           roundNum = rounds.length + 1;
         }

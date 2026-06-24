@@ -526,48 +526,113 @@ function CrossesTab({ analytics, maxCrosses, maxJudge }: {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
+  // null = aggregate "All Rounds" view; number = filter to that round
+  const [selectedRound, setSelectedRound] = useState<number | null>(null);
+
+  const activeRound = selectedRound !== null
+    ? analytics.rounds.find(r => r.roundNumber === selectedRound) ?? null
+    : null;
+
+  // Per-round judge stats derived from the selected round's cross data
+  const roundJudgeStats = useMemo(() => {
+    if (!activeRound) return null;
+    const map: Record<string, { total: number; possible: number }> = {};
+    for (const d of activeRound.dances) {
+      for (const c of d.crosses) {
+        if (!c.judge) continue;
+        if (!map[c.judge]) map[c.judge] = { total: 0, possible: 0 };
+        map[c.judge].possible++;
+        if (c.marked) map[c.judge].total++;
+      }
+    }
+    return Object.entries(map)
+      .map(([judge, { total, possible }]) => ({
+        judge,
+        totalCrosses: total,
+        pct: possible > 0 ? Math.round((total / possible) * 100) : 0,
+      }))
+      .sort((a, b) => b.totalCrosses - a.totalCrosses);
+  }, [activeRound]);
+
+  // Which dance/judge data to show
+  const displayDances  = activeRound ? activeRound.dances : null;
+  const displayJudges  = activeRound ? roundJudgeStats   : analytics.judgeStats;
+  const danceMax = displayDances
+    ? Math.max(1, ...displayDances.map(d => d.totalCrosses))
+    : maxCrosses;
+  const judgeMax = displayJudges && displayJudges.length > 0
+    ? Math.max(1, ...displayJudges.map(j => j.totalCrosses))
+    : maxJudge;
+
+  const sectionSuffix = activeRound ? ` — Round ${activeRound.roundNumber}` : " (All Rounds)";
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
 
+      {/* Round selector */}
+      {analytics.rounds.length > 1 ? (
+        <View style={s.roundFilterRow}>
+          <TouchableOpacity
+            style={[s.roundFilterChip, selectedRound === null && s.roundFilterChipActive]}
+            onPress={() => setSelectedRound(null)}
+          >
+            <Text style={[s.roundFilterChipText, selectedRound === null && s.roundFilterChipTextActive]}>All</Text>
+          </TouchableOpacity>
+          {analytics.rounds.map(r => (
+            <TouchableOpacity
+              key={r.roundNumber}
+              style={[s.roundFilterChip, selectedRound === r.roundNumber && s.roundFilterChipActive]}
+              onPress={() => setSelectedRound(r.roundNumber)}
+            >
+              <Text style={[s.roundFilterChipText, selectedRound === r.roundNumber && s.roundFilterChipTextActive]}>
+                R{r.roundNumber}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+
       {/* Per-dance totals */}
-      {analytics.danceStats.length > 0 ? (
+      {(displayDances ?? analytics.danceStats).length > 0 ? (
         <>
-          <SectionHeader title="Crosses Per Dance (All Rounds)" />
+          <SectionHeader title={`Crosses Per Dance${sectionSuffix}`} />
           <View style={s.sectionCard}>
-            {analytics.danceStats.map((ds, i) => (
-              <View key={ds.dance} style={[s.barRow, i < analytics.danceStats.length - 1 && s.rowBorder]}>
-                <Text style={s.barRowLabel}>{ds.dance}</Text>
-                <View style={s.barRowTrack}>
-                  <View style={[s.barRowFill, { width: `${Math.round((ds.totalCrosses / maxCrosses) * 100)}%`, backgroundColor: C.accent }]} />
+            {(displayDances ?? analytics.danceStats).map((ds, i) => {
+              const arr = displayDances ?? analytics.danceStats;
+              return (
+                <View key={ds.dance} style={[s.barRow, i < arr.length - 1 && s.rowBorder]}>
+                  <Text style={s.barRowLabel}>{ds.dance}</Text>
+                  <View style={s.barRowTrack}>
+                    <View style={[s.barRowFill, { width: `${Math.round((ds.totalCrosses / danceMax) * 100)}%`, backgroundColor: C.accent }]} />
+                  </View>
+                  <Text style={s.barRowVal}>{ds.totalCrosses}</Text>
                 </View>
-                <Text style={s.barRowVal}>{ds.totalCrosses}</Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </>
       ) : null}
 
       {/* Judge analytics */}
-      {analytics.judgeStats.length > 0 ? (
+      {displayJudges && displayJudges.length > 0 ? (
         <>
           <SectionHeader
-            title="Judge Analytics"
+            title={`Judge Analytics${sectionSuffix}`}
             subtitle="Most → fewest crosses"
           />
           <View style={s.sectionCard}>
-            {analytics.judgeStats.map((js, i) => {
+            {displayJudges.map((js, i) => {
               const isFirst  = i === 0;
-              const isLast   = i === analytics.judgeStats.length - 1;
+              const isLast   = i === displayJudges.length - 1;
               const barColor = isFirst ? C.gold : isLast ? C.red : C.accent;
               const nameColor = isFirst ? C.gold : isLast ? C.red : C.t1;
               return (
-                <View key={js.judge} style={[s.barRow, i < analytics.judgeStats.length - 1 && s.rowBorder]}>
+                <View key={js.judge} style={[s.barRow, i < displayJudges.length - 1 && s.rowBorder]}>
                   <Text style={[s.judgeNameLabel, { color: nameColor }]} numberOfLines={1}>
                     {jFullName(js.judge, analytics.judgeNames)}
                   </Text>
                   <View style={s.barRowTrack}>
-                    <View style={[s.barRowFill, { width: `${Math.round((js.totalCrosses / maxJudge) * 100)}%`, backgroundColor: barColor }]} />
+                    <View style={[s.barRowFill, { width: `${Math.round((js.totalCrosses / judgeMax) * 100)}%`, backgroundColor: barColor }]} />
                   </View>
                   <Text style={s.barRowVal}>{js.totalCrosses} <Text style={s.barRowPct}>({js.pct}%)</Text></Text>
                 </View>
@@ -578,14 +643,14 @@ function CrossesTab({ analytics, maxCrosses, maxJudge }: {
             <View style={s.judgeInsightCard}>
               <Text style={s.judgeInsightIcon}>🏅</Text>
               <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Most Crosses</Text>
-              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(analytics.judgeStats[0]?.judge, analytics.judgeNames)}</Text>
-              <Text style={s.judgeInsightVal}>{analytics.judgeStats[0]?.totalCrosses}</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(displayJudges[0]?.judge, analytics.judgeNames)}</Text>
+              <Text style={s.judgeInsightVal}>{displayJudges[0]?.totalCrosses}</Text>
             </View>
             <View style={s.judgeInsightCard}>
               <Text style={s.judgeInsightIcon}>📉</Text>
               <Text style={[s.judgeInsightLabel, { color: C.red }]}>Fewest Crosses</Text>
-              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(analytics.judgeStats[analytics.judgeStats.length - 1]?.judge, analytics.judgeNames)}</Text>
-              <Text style={s.judgeInsightVal}>{analytics.judgeStats[analytics.judgeStats.length - 1]?.totalCrosses}</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(displayJudges[displayJudges.length - 1]?.judge, analytics.judgeNames)}</Text>
+              <Text style={s.judgeInsightVal}>{displayJudges[displayJudges.length - 1]?.totalCrosses}</Text>
             </View>
           </View>
         </>
@@ -1206,6 +1271,24 @@ function makeStyles(C: Palette) {
   judgeInsightLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
   judgeInsightName:  { color: C.t1, fontSize: 16, fontWeight: "800" },
   judgeInsightVal:   { color: C.t2, fontSize: 11 },
+
+  roundFilterRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 4,
+  },
+  roundFilterChip: {
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.card,
+  },
+  roundFilterChipActive: {
+    backgroundColor: C.accent, borderColor: C.accent,
+  },
+  roundFilterChipText: {
+    fontSize: 13, fontWeight: "600", color: C.t2,
+  },
+  roundFilterChipTextActive: {
+    color: "#fff",
+  },
 
   roundHeader: {
     flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12,

@@ -92,9 +92,22 @@ export interface RankingEntry {
 
 export interface Score3JudgeEntry {
   judge: string;
+  tqPs: number | null;  // combined "TQ & PS" value (2-column competitions)
+  mmCp: number | null;  // combined "MM & CP" value (2-column competitions)
+  tq: number | null;    // Technical Quality           (4-column competitions)
+  mm: number | null;    // Movement to Music           (4-column competitions)
+  ps: number | null;    // Partnering Skill            (4-column competitions)
+  cp: number | null;    // Choreography & Presentation (4-column competitions)
+  rank: number;
+}
+
+export interface Score3Components {
   tqPs: number | null;
   mmCp: number | null;
-  rank: number;
+  tq: number | null;
+  mm: number | null;
+  ps: number | null;
+  cp: number | null;
 }
 
 export interface Score3Dance {
@@ -102,7 +115,9 @@ export interface Score3Dance {
   judgeEntries: Score3JudgeEntry[];
   place: number;       // dance place in Final rounds; 0 for prelim
   totalMarks: number;  // total criteria marks in prelim rounds; 0 for Final
-  totalScore: number;  // sum of all judge scores (multi-dance table layout); 0 otherwise
+  totalScore: number;  // dance total (sum of component scores), e.g. 38.200; 0 if unknown
+  components: Score3Components; // per-criterion averages from the "Component score" row
+  fourCriteria: boolean;        // true when the dance used 4 separate criteria columns
 }
 
 export interface Score3Round {
@@ -133,6 +148,12 @@ export interface CompetitionAnalytics {
   judgeNames: Record<string, string>;
 }
 
+// One rival couple's System 3.0 breakdown (for side-by-side comparison)
+export interface CoupleScores {
+  scores3: Scores3Result | null;
+  final3: Score3Round | null;
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 interface WdsfState {
@@ -141,6 +162,8 @@ interface WdsfState {
   error: string | null;
   analyticsCache: Record<string, CompetitionAnalytics | null>;
   analyticsLoading: Record<string, boolean>;
+  coupleScoresCache: Record<string, CoupleScores | null>;
+  coupleScoresLoading: Record<string, boolean>;
 
   fetchProfile: () => Promise<void>;
   linkByMin: (min: string) => Promise<void>;
@@ -149,6 +172,7 @@ interface WdsfState {
   unlink: () => Promise<void>;
   fetchAnalytics: (competitionUrl: string) => Promise<CompetitionAnalytics | null>;
   clearAnalyticsCache: (competitionUrl: string) => void;
+  fetchCoupleScores: (competitionUrl: string, coupleNumber: string) => Promise<CoupleScores | null>;
 }
 
 export const useWdsfStore = create<WdsfState>((set, get) => ({
@@ -157,6 +181,8 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
   error: null,
   analyticsCache: {},
   analyticsLoading: {},
+  coupleScoresCache: {},
+  coupleScoresLoading: {},
 
   fetchProfile: async () => {
     set({ loading: true, error: null });
@@ -247,6 +273,31 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
       set(s => ({
         analyticsCache: { ...s.analyticsCache, [competitionUrl]: null },
         analyticsLoading: { ...s.analyticsLoading, [competitionUrl]: false },
+      }));
+      return null;
+    }
+  },
+
+  fetchCoupleScores: async (competitionUrl: string, coupleNumber: string) => {
+    const key = `${competitionUrl}|${coupleNumber}`;
+    const cached = get().coupleScoresCache[key];
+    if (cached !== undefined) return cached;
+
+    set(s => ({ coupleScoresLoading: { ...s.coupleScoresLoading, [key]: true } }));
+    try {
+      const params = new URLSearchParams({ competitionUrl, coupleNumber });
+      const { scores } = await api.get<{ scores: CoupleScores }>(
+        `/wdsf/couple-scores?${params}`
+      );
+      set(s => ({
+        coupleScoresCache: { ...s.coupleScoresCache, [key]: scores },
+        coupleScoresLoading: { ...s.coupleScoresLoading, [key]: false },
+      }));
+      return scores;
+    } catch {
+      set(s => ({
+        coupleScoresCache: { ...s.coupleScoresCache, [key]: null },
+        coupleScoresLoading: { ...s.coupleScoresLoading, [key]: false },
       }));
       return null;
     }

@@ -99,11 +99,31 @@ export interface RankingEntry {
 
 // ─── System 3.0 Scoring Types ─────────────────────────────────────────────────
 
+// In WDSF System 3.0 each adjudicator evaluates exactly ONE area for a given dance:
+// either "Technical Quality & Partnering Skill" (TQ & PS) or
+// "Movement to Music & Choreography/Presentation" (MM & CP).
+// Competitions display this in one of two formats:
+//   • 2-column: a single combined value per area  → tqPs / mmCp populated
+//   • 4-column: the area split into two criteria   → (tq, ps) or (mm, cp) populated
 export interface Score3JudgeEntry {
   judge: string;
-  tqPs: number | null;  // Technical Quality & Performance Standard (1-10)
-  mmCp: number | null;  // Movement & Music, Content & Presentation (1-10)
-  rank: number;         // this judge's ranking of the couple in this dance
+  tqPs: number | null;  // combined "TQ & PS" value (2-column competitions)
+  mmCp: number | null;  // combined "MM & CP" value (2-column competitions)
+  tq: number | null;    // Technical Quality      (4-column competitions)
+  mm: number | null;    // Movement to Music       (4-column competitions)
+  ps: number | null;    // Partnering Skill        (4-column competitions)
+  cp: number | null;    // Choreography & Presentation (4-column competitions)
+  rank: number;         // this judge's ranking of the couple in this dance (0 if none)
+}
+
+// "Component score" row (tfoot) — the averaged contribution of each area / criterion.
+export interface Score3Components {
+  tqPs: number | null;
+  mmCp: number | null;
+  tq: number | null;
+  mm: number | null;
+  ps: number | null;
+  cp: number | null;
 }
 
 export interface Score3Dance {
@@ -111,7 +131,9 @@ export interface Score3Dance {
   judgeEntries: Score3JudgeEntry[];
   place: number;       // couple's place in this dance (Final rounds); 0 for prelim
   totalMarks: number;  // total criteria marks (prelim rounds); 0 for Final
-  totalScore: number;  // sum of all judge scores (multi-dance table layout); 0 otherwise
+  totalScore: number;  // dance total (sum of component scores), e.g. 38.200; 0 if unknown
+  components: Score3Components; // per-criterion averages from the "Component score" row
+  fourCriteria: boolean;        // true when the dance used 4 separate criteria columns
 }
 
 export interface Score3Round {
@@ -646,6 +668,12 @@ async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<
   if (!res.ok) return null;
   const $ = load(await res.text());
 
+  // For System 3.0 competitions WDSF serves the same page at /Final/ and /Scores/.
+  // The 3.0 data is parsed by scrapeScoresPage (→ final3); this skating-system parser
+  // must NOT run on it, otherwise it picks up a place from any round's summary table
+  // and wrongly reports a non-finalist as having reached the final.
+  if ($("table.js-scores").length > 0 || /Component score/.test($("body").text())) return null;
+
   // Map each <table> to the dance name announced by the nearest preceding heading
   const tableDanceMap = new Map<Element, string>();
   {
@@ -764,23 +792,6 @@ async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<
 
 // ─── System 3.0 Scores page scraper ──────────────────────────────────────────
 
-/**
- * Parse a cell that contains a decimal score and optional rank or mark.
- * Final format:   "7.800 2"  or  "7.8002"  → score=7.800, rank=2
- * Prelim format:  "9.1 +"    or  "9.1+"    → score=9.1,   rank=0
- */
-function parseScore3Cell(raw: string): { score: number; rank: number } | null {
-  const scoreMatch = raw.match(/(\d+\.\d+)/);
-  if (!scoreMatch) return null;
-  const score = parseFloat(scoreMatch[1]);
-  const afterScore = raw.slice(raw.indexOf(scoreMatch[1]) + scoreMatch[1].length);
-  // Prelim: mark indicator "+" or "-" → no rank
-  if (/[+\-]/.test(afterScore.replace(/\s/g, "").charAt(0))) return { score, rank: 0 };
-  const rankMatch = afterScore.match(/(\d+)/);
-  const rank = rankMatch ? parseInt(rankMatch[1], 10) : 0;
-  return { score, rank };
-}
-
 /** Returns true for the true Final round (not Semi/Quarter/prelim numbered rounds). */
 function isTrueFinalRound(roundName: string): boolean {
   const n = roundName.trim().toLowerCase();
@@ -791,6 +802,129 @@ function isTrueFinalRound(roundName: string): boolean {
 // Matches headings that represent competition rounds (not just dance names or rule tables)
 const ROUND_HEADING_RE = /\bfinal\b|\bsemi\b|\bquarter\b|\bsf\b|\bqf\b|\d+\.?\s*round\b|\bround\s*\d+/i;
 
+/** Canonical dance name from a heading/header cell, or "" if not a dance. */
+function canonDanceName(s: string): string {
+  const t = s.trim();
+  if (/cha.?cha/i.test(t)) return "Cha Cha Cha";
+  const m = t.match(FINAL_DANCE_RE);
+  if (!m) return "";
+  return m[0].replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function emptyScore3Components(): Score3Components {
+  return { tqPs: null, mmCp: null, tq: null, mm: null, ps: null, cp: null };
+}
+
+/**
+ * Parse one couple's per-dance adjudicator table (the nested table inside a
+ * tr.coupleInfo row). Handles both column layouts:
+ *   2-column: Adjudicator | TQ & PS | MM & CP | Result
+ *   4-column: Adjudicator | TQ | MM | PS | CP | Result
+ * Each adjudicator scores exactly one area, so the other cells are blank.
+ */
+function parseAdjudicatorTable(
+  $: CheerioAPI,
+  $at: Cheerio<Element>,
+): { judgeEntries: Score3JudgeEntry[]; components: Score3Components; totalScore: number; fourCriteria: boolean } {
+  // ── Locate criteria columns from the 2-row thead (rowspan/colspan aware) ──
+  let tqPsIdx = -1, mmCpIdx = -1, tqIdx = -1, mmIdx = -1, psIdx = -1, cpIdx = -1;
+  {
+    const headRows = $at.find("thead tr").toArray();
+    const occupied = new Set<number>();
+    for (let ri = 0; ri < headRows.length; ri++) {
+      let ci = 0;
+      $(headRows[ri]).find("th, td").each((_, th) => {
+        while (occupied.has(ci)) ci++;
+        const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
+        const rowspan = parseInt($(th).attr("rowspan") ?? "1", 10);
+        const t = $(th).text().replace(/ /g, " ").trim().toUpperCase().replace(/\s+/g, " ");
+        if      (t === "TQ & PS") tqPsIdx = ci;
+        else if (t === "MM & CP") mmCpIdx = ci;
+        else if (t === "TQ")      tqIdx = ci;
+        else if (t === "MM")      mmIdx = ci;
+        else if (t === "PS")      psIdx = ci;
+        else if (t === "CP")      cpIdx = ci;
+        if (rowspan > 1) for (let k = 0; k < colspan; k++) occupied.add(ci + k);
+        ci += colspan;
+      });
+    }
+  }
+  const fourCriteria = tqIdx >= 0 || psIdx >= 0 || cpIdx >= 0;
+  // Fallbacks when headers could not be located
+  if (!fourCriteria) {
+    if (tqPsIdx < 0) tqPsIdx = 1;
+    if (mmCpIdx < 0) mmCpIdx = 2;
+  }
+
+  const get = (cells: string[], idx: number): number | null => {
+    if (idx < 0 || idx >= cells.length) return null;
+    const n = parseFloat(cells[idx]);
+    return isNaN(n) ? null : n;
+  };
+  const cellsOf = (row: Element): string[] =>
+    $(row).find("td:not(.total)").map((_, td) => $(td).text().replace(/ /g, " ").trim()).get();
+
+  // ── Dance total (td.total carries a rowspan over all judge rows) ──
+  let totalScore = 0;
+  const totalTxt = $at.find("td.total").first().text().replace(/ /g, " ").trim();
+  if (totalTxt) { const n = parseFloat(totalTxt); if (!isNaN(n)) totalScore = n; }
+
+  // ── Per-judge rows ──
+  const judgeEntries: Score3JudgeEntry[] = [];
+  $at.find("tbody tr").each((_, row) => {
+    const cells = cellsOf(row);
+    if (cells.length < 2) return;
+    const name = cells[0]?.trim() ?? "";
+    if (!name || /component|result/i.test(name)) return;
+    if (!/[a-zA-Z]/.test(name)) return;
+
+    const entry: Score3JudgeEntry = {
+      judge: name, tqPs: null, mmCp: null, tq: null, mm: null, ps: null, cp: null, rank: 0,
+    };
+    if (fourCriteria) {
+      entry.tq = get(cells, tqIdx);
+      entry.mm = get(cells, mmIdx);
+      entry.ps = get(cells, psIdx);
+      entry.cp = get(cells, cpIdx);
+    } else {
+      entry.tqPs = get(cells, tqPsIdx);
+      entry.mmCp = get(cells, mmCpIdx);
+    }
+    const has = entry.tqPs != null || entry.mmCp != null ||
+                entry.tq != null || entry.mm != null || entry.ps != null || entry.cp != null;
+    if (!has) return;
+    judgeEntries.push(entry);
+  });
+
+  // ── Component score row (tfoot) ──
+  const components = emptyScore3Components();
+  const foot = $at.find("tfoot tr").first();
+  if (foot.length) {
+    const cells = foot.find("td").map((_, td) => $(td).text().replace(/ /g, " ").trim()).get();
+    if (fourCriteria) {
+      components.tq = get(cells, tqIdx);
+      components.mm = get(cells, mmIdx);
+      components.ps = get(cells, psIdx);
+      components.cp = get(cells, cpIdx);
+    } else {
+      components.tqPs = get(cells, tqPsIdx);
+      components.mmCp = get(cells, mmCpIdx);
+    }
+  }
+
+  return { judgeEntries, components, totalScore, fourCriteria };
+}
+
+/**
+ * Scrape the System 3.0 "Scores" page. Structure (one section per round):
+ *   <h2>Final</h2>  (or "4. Round", "Semi-Final", …)
+ *   <table class="js-scores scores">
+ *     thead: Couple | <dance>* | Total | Place
+ *     tbody: for each couple — one summary <tr class="couple"> (per-dance totals,
+ *            total, place) followed by hidden <tr class="dance_<num>_<i> coupleInfo">
+ *            detail rows, each holding one dance's adjudicator table.
+ * Only the Final round's summary table fills the Place column.
+ */
 async function scrapeScoresPage(
   scoresUrl: string,
   coupleNumber: string,
@@ -798,496 +932,152 @@ async function scrapeScoresPage(
   const empty = { prelim: null, final3: null };
   const res = await fetch(scoresUrl, { headers: FETCH_HEADERS });
   if (!res.ok) return empty;
-  const $ = load(await res.text());
+  return parseScoresHtml(await res.text(), coupleNumber);
+}
 
-  // Validate: must have decimal judge scores
+/** Pure parser for the System 3.0 Scores page HTML (separated for testability). */
+export function parseScoresHtml(
+  html: string,
+  coupleNumber: string,
+): { prelim: Scores3Result | null; final3: Score3Round | null } {
+  const empty = { prelim: null, final3: null };
+  const $ = load(html);
+
+  // Must contain decimal judge scores to be a System 3.0 page
   if (!/\d+\.\d+/.test($("body").text())) return empty;
 
-  // ── Map each table to its preceding round, dance, and couple ─────────
-  // Two page layouts exist:
-  //
-  // Layout A (Blackpool-style): one table per dance per round, judge codes in header columns
-  //   h2 "Final" → h4 "Waltz" → table (Couple | D TQ&PS | D MM&CP | … | Place)
-  //
-  // Layout B (World Open-style): summary table + per-couple adjudicator tables
-  //   h2 "Final" → summary table (Couple | Waltz | Tango | … | Place)
-  //   h3/h4 "406" (couple number) → h3 "Waltz" → table (Adjudicator | TQ&PS | MM&CP | Result)
-  const tableRoundMap  = new Map<Element, string>();
-  const tableDanceMap  = new Map<Element, string>();
-  const tableCoupleMap = new Map<Element, string>(); // Layout B: couple number before each adj table
+  // Map each outer scores table to its preceding round heading
+  const tableRoundMap = new Map<Element, string>();
   {
-    let curRound  = "";
-    let curDance  = "";
-    let curCouple = "";
-    $("h1, h2, h3, h4, h5, table").each((_, el) => {
+    let curRound = "";
+    $("h1, h2, h3, h4, h5, table.js-scores").each((_, el) => {
       if ($(el).is("table")) {
         tableRoundMap.set(el as Element, curRound);
-        tableDanceMap.set(el as Element, curDance);
-        tableCoupleMap.set(el as Element, curCouple);
-        curDance = "";
       } else {
         const t = $(el).text().trim();
-        if (!t || t.length > 100) return;
-        if (/^\d{2,4}$/.test(t)) {
-          // Purely numeric heading = couple start number (Layout B)
-          curCouple = t;
-        } else if (FINAL_DANCE_RE.test(t) && t.length < 40) {
-          curDance = t;
-        } else if (ROUND_HEADING_RE.test(t)) {
-          curRound  = t;
-          curDance  = "";
-          curCouple = "";
-        }
+        if (t && t.length < 40 && ROUND_HEADING_RE.test(t)) curRound = t;
       }
     });
   }
 
-  // colKind for Score 3.0 column map
-  type S3Col =
-    | { kind: "couple" | "place" | "marks" | "skip" }
-    | { kind: "score"; judge: string; criterion: "TQ & PS" | "MM & CP" | "score" };
-
-  // Accumulate results per round name
   const roundData: Record<string, { dances: Score3Dance[]; overallPlace: number }> = {};
+  const ensureRound = (r: string) => {
+    if (!roundData[r]) roundData[r] = { dances: [], overallPlace: 0 };
+    return roundData[r];
+  };
+  const upsertDance = (
+    round: { dances: Score3Dance[]; overallPlace: number },
+    dance: string,
+    patch: Partial<Score3Dance>,
+  ): void => {
+    let d = round.dances.find(x => x.dance === dance);
+    if (!d) {
+      d = { dance, judgeEntries: [], place: 0, totalMarks: 0, totalScore: 0,
+            components: emptyScore3Components(), fourCriteria: false };
+      round.dances.push(d);
+    }
+    Object.assign(d, patch);
+  };
 
-  $("table").each((_, table) => {
+  // ── Pass 1: summary tables → per-dance totals + overall place ──
+  $("table.js-scores").each((_, table) => {
     const $t = $(table);
     const roundName = tableRoundMap.get(table as Element) ?? "";
-    if (!roundName) return; // table before any round heading — skip
-    const danceName   = tableDanceMap.get(table as Element) ?? "";
-    const tableCouple = tableCoupleMap.get(table as Element) ?? "";
+    if (!roundName) return;
+    const round = ensureRound(roundName);
 
-    if (!roundData[roundName]) roundData[roundName] = { dances: [], overallPlace: 0 };
-
-    // ── Layout B: adjudicator-row table (World Open style) ───────────────
-    // Detected by first header cell = "adjudicator". Rows are judges, columns are criteria.
-    // Couple is identified by the numeric heading that precedes all dance tables for that pair.
+    // Parse the (single-row) summary header for column positions
+    const danceCols: { dance: string; colIdx: number }[] = [];
+    let coupleColIdx = -1, totalColIdx = -1, placeColIdx = -1;
     {
-      const allRows   = $t.find("tr").toArray();
-      const firstRow  = allRows[0] ? $(allRows[0]) : null;
-      const firstCell = firstRow?.find("th, td").first().text().trim().toLowerCase() ?? "";
-      const isAdjFmt  = firstCell === "adjudicator" || firstCell === "adj." || firstCell === "adjudicators";
-
-      if (isAdjFmt) {
-        // Only process this table if it belongs to our couple
-        if (!tableCouple || normNum(tableCouple) !== normNum(coupleNumber)) return;
-
-        const danceMatch = danceName ? danceName.match(FINAL_DANCE_RE) : null;
-        if (!danceMatch) return;
-        const canonical = danceMatch[0].replace(/\b\w/g, c => c.toUpperCase());
-
-        // Detect which physical column index holds TQ&PS and MM&CP.
-        // Typical 2-row thead:
-        //   Row 0: Adjudicator(rowspan=2) | Points …(colspan=2) | Result(rowspan=2)
-        //   Row 1: TQ & PS | MM & CP
-        let tqPsColIdx = -1;
-        let mmCpColIdx = -1;
-
-        const rowspannedCols2 = new Set<number>();
-        const theadRows2 = $t.find("thead tr").toArray();
-        if (theadRows2.length >= 2) {
-          // Pass 1: mark rowspan-2 columns from row 0
-          let ci2 = 0;
-          $(theadRows2[0]).find("th, td").each((_, th) => {
-            const cs = parseInt($(th).attr("colspan") ?? "1", 10);
-            const rs = parseInt($(th).attr("rowspan") ?? "1", 10);
-            if (rs > 1) { for (let k = 0; k < cs; k++) rowspannedCols2.add(ci2 + k); }
-            ci2 += cs;
-          });
-          // Pass 2: scan row 1 for TQ&PS / MM&CP
-          ci2 = 0;
-          $(theadRows2[1]).find("th, td").each((_, th) => {
-            while (rowspannedCols2.has(ci2)) ci2++;
-            const txt = $(th).text().trim().toLowerCase();
-            if (/tq|ps/.test(txt) && tqPsColIdx < 0) tqPsColIdx = ci2;
-            else if (/mm|cp/.test(txt) && mmCpColIdx < 0) mmCpColIdx = ci2;
-            ci2++;
-          });
-        }
-        // Fallback: scan any header-like row (tr with th cells)
-        if (tqPsColIdx < 0 || mmCpColIdx < 0) {
-          for (const row of allRows) {
-            const ths = $(row).find("th");
-            if (!ths.length) continue;
-            ths.each((ci2, th) => {
-              const txt = $(th).text().trim().toLowerCase();
-              if (/tq|ps/.test(txt) && tqPsColIdx < 0) tqPsColIdx = ci2;
-              if (/mm|cp/.test(txt) && mmCpColIdx < 0) mmCpColIdx = ci2;
-            });
-            break;
-          }
-        }
-        // Hard fallback: assume col 1 = TQ&PS, col 2 = MM&CP
-        if (tqPsColIdx < 0) tqPsColIdx = 1;
-        if (mmCpColIdx < 0) mmCpColIdx = 2;
-
-        const judgeEntries: Score3JudgeEntry[] = [];
-
-        $t.find("tr").each((_, row) => {
-          const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
-          if (cells.length < 2) return;
-          const adjName = cells[0]?.trim() ?? "";
-          // Skip header-like, component score and result rows
-          if (!adjName || /component|result|total/i.test(adjName)) return;
-          // Skip rows whose first cell is not a real judge name (no letters)
-          if (!/[a-zA-Z]/.test(adjName)) return;
-
-          const tqRaw = tqPsColIdx < cells.length ? cells[tqPsColIdx] : "";
-          const mmRaw = mmCpColIdx < cells.length ? cells[mmCpColIdx] : "";
-          const tqVal = tqRaw !== "" ? parseFloat(tqRaw) : NaN;
-          const mmVal = mmRaw !== "" ? parseFloat(mmRaw) : NaN;
-          const hasTq = !isNaN(tqVal);
-          const hasMm = !isNaN(mmVal);
-          if (!hasTq && !hasMm) return;
-
-          judgeEntries.push({
-            judge: adjName,
-            tqPs:  hasTq ? tqVal : null,
-            mmCp:  hasMm ? mmVal : null,
-            rank:  0,
-          });
-        });
-
-        if (judgeEntries.length === 0) return;
-
-        // Merge into an existing dance entry (from summary table) or create new
-        const existingIdx = roundData[roundName].dances.findIndex(d => d.dance === canonical);
-        if (existingIdx >= 0) {
-          roundData[roundName].dances[existingIdx] = {
-            ...roundData[roundName].dances[existingIdx],
-            judgeEntries,
-          };
-        } else {
-          roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: 0, totalMarks: 0, totalScore: 0 });
-        }
-        return;
-      }
-    }
-
-    // ── Layout A: column-map format (Blackpool style) ─────────────────────
-    const theadText = $t.find("thead").text();
-    const danceMatch = (danceName + " " + theadText).match(FINAL_DANCE_RE);
-
-    if (!danceMatch) {
-      // Summary table (Rule 9 etc.) — try to find overall place for our couple
-      const hdrs: string[] = [];
-      $t.find("thead th, thead td").each((_, el) => { hdrs.push($(el).text().trim().toLowerCase()); });
-      let placeColIdx = -1;
-      for (let i = hdrs.length - 1; i >= 0; i--) {
-        if (hdrs[i] === "place" || hdrs[i] === "rank") { placeColIdx = i; break; }
-      }
-      if (isTrueFinalRound(roundName)) {
-        // Only extract overall place for the true Final summary table
-        $t.find("tbody tr").each((_, row) => {
-          const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
-          if (!cells.length || rowHasCoupleNum(cells, coupleNumber, 3) < 0) return;
-          if (placeColIdx >= 0 && placeColIdx < cells.length) {
-            const p = parseInt(cells[placeColIdx], 10);
-            if (!isNaN(p) && p >= 1) roundData[roundName].overallPlace = p;
-          } else {
-            for (let i = cells.length - 1; i >= Math.max(0, cells.length - 4); i--) {
-              const p = parseInt(cells[i], 10);
-              if (!isNaN(p) && p >= 1 && p <= 200) { roundData[roundName].overallPlace = p; break; }
-            }
-          }
-        });
-      }
-      return;
-    }
-
-    // ── Parse 2-row thead into column map ─────────────────────────────────
-    const headerRows = $t.find("thead tr").toArray();
-    if (!headerRows.length) return;
-
-    const totalCols = $(headerRows[0]).find("th, td").toArray()
-      .reduce((s, el) => s + parseInt($(el).attr("colspan") ?? "1", 10), 0);
-
-    const colMap: S3Col[] = Array.from({ length: totalCols }, () => ({ kind: "skip" } as S3Col));
-    const rowspanned = new Set<number>();
-
-    for (let ri = 0; ri < Math.min(headerRows.length, 2); ri++) {
-      const ths = $(headerRows[ri]).find("th, td").toArray();
+      const headRow = $t.children("thead").children("tr").first();
       let ci = 0;
-      for (const th of ths) {
-        while (rowspanned.has(ci)) ci++;
-        const raw = $(th).text().trim();
-        const lower = raw.toLowerCase();
+      headRow.children("th, td").each((_, th) => {
+        const cls = $(th).attr("class") ?? "";
+        const txt = $(th).text().trim();
         const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
-        const rowspan = parseInt($(th).attr("rowspan") ?? "1", 10);
-
-        for (let k = 0; k < colspan; k++) {
-          const idx = ci + k;
-          if (idx >= colMap.length) break;
-
-          if (ri === 0) {
-            if (lower === "couple" || lower === "#" || lower === "nr" || lower === "no") {
-              colMap[idx] = { kind: "couple" };
-            } else if (lower === "place" || lower === "rank" || lower === "pos") {
-              colMap[idx] = { kind: "place" };
-            } else if (lower === "marks" || lower === "mark" || lower === "total") {
-              colMap[idx] = { kind: "marks" };
-            } else if (raw && /[a-zA-Z]/.test(raw)) {
-              // Treat as judge code (will be refined by row 1 if multi-row header)
-              colMap[idx] = { kind: "score", judge: raw, criterion: "score" };
-            }
-          } else {
-            const existing = colMap[idx];
-            if (existing.kind === "score") {
-              const crit: "TQ & PS" | "MM & CP" | "score" =
-                /tq|ps/i.test(lower) ? "TQ & PS" :
-                /mm|cp/i.test(lower) ? "MM & CP" : "score";
-              colMap[idx] = { ...existing, criterion: crit };
-            }
-          }
-          if (rowspan > 1) rowspanned.add(idx);
-        }
+        if      (/\bcouple\b/.test(cls)) coupleColIdx = ci;
+        else if (/\bplace\b/.test(cls))  placeColIdx = ci;
+        else if (/\btotal\b/.test(cls))  totalColIdx = ci;
+        else if (/\bdance\b/.test(cls))  danceCols.push({ dance: txt, colIdx: ci });
         ci += colspan;
+      });
+      // Fallback: derive columns positionally when classes are absent
+      if (coupleColIdx < 0) coupleColIdx = 0;
+      if (!danceCols.length) {
+        let cj = 0;
+        headRow.children("th, td").each((_, th) => {
+          const txt = $(th).text().trim();
+          const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
+          const canon = canonDanceName(txt);
+          if (canon) danceCols.push({ dance: txt, colIdx: cj });
+          cj += colspan;
+        });
       }
     }
 
-    if (!colMap.some(c => c.kind === "score")) return;
+    $t.children("tbody").children("tr.couple").each((_, row) => {
+      const cells = $(row).children("td").map((_, td) => $(td).text().trim()).get();
+      if (!cells.length) return;
+      const num = coupleColIdx < cells.length ? cells[coupleColIdx] : cells[0];
+      if (normNum(num) !== normNum(coupleNumber)) return;
 
-    const canonical = danceMatch[0].replace(/\b\w/g, c => c.toUpperCase());
-    const judgeEntryMap: Record<string, { tqPs: number | null; mmCp: number | null; rank: number }> = {};
-    let dancePlace = 0;
-    let totalMarks = 0;
-    let found = false;
-
-    $t.find("tbody tr").each((_, row) => {
-      const rawCells = $(row).find("td").toArray();
-      if (!rawCells.length) return;
-      const cellTexts = rawCells.map(td => $(td).text().trim());
-
-      const coupleColIdx = colMap.findIndex(c => c.kind === "couple");
-      let isOurs = false;
-      if (coupleColIdx >= 0 && coupleColIdx < cellTexts.length) {
-        isOurs = normNum(cellTexts[coupleColIdx]) === normNum(coupleNumber);
-      } else {
-        isOurs = rowHasCoupleNum(cellTexts, coupleNumber, 3) >= 0;
-      }
-      if (!isOurs) return;
-
-      found = true;
-
-      for (let i = 0; i < Math.min(colMap.length, cellTexts.length); i++) {
-        const col = colMap[i];
-        if (col.kind !== "score") continue;
-        const parsed = parseScore3Cell(cellTexts[i]);
-        if (!parsed) continue;
-        if (!judgeEntryMap[col.judge]) {
-          judgeEntryMap[col.judge] = { tqPs: null, mmCp: null, rank: parsed.rank };
-        }
-        const ent = judgeEntryMap[col.judge];
-        if (col.criterion === "TQ & PS") ent.tqPs = parsed.score;
-        else if (col.criterion === "MM & CP") ent.mmCp = parsed.score;
-        else ent.tqPs = parsed.score;
-        if (parsed.rank > 0) ent.rank = parsed.rank;
+      for (const { dance, colIdx } of danceCols) {
+        const canonical = canonDanceName(dance);
+        if (!canonical) continue;
+        const val = colIdx < cells.length ? parseFloat(cells[colIdx]) : NaN;
+        upsertDance(round, canonical, { totalScore: isNaN(val) ? 0 : val });
       }
 
-      // Extract place (Final) or totalMarks (prelim) from dedicated columns
-      const placeColIdx = colMap.findIndex(c => c.kind === "place");
-      const marksColIdx = colMap.findIndex(c => c.kind === "marks");
-      if (placeColIdx >= 0 && placeColIdx < cellTexts.length) {
-        const p = parseInt(cellTexts[placeColIdx], 10);
-        if (!isNaN(p) && p >= 1) dancePlace = p;
-      } else if (marksColIdx >= 0 && marksColIdx < cellTexts.length) {
-        const m = parseInt(cellTexts[marksColIdx], 10);
-        if (!isNaN(m)) totalMarks = m;
-      } else {
-        // Fallback: scan last few cells; treat as place only if it's a small integer
-        for (let i = cellTexts.length - 1; i >= Math.max(0, cellTexts.length - 4); i--) {
-          const p = parseInt(cellTexts[i], 10);
-          if (!isNaN(p) && p >= 1) {
-            if (isTrueFinalRound(roundName) && p <= 50) dancePlace = p;
-            else if (!isTrueFinalRound(roundName)) totalMarks = p;
-            break;
-          }
-        }
+      // Overall place — present only in the Final round summary
+      if (placeColIdx >= 0 && placeColIdx < cells.length) {
+        const p = parseInt(cells[placeColIdx], 10);
+        if (!isNaN(p) && p >= 1) round.overallPlace = p;
       }
+      void totalColIdx;
     });
-
-    if (!found) return;
-
-    // Detect multi-dance table layout: judge keys are dance names (e.g. "Waltz", "Tango")
-    // instead of judge codes (e.g. "A", "B"). This happens when the page has one table
-    // per round with one score column per dance, rather than one table per dance per judge.
-    const hasDanceNameJudges = Object.keys(judgeEntryMap).some(j => FINAL_DANCE_RE.test(j));
-
-    if (hasDanceNameJudges) {
-      // Multi-dance table: each "judge" key is actually a dance name.
-      // Accumulate TQ&PS + MM&CP for each dance to get its total score.
-      const danceScoreAccum: Record<string, number> = {};
-      for (const [judge, { tqPs, mmCp }] of Object.entries(judgeEntryMap)) {
-        const score = (tqPs ?? 0) + (mmCp ?? 0);
-        if (score <= 0) continue;
-        const key = judge.replace(/\b\w/g, c => c.toUpperCase());
-        danceScoreAccum[key] = (danceScoreAccum[key] || 0) + score;
-      }
-      // Capture overall place from the Place column of this summary table
-      if (dancePlace > 0 && !roundData[roundName].overallPlace) {
-        roundData[roundName].overallPlace = dancePlace;
-      }
-      for (const [dance, totalScore] of Object.entries(danceScoreAccum)) {
-        if (totalScore <= 0) continue;
-        roundData[roundName].dances.push({ dance, judgeEntries: [], place: 0, totalMarks: 0, totalScore });
-      }
-    } else {
-      const judgeEntries: Score3JudgeEntry[] = Object.entries(judgeEntryMap)
-        .filter(([j]) => j && /[a-zA-Z]/.test(j))
-        .map(([judge, { tqPs, mmCp, rank }]) => ({ judge, tqPs, mmCp, rank }))
-        .sort((a, b) => (a.rank || 999) - (b.rank || 999));
-
-      // Skip entries with no score data — these come from summary/Rule 9 tables whose
-      // column headers happen to contain dance names but cells contain only integers.
-      if (judgeEntries.length === 0) return;
-
-      roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: dancePlace, totalMarks, totalScore: 0 });
-    }
   });
 
-  // ── Layout B: World Open — adjudicator tables nested in tr.coupleInfo rows ──
-  // Each dance detail row has class "dance_COUPLENUM_N coupleInfo". Inside each row
-  // there is one <h3> (dance name) and one nested <table> (adjudicator scores).
-  // Column layout: Adjudicator | TQ | MM | PS | CP (each judge scores either TQ+PS or MM+CP).
+  // ── Pass 2: per-couple per-dance adjudicator tables ──
   $("tr.coupleInfo").each((_, infoRow) => {
-    const $ir       = $(infoRow);
-    const rowClass  = $ir.attr("class") ?? "";
-
-    // Extract couple number from class like "dance_406_3 coupleInfo dance_3"
-    const cm = rowClass.match(/dance_(\d+)_\d+/);
+    const $ir = $(infoRow);
+    const cls = $ir.attr("class") ?? "";
+    const cm = cls.match(/dance_(\d+)_\d+/);
     if (!cm || normNum(cm[1]) !== normNum(coupleNumber)) return;
 
-    // Round name from the parent <table>
-    const parentTbl = $ir.closest("table").get(0);
-    if (!parentTbl) return;
-    const roundName = tableRoundMap.get(parentTbl as Element) ?? "";
+    const outer = $ir.closest("table.js-scores").get(0);
+    if (!outer) return;
+    const roundName = tableRoundMap.get(outer as Element) ?? "";
     if (!roundName) return;
+    const round = ensureRound(roundName);
 
-    if (!roundData[roundName]) roundData[roundName] = { dances: [], overallPlace: 0 };
+    const canonical = canonDanceName($ir.find("h3").first().text());
+    if (!canonical) return;
 
-    // Dance name from <h3>
-    const h3Text = $ir.find("h3").first().text().trim();
-    if (!h3Text) return;
-    const dm = h3Text.match(FINAL_DANCE_RE);
-    if (!dm) return;
-    const canonical = dm[0].replace(/\b\w/g, c => c.toUpperCase());
-
-    // Nested adjudicator table
     const $at = $ir.find("table").first();
     if (!$at.length) return;
 
-    // Dance total from <td class="total"> (has rowspan covering all judge rows)
-    const totalStr   = $at.find("td.total").first().text().trim();
-    const danceTotal = totalStr ? parseFloat(totalStr) : 0;
+    const parsed = parseAdjudicatorTable($, $at);
+    if (!parsed.judgeEntries.length && parsed.totalScore <= 0) return;
 
-    // Detect column layout with proper colspan/rowspan tracking.
-    // Two formats:
-    //   Combined (Blackpool): thead has "TQ & PS" and "MM & CP" → use those directly
-    //   Individual (World Open): thead has separate TQ, MM, PS, CP → sum pairs per judge
-    let tqIdx = -1, mmIdx = -1, psIdx = -1, cpIdx = -1;
-    let tqPsCombIdx = -1, mmCpCombIdx = -1;
-
-    {
-      const rowspanOccupied = new Set<number>();
-      $at.find("thead tr").each((_, hr) => {
-        const nextRowspan = new Set<number>();
-        let ci = 0;
-        $(hr).find("th, td").each((_, th) => {
-          while (rowspanOccupied.has(ci)) ci++;
-          const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
-          const rowspan = parseInt($(th).attr("rowspan") ?? "1", 10);
-          const t = $(th).text().trim();
-          const tu = t.toUpperCase();
-          if      (tu === "TQ")                         tqIdx       = ci;
-          else if (tu === "MM")                         mmIdx       = ci;
-          else if (tu === "PS")                         psIdx       = ci;
-          else if (tu === "CP")                         cpIdx       = ci;
-          else if (/TQ.*PS|TQ\s*&\s*PS/i.test(t))      tqPsCombIdx = ci;
-          else if (/MM.*CP|MM\s*&\s*CP/i.test(t))      mmCpCombIdx = ci;
-          if (rowspan > 1) for (let k = 0; k < colspan; k++) nextRowspan.add(ci + k);
-          ci += colspan;
-        });
-        nextRowspan.forEach(c => rowspanOccupied.add(c));
-      });
-    }
-
-    const useCombined = tqPsCombIdx >= 0 || mmCpCombIdx >= 0;
-    if (!useCombined) {
-      if (tqIdx < 0) tqIdx = 1;
-      if (mmIdx < 0) mmIdx = 2;
-      if (psIdx < 0) psIdx = 3;
-      if (cpIdx < 0) cpIdx = 4;
-    }
-
-    const get = (cells: string[], idx: number): number | null => {
-      if (idx < 0 || idx >= cells.length) return null;
-      const n = parseFloat(cells[idx]);
-      return isNaN(n) ? null : n;
-    };
-
-    const judgeEntries: Score3JudgeEntry[] = [];
-
-    $at.find("tbody tr").each((_, row) => {
-      // Exclude td.total (the rowspan dance-total cell present only in the first judge's row)
-      // so that physical cell indices are consistent across all judge rows.
-      const cells = $(row).find("td:not(.total)").map((_, td) => $(td).text().trim()).get();
-      if (cells.length < 2) return;
-      const name = cells[0]?.trim() ?? "";
-      if (!name || /component|result|total/i.test(name)) return;
-      if (!/[a-zA-Z]/.test(name)) return;
-
-      let tqPs: number | null;
-      let mmCp: number | null;
-
-      if (useCombined) {
-        // Combined format: each cell already holds TQ&PS or MM&CP value
-        tqPs = tqPsCombIdx >= 0 ? get(cells, tqPsCombIdx) : null;
-        mmCp = mmCpCombIdx >= 0 ? get(cells, mmCpCombIdx) : null;
-      } else {
-        // Individual format: each judge scores either TQ+PS or MM+CP (other pair blank)
-        const tq = get(cells, tqIdx);
-        const mm = get(cells, mmIdx);
-        const ps = get(cells, psIdx);
-        const cp = get(cells, cpIdx);
-        tqPs = (tq !== null || ps !== null) ? ((tq ?? 0) + (ps ?? 0)) : null;
-        mmCp = (mm !== null || cp !== null) ? ((mm ?? 0) + (cp ?? 0)) : null;
-      }
-
-      if (tqPs === null && mmCp === null) return;
-      judgeEntries.push({ judge: name, tqPs, mmCp, rank: 0 });
+    upsertDance(round, canonical, {
+      judgeEntries: parsed.judgeEntries,
+      components: parsed.components,
+      fourCriteria: parsed.fourCriteria,
+      ...(parsed.totalScore > 0 ? { totalScore: parsed.totalScore } : {}),
     });
-
-    if (judgeEntries.length === 0) return;
-
-    // Merge into existing dance entry (created by hasDanceNameJudges from summary table)
-    // or create new entry
-    const existingIdx = roundData[roundName].dances.findIndex(d => d.dance === canonical);
-    if (existingIdx >= 0) {
-      roundData[roundName].dances[existingIdx] = {
-        ...roundData[roundName].dances[existingIdx],
-        judgeEntries,
-        ...(danceTotal > 0 ? { totalScore: danceTotal } : {}),
-      };
-    } else {
-      roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: 0, totalMarks: 0, totalScore: danceTotal });
-    }
   });
 
-  // ── Split Final vs prelim rounds ──────────────────────────────────────
+  // ── Split Final vs prelim rounds ──
   let final3: Score3Round | null = null;
   const prelimRounds: Score3Round[] = [];
-
   for (const [roundName, { dances, overallPlace }] of Object.entries(roundData)) {
     if (!dances.length) continue;
     const round: Score3Round = { roundName, dances, overallPlace };
-    if (isTrueFinalRound(roundName)) {
-      final3 = round;
-    } else {
-      prelimRounds.push(round);
-    }
+    if (isTrueFinalRound(roundName)) final3 = round;
+    else prelimRounds.push(round);
   }
 
-  // Sort prelim rounds in ascending order (4. Round < 5. Round)
   prelimRounds.sort((a, b) => {
     const num = (s: string) => { const m = s.match(/(\d+)/); return m ? parseInt(m[1]) : 0; };
     return num(a.roundName) - num(b.roundName);
@@ -1385,10 +1175,28 @@ export async function scrapeCompetitionAnalytics(
     danceStats,
     judgeStats,
     totalPossibleCrosses: totalPossible,
-    reachedFinal: final !== null || final3 !== null,
+    // Reached the final only if the couple has actual Final-round dance data — not
+    // merely an overall place picked up from a shared scores page.
+    reachedFinal:
+      (final3 !== null && final3.dances.length > 0) ||
+      (final !== null && final.dances.length > 0),
     allCouples: entries,
     judgeNames,
   };
+}
+
+/**
+ * Fetch the System 3.0 score breakdown (Final + prelim rounds) for ANY couple at a
+ * competition, by start number. Used to compare the logged-in couple against a rival
+ * — the Scores page already contains every couple's per-judge data.
+ */
+export async function scrapeCoupleScores(
+  competitionUrl: string,
+  coupleNumber: string,
+): Promise<{ scores3: Scores3Result | null; final3: Score3Round | null }> {
+  const urls = buildCompUrls(competitionUrl);
+  const { prelim, final3 } = await scrapeScoresPage(urls.scores, coupleNumber);
+  return { scores3: prelim, final3 };
 }
 
 // ─── Main profile scraper ─────────────────────────────────────────────────────

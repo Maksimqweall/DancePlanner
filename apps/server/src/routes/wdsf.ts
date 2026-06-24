@@ -8,6 +8,7 @@ import {
   scrapeAthleteProfile,
   verifyAndScrape,
   scrapeCompetitionAnalytics,
+  scrapeCoupleScores,
   extractUuid,
   type WdsfProfile,
 } from "../lib/wdsfScraper";
@@ -174,6 +175,21 @@ router.get(
 
     const analytics = await scrapeCompetitionAnalytics(competitionUrl, uuid);
     res.json({ analytics });
+  })
+);
+
+// GET /api/wdsf/couple-scores — fetch one rival couple's System 3.0 breakdown
+// Query: competitionUrl, coupleNumber — used by the Compare tab for side-by-side analysis
+router.get(
+  "/couple-scores",
+  asyncHandler(async (req, res) => {
+    const { competitionUrl, coupleNumber } = z.object({
+      competitionUrl: z.string().min(10),
+      coupleNumber: z.string().min(1).max(10),
+    }).parse(req.query);
+
+    const scores = await scrapeCoupleScores(competitionUrl, coupleNumber);
+    res.json({ scores });
   })
 );
 

@@ -1228,7 +1228,9 @@ async function scrapeScoresPage(
     const judgeEntries: Score3JudgeEntry[] = [];
 
     $at.find("tbody tr").each((_, row) => {
-      const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+      // Exclude td.total (the rowspan dance-total cell present only in the first judge's row)
+      // so that physical cell indices are consistent across all judge rows.
+      const cells = $(row).find("td:not(.total)").map((_, td) => $(td).text().trim()).get();
       if (cells.length < 2) return;
       const name = cells[0]?.trim() ?? "";
       if (!name || /component|result|total/i.test(name)) return;

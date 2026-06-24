@@ -197,9 +197,13 @@ function buildMarkColumnMap($table: Cheerio<Element>, $: CheerioAPI): ColInfo[] 
         if (idx >= map.length) break;
 
         if (ri === 0) {
-          if (lower === "couple" || lower === "#" || lower === "st." || lower === "start" || lower === "nr" || idx === 0) {
+          if (
+            lower === "couple" || lower === "#" || lower === "st." || lower === "start" ||
+            lower === "nr" || lower === "nr." || lower === "no." || lower === "no" ||
+            lower === "pair" || lower === "pair no." || lower === "pair no" || lower === "st#"
+          ) {
             map[idx].type = "couple";
-          } else if (lower === "round" || lower === "rnd" || lower === "rd" || idx === 1) {
+          } else if (lower === "round" || lower === "rnd" || lower === "rd" || lower === "rd.") {
             map[idx].type = "round";
           } else if (lower === "total" || lower === "tot" || lower === "sum") {
             map[idx].type = "total";
@@ -463,9 +467,11 @@ async function scrapeMarksPage(
         // Full row — reset tracking, then check if this is our couple.
         trackingCouple = false;
         if (coupleCellIdx >= 0) {
+          // Couple column identified in header — use it exclusively (no fallback scan,
+          // which would create false positives from rank/draw columns with the same number).
           coupleFound = normNum(cells[coupleCellIdx]) === normNum(coupleNumber);
-        }
-        if (!coupleFound) {
+        } else {
+          // No couple column identified — scan first few cells as a fallback.
           coupleFound = rowHasCoupleNum(cells, coupleNumber, 4) >= 0;
         }
         if (coupleFound) trackingCouple = true;

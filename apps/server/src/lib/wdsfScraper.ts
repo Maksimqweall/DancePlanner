@@ -803,32 +803,41 @@ async function scrapeScoresPage(
   // Validate: must have decimal judge scores
   if (!/\d+\.\d+/.test($("body").text())) return empty;
 
-  // ── Map each table to its preceding round name and dance name ──────────
-  // Page structure:
-  //   h2 "Final"     → h3 "Rule 5 to 8" → h4 "Waltz" → table, h4 "Tango" → table …
-  //   h2 "Rule 9"    → summary table
-  //   h2 "5. Round"  → h4 "Waltz" → table, h4 "Tango" → table …
-  //   h2 "4. Round"  → h4 "Waltz" → table …
-  const tableRoundMap = new Map<Element, string>();
-  const tableDanceMap = new Map<Element, string>();
+  // ── Map each table to its preceding round, dance, and couple ─────────
+  // Two page layouts exist:
+  //
+  // Layout A (Blackpool-style): one table per dance per round, judge codes in header columns
+  //   h2 "Final" → h4 "Waltz" → table (Couple | D TQ&PS | D MM&CP | … | Place)
+  //
+  // Layout B (World Open-style): summary table + per-couple adjudicator tables
+  //   h2 "Final" → summary table (Couple | Waltz | Tango | … | Place)
+  //   h3/h4 "406" (couple number) → h3 "Waltz" → table (Adjudicator | TQ&PS | MM&CP | Result)
+  const tableRoundMap  = new Map<Element, string>();
+  const tableDanceMap  = new Map<Element, string>();
+  const tableCoupleMap = new Map<Element, string>(); // Layout B: couple number before each adj table
   {
-    let curRound = "";
-    let curDance = "";
+    let curRound  = "";
+    let curDance  = "";
+    let curCouple = "";
     $("h1, h2, h3, h4, h5, table").each((_, el) => {
       if ($(el).is("table")) {
         tableRoundMap.set(el as Element, curRound);
         tableDanceMap.set(el as Element, curDance);
+        tableCoupleMap.set(el as Element, curCouple);
         curDance = "";
       } else {
         const t = $(el).text().trim();
         if (!t || t.length > 100) return;
-        if (FINAL_DANCE_RE.test(t) && t.length < 40) {
+        if (/^\d{2,4}$/.test(t)) {
+          // Purely numeric heading = couple start number (Layout B)
+          curCouple = t;
+        } else if (FINAL_DANCE_RE.test(t) && t.length < 40) {
           curDance = t;
         } else if (ROUND_HEADING_RE.test(t)) {
-          curRound = t;
-          curDance = "";
+          curRound  = t;
+          curDance  = "";
+          curCouple = "";
         }
-        // Rule 9 / Rule 10 / section headings that don't match either → ignored, curRound unchanged
       }
     });
   }
@@ -845,12 +854,119 @@ async function scrapeScoresPage(
     const $t = $(table);
     const roundName = tableRoundMap.get(table as Element) ?? "";
     if (!roundName) return; // table before any round heading — skip
-    const danceName = tableDanceMap.get(table as Element) ?? "";
-    const theadText = $t.find("thead").text();
-
-    const danceMatch = (danceName + " " + theadText).match(FINAL_DANCE_RE);
+    const danceName   = tableDanceMap.get(table as Element) ?? "";
+    const tableCouple = tableCoupleMap.get(table as Element) ?? "";
 
     if (!roundData[roundName]) roundData[roundName] = { dances: [], overallPlace: 0 };
+
+    // ── Layout B: adjudicator-row table (World Open style) ───────────────
+    // Detected by first header cell = "adjudicator". Rows are judges, columns are criteria.
+    // Couple is identified by the numeric heading that precedes all dance tables for that pair.
+    {
+      const allRows   = $t.find("tr").toArray();
+      const firstRow  = allRows[0] ? $(allRows[0]) : null;
+      const firstCell = firstRow?.find("th, td").first().text().trim().toLowerCase() ?? "";
+      const isAdjFmt  = firstCell === "adjudicator" || firstCell === "adj." || firstCell === "adjudicators";
+
+      if (isAdjFmt) {
+        // Only process this table if it belongs to our couple
+        if (!tableCouple || normNum(tableCouple) !== normNum(coupleNumber)) return;
+
+        const danceMatch = danceName ? danceName.match(FINAL_DANCE_RE) : null;
+        if (!danceMatch) return;
+        const canonical = danceMatch[0].replace(/\b\w/g, c => c.toUpperCase());
+
+        // Detect which physical column index holds TQ&PS and MM&CP.
+        // Typical 2-row thead:
+        //   Row 0: Adjudicator(rowspan=2) | Points …(colspan=2) | Result(rowspan=2)
+        //   Row 1: TQ & PS | MM & CP
+        let tqPsColIdx = -1;
+        let mmCpColIdx = -1;
+
+        const rowspannedCols2 = new Set<number>();
+        const theadRows2 = $t.find("thead tr").toArray();
+        if (theadRows2.length >= 2) {
+          // Pass 1: mark rowspan-2 columns from row 0
+          let ci2 = 0;
+          $(theadRows2[0]).find("th, td").each((_, th) => {
+            const cs = parseInt($(th).attr("colspan") ?? "1", 10);
+            const rs = parseInt($(th).attr("rowspan") ?? "1", 10);
+            if (rs > 1) { for (let k = 0; k < cs; k++) rowspannedCols2.add(ci2 + k); }
+            ci2 += cs;
+          });
+          // Pass 2: scan row 1 for TQ&PS / MM&CP
+          ci2 = 0;
+          $(theadRows2[1]).find("th, td").each((_, th) => {
+            while (rowspannedCols2.has(ci2)) ci2++;
+            const txt = $(th).text().trim().toLowerCase();
+            if (/tq|ps/.test(txt) && tqPsColIdx < 0) tqPsColIdx = ci2;
+            else if (/mm|cp/.test(txt) && mmCpColIdx < 0) mmCpColIdx = ci2;
+            ci2++;
+          });
+        }
+        // Fallback: scan any header-like row (tr with th cells)
+        if (tqPsColIdx < 0 || mmCpColIdx < 0) {
+          for (const row of allRows) {
+            const ths = $(row).find("th");
+            if (!ths.length) continue;
+            ths.each((ci2, th) => {
+              const txt = $(th).text().trim().toLowerCase();
+              if (/tq|ps/.test(txt) && tqPsColIdx < 0) tqPsColIdx = ci2;
+              if (/mm|cp/.test(txt) && mmCpColIdx < 0) mmCpColIdx = ci2;
+            });
+            break;
+          }
+        }
+        // Hard fallback: assume col 1 = TQ&PS, col 2 = MM&CP
+        if (tqPsColIdx < 0) tqPsColIdx = 1;
+        if (mmCpColIdx < 0) mmCpColIdx = 2;
+
+        const judgeEntries: Score3JudgeEntry[] = [];
+
+        $t.find("tr").each((_, row) => {
+          const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+          if (cells.length < 2) return;
+          const adjName = cells[0]?.trim() ?? "";
+          // Skip header-like, component score and result rows
+          if (!adjName || /component|result|total/i.test(adjName)) return;
+          // Skip rows whose first cell is not a real judge name (no letters)
+          if (!/[a-zA-Z]/.test(adjName)) return;
+
+          const tqRaw = tqPsColIdx < cells.length ? cells[tqPsColIdx] : "";
+          const mmRaw = mmCpColIdx < cells.length ? cells[mmCpColIdx] : "";
+          const tqVal = tqRaw !== "" ? parseFloat(tqRaw) : NaN;
+          const mmVal = mmRaw !== "" ? parseFloat(mmRaw) : NaN;
+          const hasTq = !isNaN(tqVal);
+          const hasMm = !isNaN(mmVal);
+          if (!hasTq && !hasMm) return;
+
+          judgeEntries.push({
+            judge: adjName,
+            tqPs:  hasTq ? tqVal : null,
+            mmCp:  hasMm ? mmVal : null,
+            rank:  0,
+          });
+        });
+
+        if (judgeEntries.length === 0) return;
+
+        // Merge into an existing dance entry (from summary table) or create new
+        const existingIdx = roundData[roundName].dances.findIndex(d => d.dance === canonical);
+        if (existingIdx >= 0) {
+          roundData[roundName].dances[existingIdx] = {
+            ...roundData[roundName].dances[existingIdx],
+            judgeEntries,
+          };
+        } else {
+          roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: 0, totalMarks: 0, totalScore: 0 });
+        }
+        return;
+      }
+    }
+
+    // ── Layout A: column-map format (Blackpool style) ─────────────────────
+    const theadText = $t.find("thead").text();
+    const danceMatch = (danceName + " " + theadText).match(FINAL_DANCE_RE);
 
     if (!danceMatch) {
       // Summary table (Rule 9 etc.) — try to find overall place for our couple
@@ -1006,6 +1122,10 @@ async function scrapeScoresPage(
         if (score <= 0) continue;
         const key = judge.replace(/\b\w/g, c => c.toUpperCase());
         danceScoreAccum[key] = (danceScoreAccum[key] || 0) + score;
+      }
+      // Capture overall place from the Place column of this summary table
+      if (dancePlace > 0 && !roundData[roundName].overallPlace) {
+        roundData[roundName].overallPlace = dancePlace;
       }
       for (const [dance, totalScore] of Object.entries(danceScoreAccum)) {
         if (totalScore <= 0) continue;

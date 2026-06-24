@@ -109,7 +109,8 @@ export interface Score3JudgeEntry {
 export interface Score3Dance {
   dance: string;
   judgeEntries: Score3JudgeEntry[];
-  place: number;        // couple's place in this dance
+  place: number;       // couple's place in this dance (Final rounds); 0 for prelim
+  totalMarks: number;  // total criteria marks (prelim rounds); 0 for Final
 }
 
 export interface Score3Round {
@@ -130,7 +131,8 @@ export interface CompetitionAnalytics {
   coupleName: string;
   rounds: PrelimRound[];
   final: FinalResult | null;
-  scores3: Scores3Result | null;
+  final3: Score3Round | null;   // System 3.0 Final (in FinalTab)
+  scores3: Scores3Result | null; // System 3.0 qualifying rounds (in Scores3Tab)
   danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
   judgeStats: { judge: string; totalCrosses: number; pct: number }[];
   totalPossibleCrosses: number;
@@ -761,35 +763,55 @@ async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<
 
 // ─── System 3.0 Scores page scraper ──────────────────────────────────────────
 
-/** Parse a cell that contains "7.800\n2" or "7.8002" → { score, rank } */
+/**
+ * Parse a cell that contains a decimal score and optional rank or mark.
+ * Final format:   "7.800 2"  or  "7.8002"  → score=7.800, rank=2
+ * Prelim format:  "9.1 +"    or  "9.1+"    → score=9.1,   rank=0
+ */
 function parseScore3Cell(raw: string): { score: number; rank: number } | null {
   const scoreMatch = raw.match(/(\d+\.\d+)/);
   if (!scoreMatch) return null;
   const score = parseFloat(scoreMatch[1]);
   const afterScore = raw.slice(raw.indexOf(scoreMatch[1]) + scoreMatch[1].length);
+  // Prelim: mark indicator "+" or "-" → no rank
+  if (/[+\-]/.test(afterScore.replace(/\s/g, "").charAt(0))) return { score, rank: 0 };
   const rankMatch = afterScore.match(/(\d+)/);
   const rank = rankMatch ? parseInt(rankMatch[1], 10) : 0;
   return { score, rank };
 }
 
+/** Returns true for the true Final round (not Semi/Quarter/prelim numbered rounds). */
+function isTrueFinalRound(roundName: string): boolean {
+  const n = roundName.trim().toLowerCase();
+  // "Final" alone, or "Final Round" — but NOT "Semi-Final", "Quarter-Final", "5. Round", etc.
+  return /^final/.test(n) && !/semi|quarter|1\/[24]|\d/.test(n);
+}
+
+// Matches headings that represent competition rounds (not just dance names or rule tables)
+const ROUND_HEADING_RE = /\bfinal\b|\bsemi\b|\bquarter\b|\bsf\b|\bqf\b|\d+\.?\s*round\b|\bround\s*\d+/i;
+
 async function scrapeScoresPage(
   scoresUrl: string,
   coupleNumber: string,
-): Promise<Scores3Result | null> {
+): Promise<{ prelim: Scores3Result | null; final3: Score3Round | null }> {
+  const empty = { prelim: null, final3: null };
   const res = await fetch(scoresUrl, { headers: FETCH_HEADERS });
-  if (!res.ok) return null;
+  if (!res.ok) return empty;
   const $ = load(await res.text());
 
-  // Validate that this is really a 3.0 scores page (decimal judge scores, not crosses)
-  const pageText = $("body").text();
-  if (!/\d+\.\d{2,3}/.test(pageText)) return null;
+  // Validate: must have decimal judge scores
+  if (!/\d+\.\d+/.test($("body").text())) return empty;
 
-  // Map each table to its preceding round heading and dance heading.
-  // Structure: h2 "Final" / h3 "Waltz" → table, h3 "Tango" → table, …
+  // ── Map each table to its preceding round name and dance name ──────────
+  // Page structure:
+  //   h2 "Final"     → h3 "Rule 5 to 8" → h4 "Waltz" → table, h4 "Tango" → table …
+  //   h2 "Rule 9"    → summary table
+  //   h2 "5. Round"  → h4 "Waltz" → table, h4 "Tango" → table …
+  //   h2 "4. Round"  → h4 "Waltz" → table …
   const tableRoundMap = new Map<Element, string>();
   const tableDanceMap = new Map<Element, string>();
   {
-    let curRound = "Final";
+    let curRound = "";
     let curDance = "";
     $("h1, h2, h3, h4, h5, table").each((_, el) => {
       if ($(el).is("table")) {
@@ -798,30 +820,30 @@ async function scrapeScoresPage(
         curDance = "";
       } else {
         const t = $(el).text().trim();
-        if (!t || t.length > 80) return;
-        if (FINAL_DANCE_RE.test(t)) {
+        if (!t || t.length > 100) return;
+        if (FINAL_DANCE_RE.test(t) && t.length < 40) {
           curDance = t;
-        } else if (/\bfinal\b|\bsemi\b|\bquarter\b|\bsf\b|\bqf\b/i.test(t)) {
+        } else if (ROUND_HEADING_RE.test(t)) {
           curRound = t;
           curDance = "";
         }
+        // Rule 9 / Rule 10 / section headings that don't match either → ignored, curRound unchanged
       }
     });
   }
 
   // colKind for Score 3.0 column map
   type S3Col =
-    | { kind: "couple" }
-    | { kind: "place" }
-    | { kind: "skip" }
+    | { kind: "couple" | "place" | "marks" | "skip" }
     | { kind: "score"; judge: string; criterion: "TQ & PS" | "MM & CP" | "score" };
 
-  // accumulate results per round
+  // Accumulate results per round name
   const roundData: Record<string, { dances: Score3Dance[]; overallPlace: number }> = {};
 
   $("table").each((_, table) => {
     const $t = $(table);
-    const roundName = tableRoundMap.get(table as Element) ?? "Final";
+    const roundName = tableRoundMap.get(table as Element) ?? "";
+    if (!roundName) return; // table before any round heading — skip
     const danceName = tableDanceMap.get(table as Element) ?? "";
     const theadText = $t.find("thead").text();
 
@@ -830,26 +852,29 @@ async function scrapeScoresPage(
     if (!roundData[roundName]) roundData[roundName] = { dances: [], overallPlace: 0 };
 
     if (!danceMatch) {
-      // Summary table (Rule 9 / overall) — extract overall place
+      // Summary table (Rule 9 etc.) — try to find overall place for our couple
       const hdrs: string[] = [];
       $t.find("thead th, thead td").each((_, el) => { hdrs.push($(el).text().trim().toLowerCase()); });
       let placeColIdx = -1;
       for (let i = hdrs.length - 1; i >= 0; i--) {
         if (hdrs[i] === "place" || hdrs[i] === "rank") { placeColIdx = i; break; }
       }
-      $t.find("tbody tr").each((_, row) => {
-        const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
-        if (!cells.length || rowHasCoupleNum(cells, coupleNumber, 3) < 0) return;
-        if (placeColIdx >= 0 && placeColIdx < cells.length) {
-          const p = parseInt(cells[placeColIdx], 10);
-          if (!isNaN(p) && p >= 1) roundData[roundName].overallPlace = p;
-        } else {
-          for (let i = cells.length - 1; i >= Math.max(0, cells.length - 4); i--) {
-            const p = parseInt(cells[i], 10);
-            if (!isNaN(p) && p >= 1 && p <= 200) { roundData[roundName].overallPlace = p; break; }
+      if (isTrueFinalRound(roundName)) {
+        // Only extract overall place for the true Final summary table
+        $t.find("tbody tr").each((_, row) => {
+          const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+          if (!cells.length || rowHasCoupleNum(cells, coupleNumber, 3) < 0) return;
+          if (placeColIdx >= 0 && placeColIdx < cells.length) {
+            const p = parseInt(cells[placeColIdx], 10);
+            if (!isNaN(p) && p >= 1) roundData[roundName].overallPlace = p;
+          } else {
+            for (let i = cells.length - 1; i >= Math.max(0, cells.length - 4); i--) {
+              const p = parseInt(cells[i], 10);
+              if (!isNaN(p) && p >= 1 && p <= 200) { roundData[roundName].overallPlace = p; break; }
+            }
           }
-        }
-      });
+        });
+      }
       return;
     }
 
@@ -882,11 +907,13 @@ async function scrapeScoresPage(
               colMap[idx] = { kind: "couple" };
             } else if (lower === "place" || lower === "rank" || lower === "pos") {
               colMap[idx] = { kind: "place" };
+            } else if (lower === "marks" || lower === "mark" || lower === "total") {
+              colMap[idx] = { kind: "marks" };
             } else if (raw && /[a-zA-Z]/.test(raw)) {
+              // Treat as judge code (will be refined by row 1 if multi-row header)
               colMap[idx] = { kind: "score", judge: raw, criterion: "score" };
             }
           } else {
-            // Row 1 refines the criterion for judge columns
             const existing = colMap[idx];
             if (existing.kind === "score") {
               const crit: "TQ & PS" | "MM & CP" | "score" =
@@ -901,13 +928,12 @@ async function scrapeScoresPage(
       }
     }
 
-    // Check if we found any judge columns with decimal scores
-    const hasJudgeCols = colMap.some(c => c.kind === "score");
-    if (!hasJudgeCols) return;
+    if (!colMap.some(c => c.kind === "score")) return;
 
     const canonical = danceMatch[0].replace(/\b\w/g, c => c.toUpperCase());
     const judgeEntryMap: Record<string, { tqPs: number | null; mmCp: number | null; rank: number }> = {};
     let dancePlace = 0;
+    let totalMarks = 0;
     let found = false;
 
     $t.find("tbody tr").each((_, row) => {
@@ -915,7 +941,6 @@ async function scrapeScoresPage(
       if (!rawCells.length) return;
       const cellTexts = rawCells.map(td => $(td).text().trim());
 
-      // Match our couple
       const coupleColIdx = colMap.findIndex(c => c.kind === "couple");
       let isOurs = false;
       if (coupleColIdx >= 0 && coupleColIdx < cellTexts.length) {
@@ -938,19 +963,28 @@ async function scrapeScoresPage(
         const ent = judgeEntryMap[col.judge];
         if (col.criterion === "TQ & PS") ent.tqPs = parsed.score;
         else if (col.criterion === "MM & CP") ent.mmCp = parsed.score;
-        else ent.tqPs = parsed.score;       // single-score fallback
+        else ent.tqPs = parsed.score;
         if (parsed.rank > 0) ent.rank = parsed.rank;
       }
 
-      // Extract dance place from the place column or last integer cell
+      // Extract place (Final) or totalMarks (prelim) from dedicated columns
       const placeColIdx = colMap.findIndex(c => c.kind === "place");
+      const marksColIdx = colMap.findIndex(c => c.kind === "marks");
       if (placeColIdx >= 0 && placeColIdx < cellTexts.length) {
         const p = parseInt(cellTexts[placeColIdx], 10);
         if (!isNaN(p) && p >= 1) dancePlace = p;
+      } else if (marksColIdx >= 0 && marksColIdx < cellTexts.length) {
+        const m = parseInt(cellTexts[marksColIdx], 10);
+        if (!isNaN(m)) totalMarks = m;
       } else {
+        // Fallback: scan last few cells; treat as place only if it's a small integer
         for (let i = cellTexts.length - 1; i >= Math.max(0, cellTexts.length - 4); i--) {
           const p = parseInt(cellTexts[i], 10);
-          if (!isNaN(p) && p >= 1 && p <= 200) { dancePlace = p; break; }
+          if (!isNaN(p) && p >= 1) {
+            if (isTrueFinalRound(roundName) && p <= 50) dancePlace = p;
+            else if (!isTrueFinalRound(roundName)) totalMarks = p;
+            break;
+          }
         }
       }
     });
@@ -960,16 +994,33 @@ async function scrapeScoresPage(
     const judgeEntries: Score3JudgeEntry[] = Object.entries(judgeEntryMap)
       .filter(([j]) => j && /[a-zA-Z]/.test(j))
       .map(([judge, { tqPs, mmCp, rank }]) => ({ judge, tqPs, mmCp, rank }))
-      .sort((a, b) => a.rank - b.rank);
+      .sort((a, b) => (a.rank || 999) - (b.rank || 999));
 
-    roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: dancePlace });
+    roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: dancePlace, totalMarks });
   });
 
-  const rounds: Score3Round[] = Object.entries(roundData)
-    .filter(([, { dances }]) => dances.length > 0)
-    .map(([roundName, { dances, overallPlace }]) => ({ roundName, dances, overallPlace }));
+  // ── Split Final vs prelim rounds ──────────────────────────────────────
+  let final3: Score3Round | null = null;
+  const prelimRounds: Score3Round[] = [];
 
-  return rounds.length ? { rounds } : null;
+  for (const [roundName, { dances, overallPlace }] of Object.entries(roundData)) {
+    if (!dances.length) continue;
+    const round: Score3Round = { roundName, dances, overallPlace };
+    if (isTrueFinalRound(roundName)) {
+      final3 = round;
+    } else {
+      prelimRounds.push(round);
+    }
+  }
+
+  // Sort prelim rounds in ascending order (4. Round < 5. Round)
+  prelimRounds.sort((a, b) => {
+    const num = (s: string) => { const m = s.match(/(\d+)/); return m ? parseInt(m[1]) : 0; };
+    return num(a.roundName) - num(b.roundName);
+  });
+
+  const prelim = prelimRounds.length ? { rounds: prelimRounds } : null;
+  return { prelim, final3 };
 }
 
 // ─── Main analytics scraper ───────────────────────────────────────────────────
@@ -994,7 +1045,7 @@ export async function scrapeCompetitionAnalytics(
   const coupleName   = myEntry.coupleName;
 
   // Step 2: Marks + Final + Scores (3.0) + Officials (parallel)
-  const [rounds, final, scores3, judgeNames] = await Promise.all([
+  const [rounds, final, { prelim: scores3, final3 }, judgeNames] = await Promise.all([
     scrapeMarksPage(urls.marks, coupleNumber, coupleName),
     scrapeFinalPage(urls.final, coupleNumber),
     scrapeScoresPage(urls.scores, coupleNumber),
@@ -1055,11 +1106,12 @@ export async function scrapeCompetitionAnalytics(
     coupleName,
     rounds,
     final,
+    final3,
     scores3,
     danceStats,
     judgeStats,
     totalPossibleCrosses: totalPossible,
-    reachedFinal: final !== null,
+    reachedFinal: final !== null || final3 !== null,
     allCouples: entries,
     judgeNames,
   };

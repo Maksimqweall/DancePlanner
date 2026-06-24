@@ -100,7 +100,8 @@ export interface Score3JudgeEntry {
 export interface Score3Dance {
   dance: string;
   judgeEntries: Score3JudgeEntry[];
-  place: number;
+  place: number;       // dance place in Final rounds; 0 for prelim
+  totalMarks: number;  // total criteria marks in prelim rounds; 0 for Final
 }
 
 export interface Score3Round {
@@ -121,6 +122,7 @@ export interface CompetitionAnalytics {
   coupleName: string;
   rounds: PrelimRound[];
   final: FinalResult | null;
+  final3: Score3Round | null;
   scores3: Scores3Result | null;
   danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
   judgeStats: { judge: string; totalCrosses: number; pct: number }[];

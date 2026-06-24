@@ -425,7 +425,7 @@ function CompetitionAnalyticsModal({
             {tab === "overview" && <OverviewTab analytics={analytics} comp={comp} />}
             {tab === "marks"    && <CrossesTab analytics={analytics} maxCrosses={maxCrosses} maxJudge={maxJudgeCrosses} />}
             {tab === "scores3"  && <Scores3Tab scores3={analytics.scores3!} judgeNames={analytics.judgeNames} />}
-            {tab === "final"    && <FinalTab final={analytics.final} judgeNames={analytics.judgeNames} />}
+            {tab === "final"    && <FinalTab final={analytics.final} final3={analytics.final3} judgeNames={analytics.judgeNames} />}
             {tab === "compare"  && <CompareTab analytics={analytics} />}
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -913,7 +913,11 @@ function Scores3Tab({ scores3, judgeNames }: {
         <View key={d.dance} style={[s.sectionCard, { marginBottom: 8 }]}>
           <View style={s.roundHeader}>
             <Text style={s.roundHeaderTitle}>{d.dance}</Text>
-            {d.place > 0 && <Text style={s.roundHeaderTotal}>Place #{d.place}</Text>}
+            {d.place > 0
+              ? <Text style={s.roundHeaderTotal}>Place #{d.place}</Text>
+              : d.totalMarks > 0
+                ? <Text style={s.roundHeaderTotal}>{d.totalMarks} marks</Text>
+                : null}
           </View>
           <View style={s.roundExpanded}>
             {d.judgeEntries.map((je, i) => {
@@ -941,11 +945,15 @@ function Scores3Tab({ scores3, judgeNames }: {
 
 // ─── Tab: Final ───────────────────────────────────────────────────────────────
 
-function FinalTab({ final, judgeNames }: { final: FinalResult | null; judgeNames: Record<string, string> }) {
+function FinalTab({ final, final3, judgeNames }: {
+  final: FinalResult | null;
+  final3: Score3Round | null;
+  judgeNames: Record<string, string>;
+}) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
 
-  if (!final) {
+  if (!final && !final3) {
     return (
       <View style={[s.analyticsCenter, { padding: 32 }]}>
         <Text style={{ fontSize: 32 }}>🏁</Text>
@@ -954,22 +962,100 @@ function FinalTab({ final, judgeNames }: { final: FinalResult | null; judgeNames
     );
   }
 
-  const maxAvg = Math.max(1, ...final.judgeAvgPlaces.map(j => j.avgPlace));
+  // ── System 3.0 Final ────────────────────────────────────────────────────────
+  if (final3 && !final) {
+    // Competition uses System 3.0 for the Final — show 3.0 data only
+    const danceAvgs = final3.dances.map(d => {
+      const scores = d.judgeEntries.flatMap(je => {
+        const vals: number[] = [];
+        if (je.tqPs !== null) vals.push(je.tqPs);
+        if (je.mmCp !== null) vals.push(je.mmCp);
+        return vals;
+      });
+      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      return { dance: d.dance, avg, place: d.place };
+    });
+    const maxDA = Math.max(1, ...danceAvgs.map(d => d.avg));
+
+    const judgeAvgMap: Record<string, { total: number; count: number }> = {};
+    for (const d of final3.dances) {
+      for (const je of d.judgeEntries) {
+        const sc = je.tqPs !== null && je.mmCp !== null ? (je.tqPs + je.mmCp) / 2 : (je.tqPs ?? je.mmCp ?? 0);
+        if (!judgeAvgMap[je.judge]) judgeAvgMap[je.judge] = { total: 0, count: 0 };
+        judgeAvgMap[je.judge].total += sc;
+        judgeAvgMap[je.judge].count += 1;
+      }
+    }
+    const judgeAvgs = Object.entries(judgeAvgMap)
+      .map(([judge, { total, count }]) => ({ judge, avg: count > 0 ? total / count : 0 }))
+      .sort((a, b) => b.avg - a.avg);
+    const maxJA = Math.max(1, ...judgeAvgs.map(j => j.avg));
+
+    return (
+      <View style={{ padding: 16, gap: 12 }}>
+        {final3.overallPlace > 0 && (
+          <View style={s.finalPlaceBanner}>
+            <Text style={s.finalPlaceNum}>{final3.overallPlace}</Text>
+            <Text style={s.finalPlaceLabel}>Final Place (System 3.0)</Text>
+          </View>
+        )}
+        <SectionHeader title="Dance Scores" subtitle="Avg across all judges" />
+        <View style={s.sectionCard}>
+          {danceAvgs.map((d, i) => (
+            <View key={d.dance} style={[s.barRow, i < danceAvgs.length - 1 && s.rowBorder]}>
+              <Text style={s.barRowLabel}>{d.dance}</Text>
+              <View style={s.barRowTrack}>
+                <View style={[s.barRowFill, { width: `${Math.round((d.avg / maxDA) * 100)}%`, backgroundColor: C.accent }]} />
+              </View>
+              <Text style={s.barRowVal}>
+                {d.avg.toFixed(2)}{d.place > 0 ? <Text style={s.barRowPct}> (#{d.place})</Text> : null}
+              </Text>
+            </View>
+          ))}
+        </View>
+        {judgeAvgs.length > 0 && (
+          <>
+            <SectionHeader title="Judge Scores" subtitle="Highest → lowest avg" />
+            <View style={s.sectionCard}>
+              {judgeAvgs.map((j, i) => {
+                const isFirst = i === 0; const isLast = i === judgeAvgs.length - 1;
+                return (
+                  <View key={j.judge} style={[s.barRow, i < judgeAvgs.length - 1 && s.rowBorder]}>
+                    <Text style={[s.judgeNameLabel, { color: isFirst ? C.gold : isLast ? C.red : C.t1 }]} numberOfLines={1}>
+                      {jFullName(j.judge, judgeNames)}
+                    </Text>
+                    <View style={s.barRowTrack}>
+                      <View style={[s.barRowFill, { width: `${Math.round((j.avg / maxJA) * 100)}%`, backgroundColor: isFirst ? C.gold : isLast ? C.red : C.accent }]} />
+                    </View>
+                    <Text style={s.barRowVal}>{j.avg.toFixed(2)}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+      </View>
+    );
+  }
+
+  // At this point final is guaranteed non-null (early-return handles the null cases above)
+  const f = final!;
+  const maxAvg = Math.max(1, ...f.judgeAvgPlaces.map(j => j.avgPlace));
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
 
       {/* Overall place */}
       <View style={s.finalPlaceBanner}>
-        <Text style={s.finalPlaceNum}>{final.overallPlace || "—"}</Text>
+        <Text style={s.finalPlaceNum}>{f.overallPlace || "—"}</Text>
         <Text style={s.finalPlaceLabel}>Final Place</Text>
       </View>
 
       {/* Per-dance places */}
       <SectionHeader title="Dance Results (Skating System)" />
       <View style={s.sectionCard}>
-        {final.dances.map((d, i) => (
-          <View key={d.dance} style={[s.row, i < final.dances.length - 1 && s.rowBorder]}>
+        {f.dances.map((d, i) => (
+          <View key={d.dance} style={[s.row, i < f.dances.length - 1 && s.rowBorder]}>
             <Text style={s.rowTitle}>{d.dance}</Text>
             <View style={[s.placeBadge, d.dancePlace <= 3 && { backgroundColor: C.goldFade, borderColor: C.goldBorder }]}>
               <Text style={[s.placeText, { color: d.dancePlace === 1 ? C.gold : d.dancePlace === 2 ? "#b0b8c8" : d.dancePlace === 3 ? "#cd7f32" : C.t1 }]}>
@@ -981,7 +1067,7 @@ function FinalTab({ final, judgeNames }: { final: FinalResult | null; judgeNames
       </View>
 
       {/* Per-dance judge placements */}
-      {final.dances.map(d => (
+      {f.dances.map(d => (
         d.judgeEntries.length > 0 ? (
           <View key={`jd-${d.dance}`}>
             <SectionHeader title={`${d.dance} — Judge Placements`} />
@@ -1009,18 +1095,18 @@ function FinalTab({ final, judgeNames }: { final: FinalResult | null; judgeNames
       ))}
 
       {/* Judge overall analytics */}
-      {final.judgeAvgPlaces.length > 0 ? (
+      {f.judgeAvgPlaces.length > 0 ? (
         <>
           <SectionHeader title="Judge Analytics (Final)" subtitle="Lower avg = judged you better" />
           <View style={s.sectionCard}>
-            {final.judgeAvgPlaces.map((jd, i) => {
+            {f.judgeAvgPlaces.map((jd, i) => {
               const isFirst  = i === 0;
-              const isLast   = i === final.judgeAvgPlaces.length - 1;
+              const isLast   = i === f.judgeAvgPlaces.length - 1;
               const barColor = isFirst ? C.gold : isLast ? C.red : C.accent;
               const nameColor = isFirst ? C.gold : isLast ? C.red : C.t1;
               const barPct   = 1 - (jd.avgPlace - 1) / 5;
               return (
-                <View key={jd.judge} style={[s.barRow, i < final.judgeAvgPlaces.length - 1 && s.rowBorder]}>
+                <View key={jd.judge} style={[s.barRow, i < f.judgeAvgPlaces.length - 1 && s.rowBorder]}>
                   <Text style={[s.judgeNameLabel, { color: nameColor }]} numberOfLines={1}>
                     {jFullName(jd.judge, judgeNames)}
                   </Text>
@@ -1036,14 +1122,14 @@ function FinalTab({ final, judgeNames }: { final: FinalResult | null; judgeNames
             <View style={s.judgeInsightCard}>
               <Text style={s.judgeInsightIcon}>🏅</Text>
               <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Liked Us Most</Text>
-              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(final.judgeAvgPlaces[0]?.judge, judgeNames)}</Text>
-              <Text style={s.judgeInsightVal}>avg {final.judgeAvgPlaces[0]?.avgPlace.toFixed(1)}</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(f.judgeAvgPlaces[0]?.judge, judgeNames)}</Text>
+              <Text style={s.judgeInsightVal}>avg {f.judgeAvgPlaces[0]?.avgPlace.toFixed(1)}</Text>
             </View>
             <View style={s.judgeInsightCard}>
               <Text style={s.judgeInsightIcon}>📊</Text>
               <Text style={[s.judgeInsightLabel, { color: C.t2 }]}>Strictest Judge</Text>
-              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(final.judgeAvgPlaces[final.judgeAvgPlaces.length - 1]?.judge, judgeNames)}</Text>
-              <Text style={s.judgeInsightVal}>avg {final.judgeAvgPlaces[final.judgeAvgPlaces.length - 1]?.avgPlace.toFixed(1)}</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(f.judgeAvgPlaces[f.judgeAvgPlaces.length - 1]?.judge, judgeNames)}</Text>
+              <Text style={s.judgeInsightVal}>avg {f.judgeAvgPlaces[f.judgeAvgPlaces.length - 1]?.avgPlace.toFixed(1)}</Text>
             </View>
           </View>
         </>

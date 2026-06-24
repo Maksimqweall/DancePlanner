@@ -1180,21 +1180,44 @@ async function scrapeScoresPage(
     const totalStr   = $at.find("td.total").first().text().trim();
     const danceTotal = totalStr ? parseFloat(totalStr) : 0;
 
-    // Find column indices: TQ, MM, PS, CP by scanning all thead rows
+    // Detect column layout with proper colspan/rowspan tracking.
+    // Two formats:
+    //   Combined (Blackpool): thead has "TQ & PS" and "MM & CP" → use those directly
+    //   Individual (World Open): thead has separate TQ, MM, PS, CP → sum pairs per judge
     let tqIdx = -1, mmIdx = -1, psIdx = -1, cpIdx = -1;
-    $at.find("thead tr").each((_, hr) => {
-      $(hr).find("th, td").each((ci, th) => {
-        const t = $(th).text().trim().toUpperCase();
-        if (t === "TQ")                         tqIdx = ci;
-        else if (t === "MM")                    mmIdx = ci;
-        else if (t === "PS")                    psIdx = ci;
-        else if (t === "CP")                    cpIdx = ci;
+    let tqPsCombIdx = -1, mmCpCombIdx = -1;
+
+    {
+      const rowspanOccupied = new Set<number>();
+      $at.find("thead tr").each((_, hr) => {
+        const nextRowspan = new Set<number>();
+        let ci = 0;
+        $(hr).find("th, td").each((_, th) => {
+          while (rowspanOccupied.has(ci)) ci++;
+          const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
+          const rowspan = parseInt($(th).attr("rowspan") ?? "1", 10);
+          const t = $(th).text().trim();
+          const tu = t.toUpperCase();
+          if      (tu === "TQ")                         tqIdx       = ci;
+          else if (tu === "MM")                         mmIdx       = ci;
+          else if (tu === "PS")                         psIdx       = ci;
+          else if (tu === "CP")                         cpIdx       = ci;
+          else if (/TQ.*PS|TQ\s*&\s*PS/i.test(t))      tqPsCombIdx = ci;
+          else if (/MM.*CP|MM\s*&\s*CP/i.test(t))      mmCpCombIdx = ci;
+          if (rowspan > 1) for (let k = 0; k < colspan; k++) nextRowspan.add(ci + k);
+          ci += colspan;
+        });
+        nextRowspan.forEach(c => rowspanOccupied.add(c));
       });
-    });
-    if (tqIdx < 0) tqIdx = 1;
-    if (mmIdx < 0) mmIdx = 2;
-    if (psIdx < 0) psIdx = 3;
-    if (cpIdx < 0) cpIdx = 4;
+    }
+
+    const useCombined = tqPsCombIdx >= 0 || mmCpCombIdx >= 0;
+    if (!useCombined) {
+      if (tqIdx < 0) tqIdx = 1;
+      if (mmIdx < 0) mmIdx = 2;
+      if (psIdx < 0) psIdx = 3;
+      if (cpIdx < 0) cpIdx = 4;
+    }
 
     const get = (cells: string[], idx: number): number | null => {
       if (idx < 0 || idx >= cells.length) return null;
@@ -1211,16 +1234,24 @@ async function scrapeScoresPage(
       if (!name || /component|result|total/i.test(name)) return;
       if (!/[a-zA-Z]/.test(name)) return;
 
-      const tq = get(cells, tqIdx);
-      const mm = get(cells, mmIdx);
-      const ps = get(cells, psIdx);
-      const cp = get(cells, cpIdx);
+      let tqPs: number | null;
+      let mmCp: number | null;
 
-      // Each judge scores either TQ+PS or MM+CP, other pair is blank
-      const tqPs = (tq !== null || ps !== null) ? ((tq ?? 0) + (ps ?? 0)) : null;
-      const mmCp = (mm !== null || cp !== null) ? ((mm ?? 0) + (cp ?? 0)) : null;
+      if (useCombined) {
+        // Combined format: each cell already holds TQ&PS or MM&CP value
+        tqPs = tqPsCombIdx >= 0 ? get(cells, tqPsCombIdx) : null;
+        mmCp = mmCpCombIdx >= 0 ? get(cells, mmCpCombIdx) : null;
+      } else {
+        // Individual format: each judge scores either TQ+PS or MM+CP (other pair blank)
+        const tq = get(cells, tqIdx);
+        const mm = get(cells, mmIdx);
+        const ps = get(cells, psIdx);
+        const cp = get(cells, cpIdx);
+        tqPs = (tq !== null || ps !== null) ? ((tq ?? 0) + (ps ?? 0)) : null;
+        mmCp = (mm !== null || cp !== null) ? ((mm ?? 0) + (cp ?? 0)) : null;
+      }
+
       if (tqPs === null && mmCp === null) return;
-
       judgeEntries.push({ judge: name, tqPs, mmCp, rank: 0 });
     });
 

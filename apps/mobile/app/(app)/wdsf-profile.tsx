@@ -1119,6 +1119,29 @@ function FinalTab({ final, final3, judgeNames }: {
                 <Text style={s.judgeInsightVal}>{judgeAvgs[judgeAvgs.length - 1]?.avg.toFixed(2)}</Text>
               </View>
             </View>
+            {/* Detailed per-dance per-judge breakdown */}
+            <SectionHeader title="Detailed Scores" subtitle="Per dance · per judge" />
+            {final3.dances.map(d =>
+              d.judgeEntries.length > 0 ? (
+                <View key={d.dance} style={[s.sectionCard, { marginBottom: 8 }]}>
+                  <View style={s.roundHeader}>
+                    <Text style={s.roundHeaderTitle}>{d.dance}</Text>
+                    {d.totalScore > 0 && <Text style={s.roundHeaderTotal}>{d.totalScore.toFixed(3)}</Text>}
+                  </View>
+                  <View style={s.roundExpanded}>
+                    {d.judgeEntries.map((je, i) => (
+                      <View key={je.judge} style={[s.crossRow, i < d.judgeEntries.length - 1 && s.rowBorder]}>
+                        <Text style={s.crossJudge} numberOfLines={1}>{jFullName(je.judge, judgeNames)}</Text>
+                        <View style={s.crossScores3}>
+                          {je.tqPs !== null && <Text style={s.score3Chip}>{`TQ ${je.tqPs.toFixed(1)}`}</Text>}
+                          {je.mmCp !== null && <Text style={[s.score3Chip, { backgroundColor: C.purple + "22" }]}>{`MM ${je.mmCp.toFixed(1)}`}</Text>}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null
+            )}
           </>
         )}
       </View>

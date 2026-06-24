@@ -1145,6 +1145,101 @@ async function scrapeScoresPage(
     }
   });
 
+  // ── Layout B: World Open — adjudicator tables nested in tr.coupleInfo rows ──
+  // Each dance detail row has class "dance_COUPLENUM_N coupleInfo". Inside each row
+  // there is one <h3> (dance name) and one nested <table> (adjudicator scores).
+  // Column layout: Adjudicator | TQ | MM | PS | CP (each judge scores either TQ+PS or MM+CP).
+  $("tr.coupleInfo").each((_, infoRow) => {
+    const $ir       = $(infoRow);
+    const rowClass  = $ir.attr("class") ?? "";
+
+    // Extract couple number from class like "dance_406_3 coupleInfo dance_3"
+    const cm = rowClass.match(/dance_(\d+)_\d+/);
+    if (!cm || normNum(cm[1]) !== normNum(coupleNumber)) return;
+
+    // Round name from the parent <table>
+    const parentTbl = $ir.closest("table").get(0);
+    if (!parentTbl) return;
+    const roundName = tableRoundMap.get(parentTbl as Element) ?? "";
+    if (!roundName) return;
+
+    if (!roundData[roundName]) roundData[roundName] = { dances: [], overallPlace: 0 };
+
+    // Dance name from <h3>
+    const h3Text = $ir.find("h3").first().text().trim();
+    if (!h3Text) return;
+    const dm = h3Text.match(FINAL_DANCE_RE);
+    if (!dm) return;
+    const canonical = dm[0].replace(/\b\w/g, c => c.toUpperCase());
+
+    // Nested adjudicator table
+    const $at = $ir.find("table").first();
+    if (!$at.length) return;
+
+    // Dance total from <td class="total"> (has rowspan covering all judge rows)
+    const totalStr   = $at.find("td.total").first().text().trim();
+    const danceTotal = totalStr ? parseFloat(totalStr) : 0;
+
+    // Find column indices: TQ, MM, PS, CP by scanning all thead rows
+    let tqIdx = -1, mmIdx = -1, psIdx = -1, cpIdx = -1;
+    $at.find("thead tr").each((_, hr) => {
+      $(hr).find("th, td").each((ci, th) => {
+        const t = $(th).text().trim().toUpperCase();
+        if (t === "TQ")                         tqIdx = ci;
+        else if (t === "MM")                    mmIdx = ci;
+        else if (t === "PS")                    psIdx = ci;
+        else if (t === "CP")                    cpIdx = ci;
+      });
+    });
+    if (tqIdx < 0) tqIdx = 1;
+    if (mmIdx < 0) mmIdx = 2;
+    if (psIdx < 0) psIdx = 3;
+    if (cpIdx < 0) cpIdx = 4;
+
+    const get = (cells: string[], idx: number): number | null => {
+      if (idx < 0 || idx >= cells.length) return null;
+      const n = parseFloat(cells[idx]);
+      return isNaN(n) ? null : n;
+    };
+
+    const judgeEntries: Score3JudgeEntry[] = [];
+
+    $at.find("tbody tr").each((_, row) => {
+      const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+      if (cells.length < 2) return;
+      const name = cells[0]?.trim() ?? "";
+      if (!name || /component|result|total/i.test(name)) return;
+      if (!/[a-zA-Z]/.test(name)) return;
+
+      const tq = get(cells, tqIdx);
+      const mm = get(cells, mmIdx);
+      const ps = get(cells, psIdx);
+      const cp = get(cells, cpIdx);
+
+      // Each judge scores either TQ+PS or MM+CP, other pair is blank
+      const tqPs = (tq !== null || ps !== null) ? ((tq ?? 0) + (ps ?? 0)) : null;
+      const mmCp = (mm !== null || cp !== null) ? ((mm ?? 0) + (cp ?? 0)) : null;
+      if (tqPs === null && mmCp === null) return;
+
+      judgeEntries.push({ judge: name, tqPs, mmCp, rank: 0 });
+    });
+
+    if (judgeEntries.length === 0) return;
+
+    // Merge into existing dance entry (created by hasDanceNameJudges from summary table)
+    // or create new entry
+    const existingIdx = roundData[roundName].dances.findIndex(d => d.dance === canonical);
+    if (existingIdx >= 0) {
+      roundData[roundName].dances[existingIdx] = {
+        ...roundData[roundName].dances[existingIdx],
+        judgeEntries,
+        ...(danceTotal > 0 ? { totalScore: danceTotal } : {}),
+      };
+    } else {
+      roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: 0, totalMarks: 0, totalScore: danceTotal });
+    }
+  });
+
   // ── Split Final vs prelim rounds ──────────────────────────────────────
   let final3: Score3Round | null = null;
   const prelimRounds: Score3Round[] = [];

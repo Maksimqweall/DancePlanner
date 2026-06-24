@@ -97,6 +97,31 @@ export interface RankingEntry {
   athleteUrls: string[];
 }
 
+// ─── System 3.0 Scoring Types ─────────────────────────────────────────────────
+
+export interface Score3JudgeEntry {
+  judge: string;
+  tqPs: number | null;  // Technical Quality & Performance Standard (1-10)
+  mmCp: number | null;  // Movement & Music, Content & Presentation (1-10)
+  rank: number;         // this judge's ranking of the couple in this dance
+}
+
+export interface Score3Dance {
+  dance: string;
+  judgeEntries: Score3JudgeEntry[];
+  place: number;        // couple's place in this dance
+}
+
+export interface Score3Round {
+  roundName: string;    // "Final", "Semi-Final", etc.
+  dances: Score3Dance[];
+  overallPlace: number;
+}
+
+export interface Scores3Result {
+  rounds: Score3Round[];
+}
+
 export interface CompetitionAnalytics {
   competitionSlug: string;
   competitionName: string;
@@ -105,6 +130,7 @@ export interface CompetitionAnalytics {
   coupleName: string;
   rounds: PrelimRound[];
   final: FinalResult | null;
+  scores3: Scores3Result | null;
   danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
   judgeStats: { judge: string; totalCrosses: number; pct: number }[];
   totalPossibleCrosses: number;
@@ -150,6 +176,7 @@ function buildCompUrls(slugOrUrl: string) {
     ranking:  `${WDSF_BASE}/Competitions/Ranking/${slug}`,
     marks:    `${WDSF_BASE}/Competitions/Marks/${slug}`,
     final:    `${WDSF_BASE}/Competitions/Final/${slug}`,
+    scores:   `${WDSF_BASE}/Competitions/Scores/${slug}`,
     officials:`${WDSF_BASE}/Competitions/Officials/${slug}`,
   };
 }
@@ -732,6 +759,219 @@ async function scrapeFinalPage(finalUrl: string, coupleNumber: string): Promise<
   return { dances: danceResults, overallPlace, judgeAvgPlaces };
 }
 
+// ─── System 3.0 Scores page scraper ──────────────────────────────────────────
+
+/** Parse a cell that contains "7.800\n2" or "7.8002" → { score, rank } */
+function parseScore3Cell(raw: string): { score: number; rank: number } | null {
+  const scoreMatch = raw.match(/(\d+\.\d+)/);
+  if (!scoreMatch) return null;
+  const score = parseFloat(scoreMatch[1]);
+  const afterScore = raw.slice(raw.indexOf(scoreMatch[1]) + scoreMatch[1].length);
+  const rankMatch = afterScore.match(/(\d+)/);
+  const rank = rankMatch ? parseInt(rankMatch[1], 10) : 0;
+  return { score, rank };
+}
+
+async function scrapeScoresPage(
+  scoresUrl: string,
+  coupleNumber: string,
+): Promise<Scores3Result | null> {
+  const res = await fetch(scoresUrl, { headers: FETCH_HEADERS });
+  if (!res.ok) return null;
+  const $ = load(await res.text());
+
+  // Validate that this is really a 3.0 scores page (decimal judge scores, not crosses)
+  const pageText = $("body").text();
+  if (!/\d+\.\d{2,3}/.test(pageText)) return null;
+
+  // Map each table to its preceding round heading and dance heading.
+  // Structure: h2 "Final" / h3 "Waltz" → table, h3 "Tango" → table, …
+  const tableRoundMap = new Map<Element, string>();
+  const tableDanceMap = new Map<Element, string>();
+  {
+    let curRound = "Final";
+    let curDance = "";
+    $("h1, h2, h3, h4, h5, table").each((_, el) => {
+      if ($(el).is("table")) {
+        tableRoundMap.set(el as Element, curRound);
+        tableDanceMap.set(el as Element, curDance);
+        curDance = "";
+      } else {
+        const t = $(el).text().trim();
+        if (!t || t.length > 80) return;
+        if (FINAL_DANCE_RE.test(t)) {
+          curDance = t;
+        } else if (/\bfinal\b|\bsemi\b|\bquarter\b|\bsf\b|\bqf\b/i.test(t)) {
+          curRound = t;
+          curDance = "";
+        }
+      }
+    });
+  }
+
+  // colKind for Score 3.0 column map
+  type S3Col =
+    | { kind: "couple" }
+    | { kind: "place" }
+    | { kind: "skip" }
+    | { kind: "score"; judge: string; criterion: "TQ & PS" | "MM & CP" | "score" };
+
+  // accumulate results per round
+  const roundData: Record<string, { dances: Score3Dance[]; overallPlace: number }> = {};
+
+  $("table").each((_, table) => {
+    const $t = $(table);
+    const roundName = tableRoundMap.get(table as Element) ?? "Final";
+    const danceName = tableDanceMap.get(table as Element) ?? "";
+    const theadText = $t.find("thead").text();
+
+    const danceMatch = (danceName + " " + theadText).match(FINAL_DANCE_RE);
+
+    if (!roundData[roundName]) roundData[roundName] = { dances: [], overallPlace: 0 };
+
+    if (!danceMatch) {
+      // Summary table (Rule 9 / overall) — extract overall place
+      const hdrs: string[] = [];
+      $t.find("thead th, thead td").each((_, el) => { hdrs.push($(el).text().trim().toLowerCase()); });
+      let placeColIdx = -1;
+      for (let i = hdrs.length - 1; i >= 0; i--) {
+        if (hdrs[i] === "place" || hdrs[i] === "rank") { placeColIdx = i; break; }
+      }
+      $t.find("tbody tr").each((_, row) => {
+        const cells = $(row).find("td").map((_, td) => $(td).text().trim()).get();
+        if (!cells.length || rowHasCoupleNum(cells, coupleNumber, 3) < 0) return;
+        if (placeColIdx >= 0 && placeColIdx < cells.length) {
+          const p = parseInt(cells[placeColIdx], 10);
+          if (!isNaN(p) && p >= 1) roundData[roundName].overallPlace = p;
+        } else {
+          for (let i = cells.length - 1; i >= Math.max(0, cells.length - 4); i--) {
+            const p = parseInt(cells[i], 10);
+            if (!isNaN(p) && p >= 1 && p <= 200) { roundData[roundName].overallPlace = p; break; }
+          }
+        }
+      });
+      return;
+    }
+
+    // ── Parse 2-row thead into column map ─────────────────────────────────
+    const headerRows = $t.find("thead tr").toArray();
+    if (!headerRows.length) return;
+
+    const totalCols = $(headerRows[0]).find("th, td").toArray()
+      .reduce((s, el) => s + parseInt($(el).attr("colspan") ?? "1", 10), 0);
+
+    const colMap: S3Col[] = Array.from({ length: totalCols }, () => ({ kind: "skip" } as S3Col));
+    const rowspanned = new Set<number>();
+
+    for (let ri = 0; ri < Math.min(headerRows.length, 2); ri++) {
+      const ths = $(headerRows[ri]).find("th, td").toArray();
+      let ci = 0;
+      for (const th of ths) {
+        while (rowspanned.has(ci)) ci++;
+        const raw = $(th).text().trim();
+        const lower = raw.toLowerCase();
+        const colspan = parseInt($(th).attr("colspan") ?? "1", 10);
+        const rowspan = parseInt($(th).attr("rowspan") ?? "1", 10);
+
+        for (let k = 0; k < colspan; k++) {
+          const idx = ci + k;
+          if (idx >= colMap.length) break;
+
+          if (ri === 0) {
+            if (lower === "couple" || lower === "#" || lower === "nr" || lower === "no") {
+              colMap[idx] = { kind: "couple" };
+            } else if (lower === "place" || lower === "rank" || lower === "pos") {
+              colMap[idx] = { kind: "place" };
+            } else if (raw && /[a-zA-Z]/.test(raw)) {
+              colMap[idx] = { kind: "score", judge: raw, criterion: "score" };
+            }
+          } else {
+            // Row 1 refines the criterion for judge columns
+            const existing = colMap[idx];
+            if (existing.kind === "score") {
+              const crit: "TQ & PS" | "MM & CP" | "score" =
+                /tq|ps/i.test(lower) ? "TQ & PS" :
+                /mm|cp/i.test(lower) ? "MM & CP" : "score";
+              colMap[idx] = { ...existing, criterion: crit };
+            }
+          }
+          if (rowspan > 1) rowspanned.add(idx);
+        }
+        ci += colspan;
+      }
+    }
+
+    // Check if we found any judge columns with decimal scores
+    const hasJudgeCols = colMap.some(c => c.kind === "score");
+    if (!hasJudgeCols) return;
+
+    const canonical = danceMatch[0].replace(/\b\w/g, c => c.toUpperCase());
+    const judgeEntryMap: Record<string, { tqPs: number | null; mmCp: number | null; rank: number }> = {};
+    let dancePlace = 0;
+    let found = false;
+
+    $t.find("tbody tr").each((_, row) => {
+      const rawCells = $(row).find("td").toArray();
+      if (!rawCells.length) return;
+      const cellTexts = rawCells.map(td => $(td).text().trim());
+
+      // Match our couple
+      const coupleColIdx = colMap.findIndex(c => c.kind === "couple");
+      let isOurs = false;
+      if (coupleColIdx >= 0 && coupleColIdx < cellTexts.length) {
+        isOurs = normNum(cellTexts[coupleColIdx]) === normNum(coupleNumber);
+      } else {
+        isOurs = rowHasCoupleNum(cellTexts, coupleNumber, 3) >= 0;
+      }
+      if (!isOurs) return;
+
+      found = true;
+
+      for (let i = 0; i < Math.min(colMap.length, cellTexts.length); i++) {
+        const col = colMap[i];
+        if (col.kind !== "score") continue;
+        const parsed = parseScore3Cell(cellTexts[i]);
+        if (!parsed) continue;
+        if (!judgeEntryMap[col.judge]) {
+          judgeEntryMap[col.judge] = { tqPs: null, mmCp: null, rank: parsed.rank };
+        }
+        const ent = judgeEntryMap[col.judge];
+        if (col.criterion === "TQ & PS") ent.tqPs = parsed.score;
+        else if (col.criterion === "MM & CP") ent.mmCp = parsed.score;
+        else ent.tqPs = parsed.score;       // single-score fallback
+        if (parsed.rank > 0) ent.rank = parsed.rank;
+      }
+
+      // Extract dance place from the place column or last integer cell
+      const placeColIdx = colMap.findIndex(c => c.kind === "place");
+      if (placeColIdx >= 0 && placeColIdx < cellTexts.length) {
+        const p = parseInt(cellTexts[placeColIdx], 10);
+        if (!isNaN(p) && p >= 1) dancePlace = p;
+      } else {
+        for (let i = cellTexts.length - 1; i >= Math.max(0, cellTexts.length - 4); i--) {
+          const p = parseInt(cellTexts[i], 10);
+          if (!isNaN(p) && p >= 1 && p <= 200) { dancePlace = p; break; }
+        }
+      }
+    });
+
+    if (!found) return;
+
+    const judgeEntries: Score3JudgeEntry[] = Object.entries(judgeEntryMap)
+      .filter(([j]) => j && /[a-zA-Z]/.test(j))
+      .map(([judge, { tqPs, mmCp, rank }]) => ({ judge, tqPs, mmCp, rank }))
+      .sort((a, b) => a.rank - b.rank);
+
+    roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: dancePlace });
+  });
+
+  const rounds: Score3Round[] = Object.entries(roundData)
+    .filter(([, { dances }]) => dances.length > 0)
+    .map(([roundName, { dances, overallPlace }]) => ({ roundName, dances, overallPlace }));
+
+  return rounds.length ? { rounds } : null;
+}
+
 // ─── Main analytics scraper ───────────────────────────────────────────────────
 
 export async function scrapeCompetitionAnalytics(
@@ -753,10 +993,11 @@ export async function scrapeCompetitionAnalytics(
   const coupleNumber = myEntry.coupleNumber;
   const coupleName   = myEntry.coupleName;
 
-  // Step 2: Marks + Final + Officials (parallel)
-  const [rounds, final, judgeNames] = await Promise.all([
+  // Step 2: Marks + Final + Scores (3.0) + Officials (parallel)
+  const [rounds, final, scores3, judgeNames] = await Promise.all([
     scrapeMarksPage(urls.marks, coupleNumber, coupleName),
     scrapeFinalPage(urls.final, coupleNumber),
+    scrapeScoresPage(urls.scores, coupleNumber),
     scrapeOfficialsPage(urls.officials),
   ]);
 
@@ -814,6 +1055,7 @@ export async function scrapeCompetitionAnalytics(
     coupleName,
     rounds,
     final,
+    scores3,
     danceStats,
     judgeStats,
     totalPossibleCrosses: totalPossible,

@@ -88,6 +88,31 @@ export interface RankingEntry {
   athleteUrls: string[];
 }
 
+// ─── System 3.0 Types ─────────────────────────────────────────────────────────
+
+export interface Score3JudgeEntry {
+  judge: string;
+  tqPs: number | null;
+  mmCp: number | null;
+  rank: number;
+}
+
+export interface Score3Dance {
+  dance: string;
+  judgeEntries: Score3JudgeEntry[];
+  place: number;
+}
+
+export interface Score3Round {
+  roundName: string;
+  dances: Score3Dance[];
+  overallPlace: number;
+}
+
+export interface Scores3Result {
+  rounds: Score3Round[];
+}
+
 export interface CompetitionAnalytics {
   competitionSlug: string;
   competitionName: string;
@@ -96,6 +121,7 @@ export interface CompetitionAnalytics {
   coupleName: string;
   rounds: PrelimRound[];
   final: FinalResult | null;
+  scores3: Scores3Result | null;
   danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
   judgeStats: { judge: string; totalCrosses: number; pct: number }[];
   totalPossibleCrosses: number;

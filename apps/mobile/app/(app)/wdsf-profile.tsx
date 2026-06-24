@@ -24,6 +24,7 @@ import {
   type CompetitionAnalytics,
   type PrelimRound,
   type FinalResult,
+  type Score3Round,
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import type { Palette } from "../../lib/theme";
@@ -347,7 +348,7 @@ function CompetitionAnalyticsModal({
   const url = comp.competitionUrl!;
   const isLoading  = analyticsLoading[url] ?? false;
   const analytics  = analyticsCache[url];
-  const [tab, setTab] = useState<"overview" | "marks" | "final" | "compare">("overview");
+  const [tab, setTab] = useState<"overview" | "marks" | "scores3" | "final" | "compare">("overview");
   const [loadedOnce, setLoadedOnce] = useState(false);
 
   // Auto-load on open
@@ -368,12 +369,13 @@ function CompetitionAnalyticsModal({
     return Math.max(1, ...analytics.judgeStats.map(j => j.totalCrosses));
   }, [analytics]);
 
-  const tabs = [
+  const tabs: { key: "overview" | "marks" | "scores3" | "final" | "compare"; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "marks",    label: "Crosses" },
+    ...(analytics?.scores3 ? [{ key: "scores3" as const, label: "Scores 3.0" }] : []),
     { key: "final",    label: "Final" },
     { key: "compare",  label: "Compare" },
-  ] as const;
+  ];
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -422,6 +424,7 @@ function CompetitionAnalyticsModal({
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
             {tab === "overview" && <OverviewTab analytics={analytics} comp={comp} />}
             {tab === "marks"    && <CrossesTab analytics={analytics} maxCrosses={maxCrosses} maxJudge={maxJudgeCrosses} />}
+            {tab === "scores3"  && <Scores3Tab scores3={analytics.scores3!} judgeNames={analytics.judgeNames} />}
             {tab === "final"    && <FinalTab final={analytics.final} judgeNames={analytics.judgeNames} />}
             {tab === "compare"  && <CompareTab analytics={analytics} />}
             <View style={{ height: 40 }} />
@@ -727,6 +730,211 @@ function CrossesTab({ analytics, maxCrosses, maxJudge }: {
           </Text>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+// ─── Tab: Scores 3.0 ──────────────────────────────────────────────────────────
+
+function Scores3Tab({ scores3, judgeNames }: {
+  scores3: import("../../store/useWdsfStore").Scores3Result;
+  judgeNames: Record<string, string>;
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const [selectedRound, setSelectedRound] = useState(0);
+
+  const round: Score3Round = scores3.rounds[selectedRound];
+  if (!round) {
+    return (
+      <View style={[s.emptyCenter, { margin: 24 }]}>
+        <Text style={s.emptyText}>No System 3.0 data available.</Text>
+      </View>
+    );
+  }
+
+  // Compute per-judge averages across all dances in this round
+  const judgeAvgMap: Record<string, { total: number; count: number }> = {};
+  for (const d of round.dances) {
+    for (const je of d.judgeEntries) {
+      const score = je.tqPs !== null && je.mmCp !== null
+        ? (je.tqPs + je.mmCp) / 2
+        : (je.tqPs ?? je.mmCp ?? 0);
+      if (!judgeAvgMap[je.judge]) judgeAvgMap[je.judge] = { total: 0, count: 0 };
+      judgeAvgMap[je.judge].total  += score;
+      judgeAvgMap[je.judge].count  += 1;
+    }
+  }
+  const judgeAvgs = Object.entries(judgeAvgMap)
+    .map(([judge, { total, count }]) => ({ judge, avg: count > 0 ? total / count : 0 }))
+    .sort((a, b) => b.avg - a.avg);
+
+  const maxJudgeAvg = Math.max(1, ...judgeAvgs.map(j => j.avg));
+
+  // Per-dance average score
+  const danceAvgs = round.dances.map(d => {
+    const scores: number[] = [];
+    for (const je of d.judgeEntries) {
+      const sc = je.tqPs !== null && je.mmCp !== null
+        ? (je.tqPs + je.mmCp) / 2
+        : (je.tqPs ?? je.mmCp ?? 0);
+      if (sc > 0) scores.push(sc);
+    }
+    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    return { dance: d.dance, avg, place: d.place };
+  });
+  const maxDanceAvg = Math.max(1, ...danceAvgs.map(d => d.avg));
+
+  // TQ&PS vs MM&CP overall averages
+  let tqPsTotal = 0, tqPsCount = 0, mmCpTotal = 0, mmCpCount = 0;
+  for (const d of round.dances) {
+    for (const je of d.judgeEntries) {
+      if (je.tqPs !== null) { tqPsTotal += je.tqPs; tqPsCount++; }
+      if (je.mmCp !== null) { mmCpTotal += je.mmCp; mmCpCount++; }
+    }
+  }
+  const tqPsAvg = tqPsCount > 0 ? tqPsTotal / tqPsCount : null;
+  const mmCpAvg = mmCpCount > 0 ? mmCpTotal / mmCpCount : null;
+  const hasBothCriteria = tqPsAvg !== null && mmCpAvg !== null;
+
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+
+      {/* Round selector */}
+      {scores3.rounds.length > 1 && (
+        <View style={s.roundFilterRow}>
+          {scores3.rounds.map((r, i) => (
+            <TouchableOpacity
+              key={r.roundName}
+              style={[s.roundFilterChip, selectedRound === i && s.roundFilterChipActive]}
+              onPress={() => setSelectedRound(i)}
+            >
+              <Text style={[s.roundFilterChipText, selectedRound === i && s.roundFilterChipTextActive]}>
+                {r.roundName}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Overall place banner */}
+      {round.overallPlace > 0 && (
+        <View style={s.finalPlaceBanner}>
+          <Text style={s.finalPlaceNum}>{round.overallPlace}</Text>
+          <Text style={s.finalPlaceLabel}>Place — {round.roundName}</Text>
+        </View>
+      )}
+
+      {/* Dance scores */}
+      {danceAvgs.length > 0 && (
+        <>
+          <SectionHeader title="Average Score Per Dance" subtitle="From all judges" />
+          <View style={s.sectionCard}>
+            {danceAvgs.map((d, i) => (
+              <View key={d.dance} style={[s.barRow, i < danceAvgs.length - 1 && s.rowBorder]}>
+                <Text style={s.barRowLabel}>{d.dance}</Text>
+                <View style={s.barRowTrack}>
+                  <View style={[s.barRowFill, { width: `${Math.round((d.avg / maxDanceAvg) * 100)}%`, backgroundColor: C.accent }]} />
+                </View>
+                <Text style={s.barRowVal}>
+                  {d.avg.toFixed(2)}
+                  {d.place > 0 ? <Text style={s.barRowPct}> (#{d.place})</Text> : null}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* TQ&PS vs MM&CP */}
+      {hasBothCriteria && (
+        <>
+          <SectionHeader title="Criteria Breakdown" subtitle="Technical vs Artistic average" />
+          <View style={s.sectionCard}>
+            {[
+              { label: "TQ & PS", value: tqPsAvg!, color: C.accent },
+              { label: "MM & CP", value: mmCpAvg!, color: C.purple },
+            ].map((item, i) => (
+              <View key={item.label} style={[s.barRow, i === 0 && s.rowBorder]}>
+                <Text style={s.barRowLabel}>{item.label}</Text>
+                <View style={s.barRowTrack}>
+                  <View style={[s.barRowFill, { width: `${Math.round((item.value / 10) * 100)}%`, backgroundColor: item.color }]} />
+                </View>
+                <Text style={s.barRowVal}>{item.value.toFixed(2)}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* Judge analysis */}
+      {judgeAvgs.length > 0 && (
+        <>
+          <SectionHeader title="Judge Scores" subtitle="Highest → lowest avg" />
+          <View style={s.sectionCard}>
+            {judgeAvgs.map((j, i) => {
+              const isFirst  = i === 0;
+              const isLast   = i === judgeAvgs.length - 1;
+              const barColor = isFirst ? C.gold : isLast ? C.red : C.accent;
+              const nameColor = isFirst ? C.gold : isLast ? C.red : C.t1;
+              return (
+                <View key={j.judge} style={[s.barRow, i < judgeAvgs.length - 1 && s.rowBorder]}>
+                  <Text style={[s.judgeNameLabel, { color: nameColor }]} numberOfLines={1}>
+                    {jFullName(j.judge, judgeNames)}
+                  </Text>
+                  <View style={s.barRowTrack}>
+                    <View style={[s.barRowFill, { width: `${Math.round((j.avg / maxJudgeAvg) * 100)}%`, backgroundColor: barColor }]} />
+                  </View>
+                  <Text style={s.barRowVal}>{j.avg.toFixed(2)}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <View style={s.judgeInsightRow}>
+            <View style={s.judgeInsightCard}>
+              <Text style={s.judgeInsightIcon}>🏅</Text>
+              <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Highest Score</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(judgeAvgs[0].judge, judgeNames)}</Text>
+              <Text style={s.judgeInsightVal}>{judgeAvgs[0].avg.toFixed(2)}</Text>
+            </View>
+            <View style={s.judgeInsightCard}>
+              <Text style={s.judgeInsightIcon}>📉</Text>
+              <Text style={[s.judgeInsightLabel, { color: C.red }]}>Lowest Score</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(judgeAvgs[judgeAvgs.length - 1].judge, judgeNames)}</Text>
+              <Text style={s.judgeInsightVal}>{judgeAvgs[judgeAvgs.length - 1].avg.toFixed(2)}</Text>
+            </View>
+          </View>
+        </>
+      )}
+
+      {/* Per-dance detail with per-judge scores */}
+      <SectionHeader title="Detailed Scores" subtitle="Per dance · per judge" />
+      {round.dances.map(d => (
+        <View key={d.dance} style={[s.sectionCard, { marginBottom: 8 }]}>
+          <View style={s.roundHeader}>
+            <Text style={s.roundHeaderTitle}>{d.dance}</Text>
+            {d.place > 0 && <Text style={s.roundHeaderTotal}>Place #{d.place}</Text>}
+          </View>
+          <View style={s.roundExpanded}>
+            {d.judgeEntries.map((je, i) => {
+              const score = je.tqPs !== null && je.mmCp !== null
+                ? (je.tqPs + je.mmCp) / 2
+                : (je.tqPs ?? je.mmCp ?? 0);
+              return (
+                <View key={je.judge} style={[s.crossRow, i < d.judgeEntries.length - 1 && s.rowBorder]}>
+                  <Text style={s.crossJudge} numberOfLines={1}>{jFullName(je.judge, judgeNames)}</Text>
+                  <View style={s.crossScores3}>
+                    {je.tqPs !== null && <Text style={s.score3Chip}>{`TQ ${je.tqPs.toFixed(1)}`}</Text>}
+                    {je.mmCp !== null && <Text style={[s.score3Chip, { backgroundColor: C.purple + "22" }]}>{`MM ${je.mmCp.toFixed(1)}`}</Text>}
+                    {je.tqPs === null && je.mmCp === null && <Text style={s.score3Chip}>{score.toFixed(2)}</Text>}
+                  </View>
+                  <Text style={s.crossRank}>#{je.rank}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -1304,6 +1512,19 @@ function makeStyles(C: Palette) {
   },
   roundDanceName:   { color: C.t1, fontSize: 13, fontWeight: "700" },
   roundDanceCrosses:{ color: C.t2, fontSize: 12 },
+
+  // Scores 3.0 detail rows
+  crossRow:    { flexDirection: "row", alignItems: "center", paddingVertical: 8, gap: 6 },
+  crossJudge:  { color: C.t1, fontSize: 12, fontWeight: "600", width: 110, flexShrink: 1 },
+  crossScores3:{ flexDirection: "row", flex: 1, gap: 4, flexWrap: "wrap" },
+  crossRank:   { color: C.t3, fontSize: 11, fontWeight: "600", width: 28, textAlign: "right" },
+  score3Chip: {
+    backgroundColor: C.accent + "22",
+    borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
+    fontSize: 12, fontWeight: "700", color: C.t1,
+  },
+  emptyCenter: { alignItems: "center", justifyContent: "center", padding: 24 },
+  emptyText:   { color: C.t3, fontSize: 14, textAlign: "center" },
 
   crossGrid:     { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingBottom: 8 },
   crossCell: {

@@ -789,8 +789,9 @@ function Scores3Tab({ scores3, judgeNames }: {
       avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     }
     return { dance: d.dance, avg, place: d.place };
-  });
+  }).sort((a, b) => b.avg - a.avg);
   const maxDanceAvg = Math.max(1, ...danceAvgs.map(d => d.avg));
+  const totalDanceScore = danceAvgs.reduce((s, d) => s + d.avg, 0);
 
   // TQ&PS vs MM&CP overall averages (only meaningful when judge data present)
   let tqPsTotal = 0, tqPsCount = 0, mmCpTotal = 0, mmCpCount = 0;
@@ -835,13 +836,16 @@ function Scores3Tab({ scores3, judgeNames }: {
       {/* Dance scores */}
       {danceAvgs.length > 0 && (
         <>
-          <SectionHeader title="Average Score Per Dance" subtitle="From all judges" />
+          <SectionHeader
+            title={hasJudgeData ? "Average Score Per Dance" : "Score Per Dance"}
+            subtitle={hasJudgeData ? "Avg across all judges" : "Total points (all judges combined)"}
+          />
           <View style={s.sectionCard}>
             {danceAvgs.map((d, i) => (
               <View key={d.dance} style={[s.barRow, i < danceAvgs.length - 1 && s.rowBorder]}>
-                <Text style={s.barRowLabel}>{d.dance}</Text>
+                <Text style={[s.barRowLabel, { color: i === 0 ? C.gold : i === danceAvgs.length - 1 ? C.red : C.t1 }]}>{d.dance}</Text>
                 <View style={s.barRowTrack}>
-                  <View style={[s.barRowFill, { width: `${Math.round((d.avg / maxDanceAvg) * 100)}%`, backgroundColor: C.accent }]} />
+                  <View style={[s.barRowFill, { width: `${Math.round((d.avg / maxDanceAvg) * 100)}%`, backgroundColor: i === 0 ? C.gold : i === danceAvgs.length - 1 ? C.red : C.accent }]} />
                 </View>
                 <Text style={s.barRowVal}>
                   {d.avg.toFixed(2)}
@@ -850,6 +854,28 @@ function Scores3Tab({ scores3, judgeNames }: {
               </View>
             ))}
           </View>
+          {/* Dance insight cards — always shown (judge cards shown separately only when judge data exists) */}
+          <View style={s.judgeInsightRow}>
+            <View style={s.judgeInsightCard}>
+              <Text style={s.judgeInsightIcon}>🥇</Text>
+              <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Best Dance</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{danceAvgs[0]?.dance}</Text>
+              <Text style={s.judgeInsightVal}>{danceAvgs[0]?.avg.toFixed(2)}</Text>
+            </View>
+            <View style={s.judgeInsightCard}>
+              <Text style={s.judgeInsightIcon}>📉</Text>
+              <Text style={[s.judgeInsightLabel, { color: C.red }]}>Needs Work</Text>
+              <Text style={s.judgeInsightName} numberOfLines={1}>{danceAvgs[danceAvgs.length - 1]?.dance}</Text>
+              <Text style={s.judgeInsightVal}>{danceAvgs[danceAvgs.length - 1]?.avg.toFixed(2)}</Text>
+            </View>
+          </View>
+          {/* Total score summary (meaningful for multi-dance tables) */}
+          {!hasJudgeData && (
+            <View style={[s.sectionCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 }]}>
+              <Text style={[s.barRowLabel, { fontWeight: "600" }]}>Total Score</Text>
+              <Text style={[s.barRowVal, { fontSize: 18, fontWeight: "700", color: C.accent }]}>{totalDanceScore.toFixed(2)}</Text>
+            </View>
+          )}
         </>
       )}
 
@@ -980,6 +1006,7 @@ function FinalTab({ final, final3, judgeNames }: {
   if (final3 && (!final || final.dances.length === 0)) {
     const f3OverallPlace = final3.overallPlace > 0 ? final3.overallPlace : (final?.overallPlace ?? 0);
 
+    const hasF3JudgeData = final3.dances.some(d => d.judgeEntries.length > 0);
     const danceAvgs = final3.dances.map(d => {
       let avg: number;
       if (d.totalScore > 0) {
@@ -994,8 +1021,9 @@ function FinalTab({ final, final3, judgeNames }: {
         avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
       }
       return { dance: d.dance, avg, place: d.place };
-    });
+    }).sort((a, b) => b.avg - a.avg);
     const maxDA = Math.max(1, ...danceAvgs.map(d => d.avg));
+    const totalF3Score = danceAvgs.reduce((s, d) => s + d.avg, 0);
 
     const judgeAvgMap: Record<string, { total: number; count: number }> = {};
     for (const d of final3.dances) {
@@ -1019,13 +1047,16 @@ function FinalTab({ final, final3, judgeNames }: {
             <Text style={s.finalPlaceLabel}>Final Place (System 3.0)</Text>
           </View>
         )}
-        <SectionHeader title="Dance Scores" subtitle="Avg across all judges" />
+        <SectionHeader
+          title="Dance Scores"
+          subtitle={hasF3JudgeData ? "Avg across all judges" : "Total points (all judges combined)"}
+        />
         <View style={s.sectionCard}>
           {danceAvgs.map((d, i) => (
             <View key={d.dance} style={[s.barRow, i < danceAvgs.length - 1 && s.rowBorder]}>
-              <Text style={s.barRowLabel}>{d.dance}</Text>
+              <Text style={[s.barRowLabel, { color: i === 0 ? C.gold : i === danceAvgs.length - 1 ? C.red : C.t1 }]}>{d.dance}</Text>
               <View style={s.barRowTrack}>
-                <View style={[s.barRowFill, { width: `${Math.round((d.avg / maxDA) * 100)}%`, backgroundColor: C.accent }]} />
+                <View style={[s.barRowFill, { width: `${Math.round((d.avg / maxDA) * 100)}%`, backgroundColor: i === 0 ? C.gold : i === danceAvgs.length - 1 ? C.red : C.accent }]} />
               </View>
               <Text style={s.barRowVal}>
                 {d.avg.toFixed(2)}{d.place > 0 ? <Text style={s.barRowPct}> (#{d.place})</Text> : null}
@@ -1033,6 +1064,28 @@ function FinalTab({ final, final3, judgeNames }: {
             </View>
           ))}
         </View>
+        {/* Dance insight cards */}
+        <View style={s.judgeInsightRow}>
+          <View style={s.judgeInsightCard}>
+            <Text style={s.judgeInsightIcon}>🥇</Text>
+            <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Best Dance</Text>
+            <Text style={s.judgeInsightName} numberOfLines={1}>{danceAvgs[0]?.dance}</Text>
+            <Text style={s.judgeInsightVal}>{danceAvgs[0]?.avg.toFixed(2)}</Text>
+          </View>
+          <View style={s.judgeInsightCard}>
+            <Text style={s.judgeInsightIcon}>📉</Text>
+            <Text style={[s.judgeInsightLabel, { color: C.red }]}>Needs Work</Text>
+            <Text style={s.judgeInsightName} numberOfLines={1}>{danceAvgs[danceAvgs.length - 1]?.dance}</Text>
+            <Text style={s.judgeInsightVal}>{danceAvgs[danceAvgs.length - 1]?.avg.toFixed(2)}</Text>
+          </View>
+        </View>
+        {/* Total score summary (when no per-judge breakdown) */}
+        {!hasF3JudgeData && (
+          <View style={[s.sectionCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 }]}>
+            <Text style={[s.barRowLabel, { fontWeight: "600" }]}>Total Score</Text>
+            <Text style={[s.barRowVal, { fontSize: 18, fontWeight: "700", color: C.accent }]}>{totalF3Score.toFixed(2)}</Text>
+          </View>
+        )}
         {judgeAvgs.length > 0 && (
           <>
             <SectionHeader title="Judge Scores" subtitle="Highest → lowest avg" />
@@ -1051,6 +1104,20 @@ function FinalTab({ final, final3, judgeNames }: {
                   </View>
                 );
               })}
+            </View>
+            <View style={s.judgeInsightRow}>
+              <View style={s.judgeInsightCard}>
+                <Text style={s.judgeInsightIcon}>🏅</Text>
+                <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Liked Us Most</Text>
+                <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(judgeAvgs[0]?.judge, judgeNames)}</Text>
+                <Text style={s.judgeInsightVal}>{judgeAvgs[0]?.avg.toFixed(2)}</Text>
+              </View>
+              <View style={s.judgeInsightCard}>
+                <Text style={s.judgeInsightIcon}>📊</Text>
+                <Text style={[s.judgeInsightLabel, { color: C.t2 }]}>Strictest Judge</Text>
+                <Text style={s.judgeInsightName} numberOfLines={1}>{jLastName(judgeAvgs[judgeAvgs.length - 1]?.judge, judgeNames)}</Text>
+                <Text style={s.judgeInsightVal}>{judgeAvgs[judgeAvgs.length - 1]?.avg.toFixed(2)}</Text>
+              </View>
             </View>
           </>
         )}

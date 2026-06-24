@@ -102,6 +102,7 @@ export interface Score3Dance {
   judgeEntries: Score3JudgeEntry[];
   place: number;       // dance place in Final rounds; 0 for prelim
   totalMarks: number;  // total criteria marks in prelim rounds; 0 for Final
+  totalScore: number;  // sum of all judge scores (multi-dance table layout); 0 otherwise
 }
 
 export interface Score3Round {

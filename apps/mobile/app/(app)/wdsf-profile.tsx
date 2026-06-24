@@ -753,7 +753,9 @@ function Scores3Tab({ scores3, judgeNames }: {
     );
   }
 
-  // Compute per-judge averages across all dances in this round
+  const hasJudgeData = round.dances.some(d => d.judgeEntries.length > 0);
+
+  // Compute per-judge averages across all dances in this round (only when judge data exists)
   const judgeAvgMap: Record<string, { total: number; count: number }> = {};
   for (const d of round.dances) {
     for (const je of d.judgeEntries) {
@@ -771,21 +773,26 @@ function Scores3Tab({ scores3, judgeNames }: {
 
   const maxJudgeAvg = Math.max(1, ...judgeAvgs.map(j => j.avg));
 
-  // Per-dance average score
+  // Per-dance score: use totalScore for multi-dance tables, else avg from judge entries
   const danceAvgs = round.dances.map(d => {
-    const scores: number[] = [];
-    for (const je of d.judgeEntries) {
-      const sc = je.tqPs !== null && je.mmCp !== null
-        ? (je.tqPs + je.mmCp) / 2
-        : (je.tqPs ?? je.mmCp ?? 0);
-      if (sc > 0) scores.push(sc);
+    let avg: number;
+    if (d.totalScore > 0) {
+      avg = d.totalScore;
+    } else {
+      const scores: number[] = [];
+      for (const je of d.judgeEntries) {
+        const sc = je.tqPs !== null && je.mmCp !== null
+          ? (je.tqPs + je.mmCp) / 2
+          : (je.tqPs ?? je.mmCp ?? 0);
+        if (sc > 0) scores.push(sc);
+      }
+      avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     }
-    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     return { dance: d.dance, avg, place: d.place };
   });
   const maxDanceAvg = Math.max(1, ...danceAvgs.map(d => d.avg));
 
-  // TQ&PS vs MM&CP overall averages
+  // TQ&PS vs MM&CP overall averages (only meaningful when judge data present)
   let tqPsTotal = 0, tqPsCount = 0, mmCpTotal = 0, mmCpCount = 0;
   for (const d of round.dances) {
     for (const je of d.judgeEntries) {
@@ -907,38 +914,44 @@ function Scores3Tab({ scores3, judgeNames }: {
         </>
       )}
 
-      {/* Per-dance detail with per-judge scores */}
-      <SectionHeader title="Detailed Scores" subtitle="Per dance · per judge" />
-      {round.dances.map(d => (
-        <View key={d.dance} style={[s.sectionCard, { marginBottom: 8 }]}>
-          <View style={s.roundHeader}>
-            <Text style={s.roundHeaderTitle}>{d.dance}</Text>
-            {d.place > 0
-              ? <Text style={s.roundHeaderTotal}>Place #{d.place}</Text>
-              : d.totalMarks > 0
-                ? <Text style={s.roundHeaderTotal}>{d.totalMarks} marks</Text>
-                : null}
-          </View>
-          <View style={s.roundExpanded}>
-            {d.judgeEntries.map((je, i) => {
-              const score = je.tqPs !== null && je.mmCp !== null
-                ? (je.tqPs + je.mmCp) / 2
-                : (je.tqPs ?? je.mmCp ?? 0);
-              return (
-                <View key={je.judge} style={[s.crossRow, i < d.judgeEntries.length - 1 && s.rowBorder]}>
-                  <Text style={s.crossJudge} numberOfLines={1}>{jFullName(je.judge, judgeNames)}</Text>
-                  <View style={s.crossScores3}>
-                    {je.tqPs !== null && <Text style={s.score3Chip}>{`TQ ${je.tqPs.toFixed(1)}`}</Text>}
-                    {je.mmCp !== null && <Text style={[s.score3Chip, { backgroundColor: C.purple + "22" }]}>{`MM ${je.mmCp.toFixed(1)}`}</Text>}
-                    {je.tqPs === null && je.mmCp === null && <Text style={s.score3Chip}>{score.toFixed(2)}</Text>}
-                  </View>
-                  <Text style={s.crossRank}>#{je.rank}</Text>
+      {/* Per-dance detail with per-judge scores (only when judge data exists) */}
+      {hasJudgeData && (
+        <>
+          <SectionHeader title="Detailed Scores" subtitle="Per dance · per judge" />
+          {round.dances.map(d => (
+            d.judgeEntries.length > 0 ? (
+              <View key={d.dance} style={[s.sectionCard, { marginBottom: 8 }]}>
+                <View style={s.roundHeader}>
+                  <Text style={s.roundHeaderTitle}>{d.dance}</Text>
+                  {d.place > 0
+                    ? <Text style={s.roundHeaderTotal}>Place #{d.place}</Text>
+                    : d.totalMarks > 0
+                      ? <Text style={s.roundHeaderTotal}>{d.totalMarks} marks</Text>
+                      : null}
                 </View>
-              );
-            })}
-          </View>
-        </View>
-      ))}
+                <View style={s.roundExpanded}>
+                  {d.judgeEntries.map((je, i) => {
+                    const score = je.tqPs !== null && je.mmCp !== null
+                      ? (je.tqPs + je.mmCp) / 2
+                      : (je.tqPs ?? je.mmCp ?? 0);
+                    return (
+                      <View key={je.judge} style={[s.crossRow, i < d.judgeEntries.length - 1 && s.rowBorder]}>
+                        <Text style={s.crossJudge} numberOfLines={1}>{jFullName(je.judge, judgeNames)}</Text>
+                        <View style={s.crossScores3}>
+                          {je.tqPs !== null && <Text style={s.score3Chip}>{`TQ ${je.tqPs.toFixed(1)}`}</Text>}
+                          {je.mmCp !== null && <Text style={[s.score3Chip, { backgroundColor: C.purple + "22" }]}>{`MM ${je.mmCp.toFixed(1)}`}</Text>}
+                          {je.tqPs === null && je.mmCp === null && <Text style={s.score3Chip}>{score.toFixed(2)}</Text>}
+                        </View>
+                        <Text style={s.crossRank}>#{je.rank}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null
+          ))}
+        </>
+      )}
     </View>
   );
 }
@@ -963,16 +976,23 @@ function FinalTab({ final, final3, judgeNames }: {
   }
 
   // ── System 3.0 Final ────────────────────────────────────────────────────────
-  if (final3 && !final) {
-    // Competition uses System 3.0 for the Final — show 3.0 data only
+  // Also use 3.0 path when final exists but has no per-dance data (skating page was empty)
+  if (final3 && (!final || final.dances.length === 0)) {
+    const f3OverallPlace = final3.overallPlace > 0 ? final3.overallPlace : (final?.overallPlace ?? 0);
+
     const danceAvgs = final3.dances.map(d => {
-      const scores = d.judgeEntries.flatMap(je => {
-        const vals: number[] = [];
-        if (je.tqPs !== null) vals.push(je.tqPs);
-        if (je.mmCp !== null) vals.push(je.mmCp);
-        return vals;
-      });
-      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      let avg: number;
+      if (d.totalScore > 0) {
+        avg = d.totalScore;
+      } else {
+        const scores = d.judgeEntries.flatMap(je => {
+          const vals: number[] = [];
+          if (je.tqPs !== null) vals.push(je.tqPs);
+          if (je.mmCp !== null) vals.push(je.mmCp);
+          return vals;
+        });
+        avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      }
       return { dance: d.dance, avg, place: d.place };
     });
     const maxDA = Math.max(1, ...danceAvgs.map(d => d.avg));
@@ -993,9 +1013,9 @@ function FinalTab({ final, final3, judgeNames }: {
 
     return (
       <View style={{ padding: 16, gap: 12 }}>
-        {final3.overallPlace > 0 && (
+        {f3OverallPlace > 0 && (
           <View style={s.finalPlaceBanner}>
-            <Text style={s.finalPlaceNum}>{final3.overallPlace}</Text>
+            <Text style={s.finalPlaceNum}>{f3OverallPlace}</Text>
             <Text style={s.finalPlaceLabel}>Final Place (System 3.0)</Text>
           </View>
         )}

@@ -111,6 +111,7 @@ export interface Score3Dance {
   judgeEntries: Score3JudgeEntry[];
   place: number;       // couple's place in this dance (Final rounds); 0 for prelim
   totalMarks: number;  // total criteria marks (prelim rounds); 0 for Final
+  totalScore: number;  // sum of all judge scores (multi-dance table layout); 0 otherwise
 }
 
 export interface Score3Round {
@@ -991,12 +992,37 @@ async function scrapeScoresPage(
 
     if (!found) return;
 
-    const judgeEntries: Score3JudgeEntry[] = Object.entries(judgeEntryMap)
-      .filter(([j]) => j && /[a-zA-Z]/.test(j))
-      .map(([judge, { tqPs, mmCp, rank }]) => ({ judge, tqPs, mmCp, rank }))
-      .sort((a, b) => (a.rank || 999) - (b.rank || 999));
+    // Detect multi-dance table layout: judge keys are dance names (e.g. "Waltz", "Tango")
+    // instead of judge codes (e.g. "A", "B"). This happens when the page has one table
+    // per round with one score column per dance, rather than one table per dance per judge.
+    const hasDanceNameJudges = Object.keys(judgeEntryMap).some(j => FINAL_DANCE_RE.test(j));
 
-    roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: dancePlace, totalMarks });
+    if (hasDanceNameJudges) {
+      // Multi-dance table: each "judge" key is actually a dance name.
+      // Accumulate TQ&PS + MM&CP for each dance to get its total score.
+      const danceScoreAccum: Record<string, number> = {};
+      for (const [judge, { tqPs, mmCp }] of Object.entries(judgeEntryMap)) {
+        const score = (tqPs ?? 0) + (mmCp ?? 0);
+        if (score <= 0) continue;
+        const key = judge.replace(/\b\w/g, c => c.toUpperCase());
+        danceScoreAccum[key] = (danceScoreAccum[key] || 0) + score;
+      }
+      for (const [dance, totalScore] of Object.entries(danceScoreAccum)) {
+        if (totalScore <= 0) continue;
+        roundData[roundName].dances.push({ dance, judgeEntries: [], place: 0, totalMarks: 0, totalScore });
+      }
+    } else {
+      const judgeEntries: Score3JudgeEntry[] = Object.entries(judgeEntryMap)
+        .filter(([j]) => j && /[a-zA-Z]/.test(j))
+        .map(([judge, { tqPs, mmCp, rank }]) => ({ judge, tqPs, mmCp, rank }))
+        .sort((a, b) => (a.rank || 999) - (b.rank || 999));
+
+      // Skip entries with no score data — these come from summary/Rule 9 tables whose
+      // column headers happen to contain dance names but cells contain only integers.
+      if (judgeEntries.length === 0) return;
+
+      roundData[roundName].dances.push({ dance: canonical, judgeEntries, place: dancePlace, totalMarks, totalScore: 0 });
+    }
   });
 
   // ── Split Final vs prelim rounds ──────────────────────────────────────

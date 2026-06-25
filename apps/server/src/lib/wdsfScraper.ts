@@ -1186,17 +1186,27 @@ export async function scrapeCompetitionAnalytics(
 }
 
 /**
- * Fetch the System 3.0 score breakdown (Final + prelim rounds) for ANY couple at a
+ * Fetch the FULL score breakdown (both judging systems) for ANY couple at a
  * competition, by start number. Used to compare the logged-in couple against a rival
- * — the Scores page already contains every couple's per-judge data.
+ * round-by-round. Covers System 2.0 (crosses in `rounds`, skating `final`) and
+ * System 3.0 (`scores3` qualifying + `final3`), including competitions that mix both.
  */
 export async function scrapeCoupleScores(
   competitionUrl: string,
   coupleNumber: string,
-): Promise<{ scores3: Scores3Result | null; final3: Score3Round | null }> {
+): Promise<{
+  rounds: PrelimRound[];
+  final: FinalResult | null;
+  scores3: Scores3Result | null;
+  final3: Score3Round | null;
+}> {
   const urls = buildCompUrls(competitionUrl);
-  const { prelim, final3 } = await scrapeScoresPage(urls.scores, coupleNumber);
-  return { scores3: prelim, final3 };
+  const [rounds, final, scores] = await Promise.all([
+    scrapeMarksPage(urls.marks, coupleNumber, ""),
+    scrapeFinalPage(urls.final, coupleNumber),
+    scrapeScoresPage(urls.scores, coupleNumber),
+  ]);
+  return { rounds, final, scores3: scores.prelim, final3: scores.final3 };
 }
 
 // ─── Main profile scraper ─────────────────────────────────────────────────────

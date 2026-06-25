@@ -148,10 +148,12 @@ export interface CompetitionAnalytics {
   judgeNames: Record<string, string>;
 }
 
-// One rival couple's System 3.0 breakdown (for side-by-side comparison)
+// One rival couple's full breakdown across both judging systems (for side-by-side comparison)
 export interface CoupleScores {
-  scores3: Scores3Result | null;
-  final3: Score3Round | null;
+  rounds: PrelimRound[];          // System 2.0 qualifying rounds (crosses)
+  final: FinalResult | null;      // System 2.0 skating final
+  scores3: Scores3Result | null;  // System 3.0 qualifying rounds
+  final3: Score3Round | null;     // System 3.0 final
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────

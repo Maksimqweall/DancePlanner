@@ -493,7 +493,7 @@ function fmtYear(t: number | undefined): string {
 function ProgressModal({ competitions, onClose }: { competitions: WdsfCompetition[]; onClose: () => void }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
-  const [tab, setTab] = useState<"trends" | "compare">("trends");
+  const [tab, setTab] = useState<"trends" | "dances" | "compare">("trends");
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -509,14 +509,16 @@ function ProgressModal({ competitions, onClose }: { competitions: WdsfCompetitio
           </TouchableOpacity>
         </View>
         <View style={s.tabBar}>
-          {([{ key: "trends", label: "Trends" }, { key: "compare", label: "Compare 2 events" }] as const).map(t => (
+          {([{ key: "trends", label: "Trends" }, { key: "dances", label: "Dances" }, { key: "compare", label: "Compare 2" }] as const).map(t => (
             <TouchableOpacity key={t.key} style={[s.tabItem, tab === t.key && s.tabItemActive]} onPress={() => setTab(t.key)}>
               <Text style={[s.tabLabel, tab === t.key && s.tabLabelActive]}>{t.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
         <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          {tab === "trends" ? <TrendsView competitions={competitions} /> : <CompareEventsView competitions={competitions} />}
+          {tab === "trends" && <TrendsView competitions={competitions} />}
+          {tab === "dances" && <DanceDynamicsView competitions={competitions} />}
+          {tab === "compare" && <CompareEventsView competitions={competitions} />}
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>
@@ -524,34 +526,44 @@ function ProgressModal({ competitions, onClose }: { competitions: WdsfCompetitio
   );
 }
 
+// Detect the dance style of a competition (ignore age categories like Adult/U21).
+function danceStyle(c: WdsfCompetition): "Standard" | "Latin" | null {
+  const t = `${c.discipline} ${c.category} ${c.event}`.toLowerCase();
+  if (/\bstandard\b|\bstd\b|\bballroom\b|\bsmooth\b|\bmodern\b/.test(t)) return "Standard";
+  if (/\blatin\b|\blat\b|\brhythm\b/.test(t)) return "Latin";
+  return null;
+}
+
 function TrendsView({ competitions }: { competitions: WdsfCompetition[] }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
 
-  const disciplines = useMemo(() => {
+  const styleTabs = useMemo(() => {
     const set = new Set<string>();
-    for (const c of competitions) if (c.discipline) set.add(c.discipline);
-    return ["All", ...set];
+    for (const c of competitions) { const st = danceStyle(c); if (st) set.add(st); }
+    return ["All", ...["Standard", "Latin"].filter(x => set.has(x))];
   }, [competitions]);
   const [disc, setDisc] = useState("All");
+  const [selBar, setSelBar] = useState<number | null>(null);
 
   const items = competitions
-    .map(c => ({ comp: c, place: numOrNull(c.place), points: numOrNull(c.points), time: parseCompDate(c.date) }))
-    .filter(it => disc === "All" || it.comp.discipline === disc);
+    .map(c => ({ comp: c, place: numOrNull(c.place), points: numOrNull(c.points), time: parseCompDate(c.date), style: danceStyle(c) }))
+    .filter(it => disc === "All" || it.style === disc);
 
   const chrono = [...items].sort((a, b) => (a.time || 0) - (b.time || 0));
-  const placed = chrono.filter(it => it.place != null) as { comp: WdsfCompetition; place: number; points: number | null; time: number }[];
+  const placed = chrono.filter(it => it.place != null) as { comp: WdsfCompetition; place: number; points: number | null; time: number; style: string | null }[];
   const best = placed.length ? Math.min(...placed.map(it => it.place)) : null;
   const avg = placed.length ? placed.reduce((sum, it) => sum + it.place, 0) / placed.length : null;
   const maxPlace = placed.length ? Math.max(...placed.map(it => it.place)) : 1;
   const wins = placed.filter(it => it.place === 1).length;
+  const sel = selBar != null ? chrono[selBar] : null;
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
-      {disciplines.length > 2 && (
+      {styleTabs.length > 1 && (
         <View style={s.roundFilterRow}>
-          {disciplines.map(d => (
-            <TouchableOpacity key={d} style={[s.roundFilterChip, disc === d && s.roundFilterChipActive]} onPress={() => setDisc(d)}>
+          {styleTabs.map(d => (
+            <TouchableOpacity key={d} style={[s.roundFilterChip, disc === d && s.roundFilterChipActive]} onPress={() => { setDisc(d); setSelBar(null); }}>
               <Text style={[s.roundFilterChipText, disc === d && s.roundFilterChipTextActive]}>{d}</Text>
             </TouchableOpacity>
           ))}
@@ -578,13 +590,29 @@ function TrendsView({ competitions }: { competitions: WdsfCompetition[] }) {
 
       {placed.length > 1 && (
         <>
-          <SectionHeader title="Placement over time" subtitle={`Taller = better · ${wins} win${wins === 1 ? "" : "s"}`} />
+          <SectionHeader title="Placement over time" subtitle="Tap a bar to see the result" />
           <View style={[s.sectionCard, { padding: 14 }]}>
+            <View style={{ minHeight: 36, marginBottom: 8 }}>
+              {sel ? (
+                <>
+                  <Text style={{ color: C.t1, fontWeight: "700", fontSize: 13 }} numberOfLines={1}>{sel.comp.event || "Competition"}</Text>
+                  <Text style={{ color: C.t3, fontSize: 11 }} numberOfLines={1}>
+                    {[sel.comp.date, sel.place != null ? `Place #${sel.place}` : "—", sel.style].filter(Boolean).join(" · ")}
+                  </Text>
+                </>
+              ) : (
+                <Text style={{ color: C.t3, fontSize: 12 }}>Taller = better placement · {wins} win{wins === 1 ? "" : "s"} · tap a bar</Text>
+              )}
+            </View>
             <View style={{ flexDirection: "row", alignItems: "flex-end", height: 64, gap: 3 }}>
               {chrono.map((it, i) => {
                 const h = it.place != null ? Math.max(0.08, (maxPlace + 1 - it.place) / maxPlace) : 0.04;
+                const isSel = selBar === i;
+                const col = it.place == null ? C.border : it.place === 1 ? C.gold : C.accent;
                 return (
-                  <View key={i} style={{ flex: 1, height: `${Math.round(h * 100)}%`, borderRadius: 3, backgroundColor: it.place == null ? C.border : it.place === 1 ? C.gold : it.place === best ? C.accent : C.accent, opacity: it.place == null ? 0.4 : it.place === 1 ? 1 : 0.75 }} />
+                  <TouchableOpacity key={i} activeOpacity={0.6} onPress={() => setSelBar(isSel ? null : i)} style={{ flex: 1, height: "100%", justifyContent: "flex-end" }}>
+                    <View style={{ height: `${Math.round(h * 100)}%`, borderRadius: 3, backgroundColor: col, opacity: it.place == null ? 0.4 : isSel ? 1 : it.place === 1 ? 0.95 : 0.7, borderWidth: isSel ? 2 : 0, borderColor: C.t1 }} />
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -606,7 +634,7 @@ function TrendsView({ competitions }: { competitions: WdsfCompetition[] }) {
             <View key={i} style={[s.barRow, i < arr.length - 1 && s.rowBorder]}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={s.rowTitle} numberOfLines={1}>{it.comp.event || "Competition"}</Text>
-                <Text style={s.rowSub} numberOfLines={1}>{[it.comp.date, it.comp.discipline].filter(Boolean).join(" · ")}</Text>
+                <Text style={s.rowSub} numberOfLines={1}>{[it.comp.date, it.style].filter(Boolean).join(" · ")}</Text>
               </View>
               <View style={{ width: 64, height: 6, borderRadius: 3, backgroundColor: C.border, marginHorizontal: 8, overflow: "hidden" }}>
                 <View style={{ width: `${barPct}%`, height: "100%", backgroundColor: pc, borderRadius: 3 }} />
@@ -616,6 +644,134 @@ function TrendsView({ competitions }: { competitions: WdsfCompetition[] }) {
           );
         })}
       </View>
+    </View>
+  );
+}
+
+function DanceDynamicsView({ competitions }: { competitions: WdsfCompetition[] }) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const fetchAnalytics = useWdsfStore(st => st.fetchAnalytics);
+  const cache = useWdsfStore(st => st.analyticsCache);
+  const loadingMap = useWdsfStore(st => st.analyticsLoading);
+
+  const styleTabs = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of competitions) { const st = danceStyle(c); if (st) set.add(st); }
+    return ["All", ...["Standard", "Latin"].filter(x => set.has(x))];
+  }, [competitions]);
+  const [disc, setDisc] = useState("All");
+  const [n, setN] = useState(10);
+
+  const pool = useMemo(() => competitions
+    .filter(c => c.competitionUrl && (disc === "All" || danceStyle(c) === disc))
+    .map(c => ({ c, time: parseCompDate(c.date) }))
+    .sort((x, y) => y.time - x.time)
+    .slice(0, n)
+    .map(x => x.c), [competitions, disc, n]);
+
+  const urls = pool.map(c => c.competitionUrl as string);
+  const urlsKey = urls.join(",");
+
+  useEffect(() => {
+    urls.forEach(u => fetchAnalytics(u));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlsKey, fetchAnalytics]);
+
+  const loaded = urls.map(u => cache[u]).filter((a): a is CompetitionAnalytics => !!a);
+  const anyLoading = urls.some(u => loadingMap[u]);
+
+  const agg3: Record<string, { sum: number; n: number }> = {};
+  const agg2: Record<string, { sum: number; n: number }> = {};
+  for (const a of loaded) {
+    const r3 = a.final3 ?? (a.scores3 && a.scores3.rounds.length ? a.scores3.rounds[a.scores3.rounds.length - 1] : null);
+    if (r3) for (const d of r3.dances) {
+      if (d.totalScore > 0) {
+        if (!agg3[d.dance]) agg3[d.dance] = { sum: 0, n: 0 };
+        agg3[d.dance].sum += d.totalScore;
+        agg3[d.dance].n += 1;
+      }
+    }
+    for (const ds of a.danceStats) {
+      if (ds.avgPerRound > 0) {
+        if (!agg2[ds.dance]) agg2[ds.dance] = { sum: 0, n: 0 };
+        agg2[ds.dance].sum += ds.avgPerRound;
+        agg2[ds.dance].n += 1;
+      }
+    }
+  }
+  const list3 = Object.entries(agg3).map(([dance, v]) => ({ dance, avg: v.sum / v.n, n: v.n })).sort((a, b) => b.avg - a.avg);
+  const list2 = Object.entries(agg2).map(([dance, v]) => ({ dance, avg: v.sum / v.n, n: v.n })).sort((a, b) => b.avg - a.avg);
+
+  const renderList = (title: string, sub: string, list: { dance: string; avg: number; n: number }[], digits: number) => {
+    if (!list.length) return null;
+    const max = Math.max(1, ...list.map(d => d.avg));
+    return (
+      <>
+        <SectionHeader title={title} subtitle={sub} />
+        <View style={s.sectionCard}>
+          {list.map((d, i) => {
+            const isFirst = i === 0, isLast = i === list.length - 1;
+            const col = isFirst ? C.gold : isLast ? C.red : C.accent;
+            return (
+              <View key={d.dance} style={[s.barRow, i < list.length - 1 && s.rowBorder]}>
+                <Text style={[s.barRowLabel, { color: isFirst ? C.gold : isLast ? C.red : C.t1 }]}>{d.dance}</Text>
+                <View style={s.barRowTrack}><View style={[s.barRowFill, { width: `${Math.round((d.avg / max) * 100)}%`, backgroundColor: col }]} /></View>
+                <Text style={s.barRowVal}>{d.avg.toFixed(digits)}<Text style={s.barRowPct}> ·{d.n}</Text></Text>
+              </View>
+            );
+          })}
+        </View>
+        <View style={s.judgeInsightRow}>
+          <View style={s.judgeInsightCard}>
+            <Text style={s.judgeInsightIcon}>🥇</Text>
+            <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Best dance</Text>
+            <Text style={s.judgeInsightName} numberOfLines={1}>{list[0].dance}</Text>
+            <Text style={s.judgeInsightVal}>{list[0].avg.toFixed(digits)}</Text>
+          </View>
+          <View style={s.judgeInsightCard}>
+            <Text style={s.judgeInsightIcon}>📉</Text>
+            <Text style={[s.judgeInsightLabel, { color: C.red }]}>Needs work</Text>
+            <Text style={s.judgeInsightName} numberOfLines={1}>{list[list.length - 1].dance}</Text>
+            <Text style={s.judgeInsightVal}>{list[list.length - 1].avg.toFixed(digits)}</Text>
+          </View>
+        </View>
+      </>
+    );
+  };
+
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+      {styleTabs.length > 1 && (
+        <View style={s.roundFilterRow}>
+          {styleTabs.map(d => (
+            <TouchableOpacity key={d} style={[s.roundFilterChip, disc === d && s.roundFilterChipActive]} onPress={() => setDisc(d)}>
+              <Text style={[s.roundFilterChipText, disc === d && s.roundFilterChipTextActive]}>{d}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      <View style={s.roundFilterRow}>
+        {[5, 10, 15, 999].map(v => (
+          <TouchableOpacity key={v} style={[s.roundFilterChip, n === v && s.roundFilterChipActive]} onPress={() => setN(v)}>
+            <Text style={[s.roundFilterChipText, n === v && s.roundFilterChipTextActive]}>{v === 999 ? "All" : `Last ${v}`}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={{ color: C.t3, fontSize: 12 }}>
+        {loaded.length}/{urls.length} tournaments loaded{anyLoading ? " …" : ""}
+      </Text>
+      {anyLoading && loaded.length === 0 && <ActivityIndicator color={C.accent} style={{ marginTop: 12 }} />}
+
+      {renderList("System 3.0 dances", "Avg score per dance · best → worst", list3, 2)}
+      {renderList("System 2.0 dances", "Avg crosses per dance · best → worst", list2, 1)}
+
+      {!anyLoading && list3.length === 0 && list2.length === 0 && (
+        <View style={[s.sectionCard, { padding: 16 }]}>
+          <Text style={{ color: C.t2, textAlign: "center" }}>No per-dance data found in these tournaments yet.</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -651,26 +807,16 @@ function CompareEventsView({ competitions }: { competitions: WdsfCompetition[] }
     } else if (aData === null || bData === null) {
       body = <View style={[s.sectionCard, { padding: 16 }]}><Text style={{ color: C.t2, textAlign: "center" }}>Couldn't load one of the events.</Text></View>;
     } else if (aData && bData) {
-      const ar = collectRounds(aData.final3, aData.scores3);
-      const br = collectRounds(bData.final3, bData.scores3);
-      const common = ar.map(r => r.roundName).filter(n => br.some(x => x.roundName === n));
-      const name = common.find(n => /final/i.test(n)) ?? common[0];
-      const aRound = ar.find(r => r.roundName === name);
-      const bRound = br.find(r => r.roundName === name);
-      if (aRound && bRound) {
-        body = (
-          <Score3CompareView
-            myRound={aRound}
-            rivalRound={bRound}
-            myLabel={shortEventLabel(a)}
-            rivalLabel={shortEventLabel(b)}
-            judgeNames={{}}
-            sameJudges={false}
-          />
-        );
-      } else {
-        body = <View style={[s.sectionCard, { padding: 16 }]}><Text style={{ color: C.t2, textAlign: "center" }}>No System 3.0 round in common — these events may use different disciplines or have no 3.0 scores.</Text></View>;
-      }
+      body = (
+        <RoundCompareView
+          a={aData}
+          b={bData}
+          aLabel={shortEventLabel(a)}
+          bLabel={shortEventLabel(b)}
+          judgeNames={{}}
+          sameJudges={false}
+        />
+      );
     }
   }
 
@@ -1429,12 +1575,219 @@ function judgeArea(je: Score3JudgeEntry): "TQ&PS" | "MM&CP" | "" {
 }
 
 // Flatten a couple's rounds (Final first, then prelim rounds) into one list.
-function collectRounds(final3: Score3Round | null, scores3: Scores3Result | null): Score3Round[] {
-  const out: Score3Round[] = [];
-  if (final3) out.push(final3);
-  if (scores3) out.push(...scores3.rounds);
-  return out;
+// ─── Unified round-by-round comparison (System 2.0 + 3.0) ─────────────────────
+
+type SidesData = {
+  rounds: PrelimRound[];
+  final: FinalResult | null;
+  scores3: Scores3Result | null;
+  final3: Score3Round | null;
+};
+
+type RoundMetric = "crosses" | "score" | "place";
+interface CmpRound {
+  name: string;
+  system: "2.0" | "3.0";
+  metric: RoundMetric;
+  higherBetter: boolean;
+  danceVals: { dance: string; value: number | null }[];
+  total: number | null;
+  totalLabel: string;
+  score3?: Score3Round; // present for System 3.0 rounds (enables detailed comparison)
 }
+
+function roundOrderKey(name: string): number {
+  if (/final/i.test(name) && !/semi|quarter|1\/[24]/i.test(name)) return 900;
+  if (/semi/i.test(name)) return 800;
+  if (/quarter/i.test(name)) return 700;
+  const m = name.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 500;
+}
+
+function buildCmpRounds(d: SidesData): CmpRound[] {
+  const out: CmpRound[] = [];
+  for (const r of d.rounds) {
+    out.push({
+      name: `Round ${r.roundNumber}`, system: "2.0", metric: "crosses", higherBetter: true,
+      danceVals: r.dances.map(dd => ({ dance: dd.dance, value: dd.totalCrosses })),
+      total: r.totalCrosses, totalLabel: "crosses",
+    });
+  }
+  if (d.scores3) for (const r of d.scores3.rounds) {
+    out.push({
+      name: r.roundName, system: "3.0", metric: "score", higherBetter: true,
+      danceVals: r.dances.map(dd => ({ dance: dd.dance, value: dd.totalScore || null })),
+      total: r.dances.reduce((sum, dd) => sum + (dd.totalScore || 0), 0), totalLabel: "pts",
+      score3: r,
+    });
+  }
+  if (d.final && d.final.dances.length) {
+    out.push({
+      name: "Final", system: "2.0", metric: "place", higherBetter: false,
+      danceVals: d.final.dances.map(dd => ({ dance: dd.dance, value: dd.dancePlace || null })),
+      total: d.final.overallPlace || null, totalLabel: "place",
+    });
+  }
+  if (d.final3 && d.final3.dances.length) {
+    out.push({
+      name: "Final", system: "3.0", metric: "score", higherBetter: true,
+      danceVals: d.final3.dances.map(dd => ({ dance: dd.dance, value: dd.totalScore || null })),
+      total: d.final3.dances.reduce((sum, dd) => sum + (dd.totalScore || 0), 0), totalLabel: "pts",
+      score3: d.final3,
+    });
+  }
+  return out.sort((x, y) => roundOrderKey(x.name) - roundOrderKey(y.name));
+}
+
+function cmpWinner(a: number | null, b: number | null, higherBetter: boolean): "a" | "b" | "tie" | null {
+  if (a == null || b == null) return null;
+  if (a === b) return "tie";
+  const aBetter = higherBetter ? a > b : a < b;
+  return aBetter ? "a" : "b";
+}
+
+function RoundCompareView({ a, b, aLabel, bLabel, judgeNames, sameJudges }: {
+  a: SidesData;
+  b: SidesData;
+  aLabel: string;
+  bLabel: string;
+  judgeNames: Record<string, string>;
+  sameJudges: boolean;
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+
+  const ar = buildCmpRounds(a);
+  const br = buildCmpRounds(b);
+  const names: string[] = [];
+  for (const r of [...ar, ...br]) if (!names.includes(r.name)) names.push(r.name);
+  names.sort((x, y) => roundOrderKey(x) - roundOrderKey(y));
+
+  if (names.length === 0) {
+    return (
+      <View style={[s.sectionCard, { padding: 16 }]}>
+        <Text style={{ color: C.t2, textAlign: "center" }}>No round-by-round score data available to compare.</Text>
+      </View>
+    );
+  }
+
+  const valCell = { width: 60, textAlign: "right" as const, fontSize: 13, fontVariant: ["tabular-nums" as const] };
+  const SystemBadge = ({ sys }: { sys: "2.0" | "3.0" }) => (
+    <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: sys === "3.0" ? C.accentFade : C.elevated }}>
+      <Text style={{ color: sys === "3.0" ? C.accent : C.t2, fontSize: 10, fontWeight: "800" }}>SYS {sys}</Text>
+    </View>
+  );
+  const winnerChip = (w: "a" | "b" | "tie" | null) => {
+    if (!w) return null;
+    const label = w === "tie" ? "Tie" : `${w === "a" ? aLabel : bLabel} ✓`;
+    const col = w === "tie" ? C.t2 : C.gold;
+    return <Text style={{ color: col, fontSize: 12, fontWeight: "800" }}>{label}</Text>;
+  };
+
+  const roundHeader = (name: string, sys: "2.0" | "3.0", w: "a" | "b" | "tie" | null) => (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+      <Text style={{ color: C.t1, fontWeight: "800", fontSize: 15 }}>{name}</Text>
+      <SystemBadge sys={sys} />
+      <View style={{ flex: 1 }} />
+      {winnerChip(w)}
+    </View>
+  );
+
+  return (
+    <>
+      {/* Column legend */}
+      <View style={[s.sectionCard, { flexDirection: "row", paddingVertical: 8, paddingHorizontal: 14 }]}>
+        <Text style={{ flex: 1, color: C.t3, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Round by round</Text>
+        <Text style={[valCell, { color: C.accent, fontWeight: "800", fontSize: 11 }]} numberOfLines={1}>{aLabel}</Text>
+        <Text style={[valCell, { color: C.t2, fontWeight: "800", fontSize: 11 }]} numberOfLines={1}>{bLabel}</Text>
+      </View>
+
+      {names.map(name => {
+        const ra = ar.find(r => r.name === name);
+        const rb = br.find(r => r.name === name);
+
+        if (ra && rb && ra.system !== rb.system) {
+          return (
+            <View key={name} style={{ gap: 6 }}>
+              {roundHeader(name, ra.system, null)}
+              <View style={[s.sectionCard, { padding: 14, borderColor: C.gold + "55", borderWidth: 1 }]}>
+                <Text style={{ color: C.t2, fontSize: 13 }}>
+                  ⚠️ Scored with different systems ({aLabel}: {ra.system}, {bLabel}: {rb.system}) — these rounds can't be compared directly.
+                </Text>
+              </View>
+            </View>
+          );
+        }
+        if (!ra || !rb) {
+          const only = ra ? aLabel : bLabel;
+          const r = (ra ?? rb)!;
+          return (
+            <View key={name} style={{ gap: 6 }}>
+              {roundHeader(name, r.system, null)}
+              <View style={[s.sectionCard, { padding: 14 }]}>
+                <Text style={{ color: C.t3, fontSize: 13 }}>Only {only} danced this round.</Text>
+              </View>
+            </View>
+          );
+        }
+
+        const w = cmpWinner(ra.total, rb.total, ra.higherBetter);
+
+        // ── System 3.0 round → detailed per-dance / per-criterion / per-judge ──
+        if (ra.system === "3.0" && ra.score3 && rb.score3) {
+          return (
+            <View key={name} style={{ gap: 6 }}>
+              {roundHeader(name, "3.0", w)}
+              <Score3CompareView
+                myRound={ra.score3}
+                rivalRound={rb.score3}
+                myLabel={aLabel}
+                rivalLabel={bLabel}
+                judgeNames={judgeNames}
+                sameJudges={sameJudges}
+              />
+            </View>
+          );
+        }
+
+        // ── System 2.0 round → crosses (prelim) or places (final) per dance ──
+        const isPlace = ra.metric === "place";
+        const danceNames: string[] = [];
+        for (const dv of [...ra.danceVals, ...rb.danceVals]) if (!danceNames.includes(dv.dance)) danceNames.push(dv.dance);
+        const fmt = (v: number | null) => v == null ? "—" : isPlace ? `#${v}` : String(v);
+        const rowFor = (label: string, av: number | null, bv: number | null, strong: boolean, border: boolean, kk: string) => {
+          const win = cmpWinner(av, bv, ra.higherBetter);
+          return (
+            <View key={kk} style={[s.crossRow, border && s.rowBorder]}>
+              <Text style={[s.crossJudge, { color: strong ? C.t1 : C.t2, fontWeight: strong ? "700" : "500" }]} numberOfLines={1}>{label}</Text>
+              <Text style={[valCell, { color: win === "a" ? C.gold : C.t1, fontWeight: win === "a" ? "800" : "600" }]}>{fmt(av)}</Text>
+              <Text style={[valCell, { color: win === "b" ? C.gold : C.t2, fontWeight: win === "b" ? "800" : "600" }]}>{fmt(bv)}</Text>
+            </View>
+          );
+        };
+
+        return (
+          <View key={name} style={{ gap: 6 }}>
+            {roundHeader(name, "2.0", w)}
+            <View style={s.sectionCard}>
+              {rowFor(ra.metric === "place" ? "Overall place" : "Total crosses", ra.total, rb.total, true, danceNames.length > 0, "__rt")}
+              {danceNames.map((dn, i) => rowFor(
+                dn,
+                ra.danceVals.find(x => x.dance === dn)?.value ?? null,
+                rb.danceVals.find(x => x.dance === dn)?.value ?? null,
+                false, i < danceNames.length - 1, `d-${dn}`,
+              ))}
+            </View>
+            <Text style={{ color: C.t3, fontSize: 11, paddingHorizontal: 4 }}>
+              {isPlace ? "Lower place = better" : "More crosses = better (judges advancing you)"}
+            </Text>
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
 
 // Side-by-side comparison of two couples (or two events) for one round.
 function Score3CompareView({ myRound, rivalRound, myLabel, rivalLabel, judgeNames, sameJudges }: {
@@ -1548,7 +1901,6 @@ function CompareTab({ analytics }: { analytics: CompetitionAnalytics }) {
   const myNameL  = analytics.coupleName.toLowerCase();
 
   const [selected, setSelected] = useState<RankingEntry | null>(null);
-  const [roundName, setRoundName] = useState("");
 
   const key = selected ? `${analytics.rankingUrl}|${selected.coupleNumber}` : "";
   const rival: CoupleScores | null | undefined = selected ? coupleScoresCache[key] : undefined;
@@ -1558,17 +1910,7 @@ function CompareTab({ analytics }: { analytics: CompetitionAnalytics }) {
     if (selected) fetchCoupleScores(analytics.rankingUrl, selected.coupleNumber);
   }, [selected, analytics.rankingUrl, fetchCoupleScores]);
 
-  const myRounds = collectRounds(analytics.final3, analytics.scores3);
-
   if (selected) {
-    const rivalRounds = rival ? collectRounds(rival.final3, rival.scores3) : [];
-    const commonNames = myRounds.map(r => r.roundName).filter(n => rivalRounds.some(rr => rr.roundName === n));
-    const activeName = roundName && commonNames.includes(roundName)
-      ? roundName
-      : (commonNames.find(n => /final/i.test(n)) ?? commonNames[0] ?? "");
-    const myRound = myRounds.find(r => r.roundName === activeName);
-    const rivalRound = rivalRounds.find(r => r.roundName === activeName);
-
     return (
       <View style={{ padding: 16, gap: 12 }}>
         <TouchableOpacity onPress={() => setSelected(null)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -1581,33 +1923,18 @@ function CompareTab({ analytics }: { analytics: CompetitionAnalytics }) {
           <Text style={{ color: C.t3, fontSize: 12 }}>{selected.country}{selected.points ? ` · ${selected.points} pts` : ""} · rank {selected.rank}</Text>
         </View>
 
-        {commonNames.length > 1 && (
-          <View style={s.roundFilterRow}>
-            {commonNames.map(n => (
-              <TouchableOpacity key={n} style={[s.roundFilterChip, activeName === n && s.roundFilterChipActive]} onPress={() => setRoundName(n)}>
-                <Text style={[s.roundFilterChipText, activeName === n && s.roundFilterChipTextActive]}>{n}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         {rivalLoading && <ActivityIndicator color={C.accent} style={{ marginTop: 24 }} />}
         {!rivalLoading && rival === null && (
           <View style={[s.sectionCard, { padding: 16 }]}>
             <Text style={{ color: C.t2, textAlign: "center" }}>Couldn't load this couple's scores.</Text>
           </View>
         )}
-        {!rivalLoading && rival && (!myRound || !rivalRound) && (
-          <View style={[s.sectionCard, { padding: 16 }]}>
-            <Text style={{ color: C.t2, textAlign: "center" }}>No System 3.0 round in common to compare.</Text>
-          </View>
-        )}
-        {!rivalLoading && rival && myRound && rivalRound && (
-          <Score3CompareView
-            myRound={myRound}
-            rivalRound={rivalRound}
-            myLabel="You"
-            rivalLabel={`#${selected.coupleNumber}`}
+        {!rivalLoading && rival && (
+          <RoundCompareView
+            a={analytics}
+            b={rival}
+            aLabel="You"
+            bLabel={`#${selected.coupleNumber}`}
             judgeNames={analytics.judgeNames}
             sameJudges
           />
@@ -1644,7 +1971,7 @@ function CompareTab({ analytics }: { analytics: CompetitionAnalytics }) {
           );
           return isMe
             ? <View key={i}>{inner}</View>
-            : <TouchableOpacity key={i} onPress={() => { setSelected(entry); setRoundName(""); }}>{inner}</TouchableOpacity>;
+            : <TouchableOpacity key={i} onPress={() => setSelected(entry)}>{inner}</TouchableOpacity>;
         })}
         {analytics.allCouples.length > 50 ? (
           <View style={s.row}>

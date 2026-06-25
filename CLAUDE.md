@@ -13,3 +13,6 @@ You are a senior full-stack engineer building "Dance Planner" – a mobile SaaS 
 We will use a monorepo structure (or split folders) within this directory:
 - `/apps/mobile` - Expo Router application
 - `/apps/server` - Express.js backend API
+
+## Project Structure & Architecture
+- **Dependency Graph:** Current codebase architecture and index are maintained in `graphify-out/GRAPH_REPORT.md` and `graphify-out/graph.json`. Always refer to these files to understand state, hooks (like `useC`, `useT`), and component relations before making architectural changes.

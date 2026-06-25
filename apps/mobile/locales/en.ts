@@ -10,7 +10,12 @@ export const en = {
     partner: "Partner",
     settings: "Settings",
     aboutUs: "About Us",
+    wdsfProfile: "WDSF Profile",
     signOut: "Sign out",
+  },
+  toasts: {
+    wdsfLinkedTitle: "WDSF profile linked",
+    wdsfLinkedBody: "Open it anytime from the side menu ☰",
   },
   common: {
     save: "Save",

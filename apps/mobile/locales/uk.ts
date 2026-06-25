@@ -12,7 +12,12 @@ export const uk: Translations = {
     partner: "Партнер",
     settings: "Налаштування",
     aboutUs: "Про нас",
+    wdsfProfile: "Профіль WDSF",
     signOut: "Вийти",
+  },
+  toasts: {
+    wdsfLinkedTitle: "Профіль WDSF прив'язано",
+    wdsfLinkedBody: "Тепер його можна відкрити в бічному меню ☰",
   },
   common: {
     save: "Зберегти",

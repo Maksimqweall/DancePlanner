@@ -34,6 +34,8 @@ import {
 import PressableScale from "../../components/ui/PressableScale";
 import type { Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
+import { useT } from "../../lib/i18n";
+import { useToastStore } from "../../store/useToastStore";
 
 const WDSF_SEARCH_URL = "https://www.worlddancesport.org/Athletes";
 const { width: SW } = Dimensions.get("window");
@@ -73,13 +75,18 @@ function SetupScreen({
 }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
+  const t = useT();
+  const showToast = useToastStore((st) => st.show);
   const [min, setMin]         = useState("");
   const [url, setUrl]         = useState("");
   const [showUrl, setShowUrl] = useState(false);
 
+  const announceLinked = () =>
+    showToast({ icon: "🕺", title: t.toasts.wdsfLinkedTitle, body: t.toasts.wdsfLinkedBody });
+
   const handleLinkMin = async () => {
     if (!min.trim()) { Alert.alert("Enter your MIN", "Please enter your WDSF Member ID Number."); return; }
-    try { await linkByMin(min.trim()); } catch { /* error shown from store */ }
+    try { await linkByMin(min.trim()); announceLinked(); } catch { /* error shown from store */ }
   };
 
   const handleLinkUrl = async () => {
@@ -87,7 +94,7 @@ function SetupScreen({
       Alert.alert("Invalid URL", "Please paste your full WDSF profile URL.");
       return;
     }
-    try { await linkByUrl(url.trim(), min.trim() || undefined); } catch { /* error shown */ }
+    try { await linkByUrl(url.trim(), min.trim() || undefined); announceLinked(); } catch { /* error shown */ }
   };
 
   return (
@@ -1593,7 +1600,9 @@ interface CmpRound {
   danceVals: { dance: string; value: number | null }[];
   total: number | null;
   totalLabel: string;
-  score3?: Score3Round; // present for System 3.0 rounds (enables detailed comparison)
+  score3?: Score3Round;  // present for System 3.0 rounds (enables detailed comparison)
+  prelim?: PrelimRound;  // present for System 2.0 qualifying rounds (per-judge crosses)
+  final?: FinalResult;   // present for the System 2.0 skating final (per-judge placements)
 }
 
 function roundOrderKey(name: string): number {
@@ -1611,6 +1620,7 @@ function buildCmpRounds(d: SidesData): CmpRound[] {
       name: `Round ${r.roundNumber}`, system: "2.0", metric: "crosses", higherBetter: true,
       danceVals: r.dances.map(dd => ({ dance: dd.dance, value: dd.totalCrosses })),
       total: r.totalCrosses, totalLabel: "crosses",
+      prelim: r,
     });
   }
   if (d.scores3) for (const r of d.scores3.rounds) {
@@ -1626,6 +1636,7 @@ function buildCmpRounds(d: SidesData): CmpRound[] {
       name: "Final", system: "2.0", metric: "place", higherBetter: false,
       danceVals: d.final.dances.map(dd => ({ dance: dd.dance, value: dd.dancePlace || null })),
       total: d.final.overallPlace || null, totalLabel: "place",
+      final: d.final,
     });
   }
   if (d.final3 && d.final3.dances.length) {
@@ -1644,6 +1655,85 @@ function cmpWinner(a: number | null, b: number | null, higherBetter: boolean): "
   if (a === b) return "tie";
   const aBetter = higherBetter ? a > b : a < b;
   return aBetter ? "a" : "b";
+}
+
+// Sum each judge's crosses across a System 2.0 qualifying round (how many of that
+// judge's marks landed on this couple). Used to show who each judge advanced more.
+function judgeCrossTotals(r: PrelimRound): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const d of r.dances) {
+    for (const c of d.crosses) {
+      if (!c.judge) continue;
+      m.set(c.judge, (m.get(c.judge) ?? 0) + (c.marked ? 1 : 0));
+    }
+  }
+  return m;
+}
+
+// Per-judge "who did each judge favour" breakdown for a System 2.0 round.
+// Only meaningful when both couples were scored by the same panel (sameJudges).
+function JudgeFavorView({ myMap, rivalMap, higherBetter, aLabel, bLabel, judgeNames, kind }: {
+  myMap: Map<string, number>;
+  rivalMap: Map<string, number>;
+  higherBetter: boolean;
+  aLabel: string;
+  bLabel: string;
+  judgeNames: Record<string, string>;
+  kind: "crosses" | "place";
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+
+  const judges = [...new Set([...myMap.keys(), ...rivalMap.keys()])];
+  if (judges.length === 0) return null;
+
+  const fmt = (v: number | null) =>
+    v == null ? "—" : kind === "place" ? `#${v.toFixed(1)}` : String(v);
+
+  const rank = (w: "a" | "b" | "tie" | null) => (w === "a" ? 0 : w === "tie" ? 1 : 2);
+  const rows = judges.map((judge) => {
+    const mine = myMap.get(judge) ?? null;
+    const theirs = rivalMap.get(judge) ?? null;
+    return { judge, mine, theirs, win: cmpWinner(mine, theirs, higherBetter) };
+  }).sort((x, y) => {
+    if (rank(x.win) !== rank(y.win)) return rank(x.win) - rank(y.win);
+    return Math.abs((y.mine ?? 0) - (y.theirs ?? 0)) - Math.abs((x.mine ?? 0) - (x.theirs ?? 0));
+  });
+
+  const favMe    = rows.filter(r => r.win === "a").length;
+  const favRival = rows.filter(r => r.win === "b").length;
+  const ties     = rows.filter(r => r.win === "tie").length;
+
+  const valCell = { width: 60, textAlign: "right" as const, fontSize: 13, fontVariant: ["tabular-nums" as const] };
+
+  return (
+    <View style={{ gap: 6 }}>
+      <SectionHeader
+        noMargin
+        title="Judge breakdown"
+        subtitle={kind === "place" ? "Avg place each judge gave · lower = better" : "Crosses each judge gave · more = better"}
+      />
+      <View style={s.sectionCard}>
+        <View style={[s.crossRow, s.rowBorder]}>
+          <Text style={[s.crossJudge, { color: C.t3, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }]}>Judge</Text>
+          <Text style={[valCell, { color: C.accent, fontWeight: "800", fontSize: 11 }]} numberOfLines={1}>{aLabel}</Text>
+          <Text style={[valCell, { color: C.t2, fontWeight: "800", fontSize: 11 }]} numberOfLines={1}>{bLabel}</Text>
+        </View>
+        {rows.map((r, i) => (
+          <View key={r.judge} style={[s.crossRow, i < rows.length - 1 && s.rowBorder]}>
+            <Text style={[s.crossJudge, { color: C.t1, fontWeight: "600" }]} numberOfLines={1}>
+              {jFullName(r.judge, judgeNames)}{r.win === "a" ? "  ★" : r.win === "b" ? "  ☆" : ""}
+            </Text>
+            <Text style={[valCell, { color: r.win === "a" ? C.gold : C.t1, fontWeight: r.win === "a" ? "800" : "600" }]}>{fmt(r.mine)}</Text>
+            <Text style={[valCell, { color: r.win === "b" ? C.gold : C.t2, fontWeight: r.win === "b" ? "800" : "600" }]}>{fmt(r.theirs)}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={{ color: C.t3, fontSize: 11, paddingHorizontal: 4 }}>
+        {favMe} favoured {aLabel} · {favRival} favoured {bLabel}{ties ? ` · ${ties} tie` : ""}
+      </Text>
+    </View>
+  );
 }
 
 function RoundCompareView({ a, b, aLabel, bLabel, judgeNames, sameJudges }: {
@@ -1781,6 +1871,28 @@ function RoundCompareView({ a, b, aLabel, bLabel, judgeNames, sameJudges }: {
             <Text style={{ color: C.t3, fontSize: 11, paddingHorizontal: 4 }}>
               {isPlace ? "Lower place = better" : "More crosses = better (judges advancing you)"}
             </Text>
+            {sameJudges && ra.metric === "crosses" && ra.prelim && rb.prelim ? (
+              <JudgeFavorView
+                myMap={judgeCrossTotals(ra.prelim)}
+                rivalMap={judgeCrossTotals(rb.prelim)}
+                higherBetter
+                aLabel={aLabel}
+                bLabel={bLabel}
+                judgeNames={judgeNames}
+                kind="crosses"
+              />
+            ) : null}
+            {sameJudges && ra.metric === "place" && ra.final && rb.final ? (
+              <JudgeFavorView
+                myMap={new Map(ra.final.judgeAvgPlaces.map(j => [j.judge, j.avgPlace] as const))}
+                rivalMap={new Map(rb.final.judgeAvgPlaces.map(j => [j.judge, j.avgPlace] as const))}
+                higherBetter={false}
+                aLabel={aLabel}
+                bLabel={bLabel}
+                judgeNames={judgeNames}
+                kind="place"
+              />
+            ) : null}
           </View>
         );
       })}

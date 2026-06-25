@@ -12,7 +12,12 @@ export const de: Translations = {
     partner: "Partner",
     settings: "Einstellungen",
     aboutUs: "Über uns",
+    wdsfProfile: "WDSF-Profil",
     signOut: "Abmelden",
+  },
+  toasts: {
+    wdsfLinkedTitle: "WDSF-Profil verknüpft",
+    wdsfLinkedBody: "Jederzeit über das Seitenmenü ☰ öffnen",
   },
   common: {
     save: "Speichern",

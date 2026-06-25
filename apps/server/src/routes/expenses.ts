@@ -7,9 +7,13 @@ import {
   updateExpenseSchema,
   EXPENSE_CATEGORIES,
 } from "../lib/validation";
-import { notifyPartner } from "../lib/partnerNotify";
+import { logActivity } from "../lib/activity";
 
 const router = Router();
+
+const fmtMoney = (amount: number, currency: string) => `${amount} ${currency}`;
+const expenseSummary = (e: { title?: string | null; category: string; amount: number; currency: string }) =>
+  `${e.title || e.category} — ${fmtMoney(e.amount, e.currency)}`;
 router.use(requireAuth);
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -229,8 +233,8 @@ router.post(
     }
 
     res.status(201).json({ expense });
-    // Notify partner so their Finance / split view refreshes automatically
-    notifyPartner(req.userId!, "expenses");
+    // Activity feed + push to partner & coach
+    logActivity(req.userId!, { resource: "expenses", action: "added", summary: expenseSummary(expense) });
   })
 );
 
@@ -250,6 +254,7 @@ router.patch(
       data,
     });
     res.json({ expense });
+    logActivity(req.userId!, { resource: "expenses", action: "updated", summary: expenseSummary(expense) });
   })
 );
 
@@ -258,9 +263,10 @@ router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
     await assertExpenseOwnership(param(req, "id"), req.userId!);
+    const existing = await prisma.expense.findUnique({ where: { id: param(req, "id") } });
     await prisma.expense.delete({ where: { id: param(req, "id") } });
     res.status(204).end();
-    notifyPartner(req.userId!, "expenses");
+    if (existing) logActivity(req.userId!, { resource: "expenses", action: "deleted", summary: expenseSummary(existing) });
   })
 );
 

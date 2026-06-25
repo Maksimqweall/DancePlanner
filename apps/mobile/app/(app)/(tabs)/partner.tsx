@@ -3,12 +3,13 @@ import {
   View, Text, ScrollView, TextInput, Modal, Switch, Alert, Platform,
   StyleSheet, ActivityIndicator,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, router } from "expo-router";
 import Animated, {
   FadeInDown, FadeInUp,
   useSharedValue, withTiming, withDelay, useAnimatedStyle, Easing,
 } from "react-native-reanimated";
 import { usePartnerStore, type CreateProposalInput } from "../../../store/usePartnerStore";
+import { useChatStore } from "../../../store/useChatStore";
 import { useAuthStore } from "../../../store/useAuthStore";
 import ProposalCard from "../../../components/ProposalCard";
 import PressableScale from "../../../components/ui/PressableScale";
@@ -182,9 +183,10 @@ export default function PartnerScreen() {
   const myId = useAuthStore(st => st.user?.id);
   const {
     couple, pendingCount, proposals, split,
-    loading, fetchPartner, linkPartner, unlinkPartner,
+    loading, fetchPartner, linkPartner, unlinkPartner, addCoach, removeCoach,
     fetchProposals, fetchSplit, respondProposal, cancelProposal,
   } = usePartnerStore();
+  const chatUnread = useChatStore(st => st.unread);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [connectEmail, setConnectEmail] = useState("");
@@ -192,6 +194,29 @@ export default function PartnerScreen() {
   const [connecting, setConnecting] = useState(false);
   const [tab, setTab] = useState<"inbox" | "sent">("inbox");
   const [splitPeriod, setSplitPeriod] = useState<"3M" | "6M" | "1Y">("3M");
+  const [coachEmail, setCoachEmail] = useState("");
+  const [coachError, setCoachError] = useState<string | null>(null);
+  const [coachBusy, setCoachBusy] = useState(false);
+
+  const onAddCoach = async () => {
+    if (!coachEmail.trim()) return;
+    setCoachError(null); setCoachBusy(true);
+    try {
+      await addCoach(coachEmail.trim());
+      setCoachEmail("");
+    } catch (e) {
+      setCoachError(e instanceof ApiError ? e.message : "Could not add coach");
+    } finally { setCoachBusy(false); }
+  };
+
+  const onRemoveCoach = () => {
+    const doRemove = () => removeCoach().catch(() => {});
+    if (Platform.OS === "web") { doRemove(); return; }
+    Alert.alert("Remove coach", "Remove the coach from this couple?", [
+      { text: T.common.cancel, style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: doRemove },
+    ]);
+  };
 
   const filteredSplit = useMemo(() => {
     if (!split) return null;
@@ -300,6 +325,60 @@ export default function PartnerScreen() {
                   <Text style={styles.disconnectText}>{T.partner.disconnect}</Text>
                 </PressableScale>
               </View>
+            </Animated.View>
+
+            {/* ── Team chat ─────────────────────────────────────────────── */}
+            <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+              <PressableScale onPress={() => router.push("/chat")} style={styles.chatBtn}>
+                <Text style={styles.chatBtnIcon}>💬</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.chatBtnTitle}>Team chat</Text>
+                  <Text style={styles.chatBtnSub}>Messages, proposals &amp; every change</Text>
+                </View>
+                {chatUnread > 0 ? (
+                  <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{chatUnread > 99 ? "99+" : chatUnread}</Text></View>
+                ) : <Text style={styles.chatChevron}>›</Text>}
+              </PressableScale>
+            </Animated.View>
+
+            {/* ── Coach ─────────────────────────────────────────────────── */}
+            <Animated.View entering={FadeInDown.delay(70).duration(400)}>
+              {couple.coach ? (
+                <View style={styles.coachCard}>
+                  <View style={styles.coachAvatar}>
+                    <Text style={styles.coachAvatarText}>{couple.coach.firstName[0]}{couple.coach.lastName[0]}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.coachName}>{couple.coach.firstName} {couple.coach.lastName}</Text>
+                    <Text style={styles.coachRole}>🎓 Coach · full access</Text>
+                  </View>
+                  {couple.role !== "coach" ? (
+                    <PressableScale onPress={onRemoveCoach} style={styles.disconnectBtn}>
+                      <Text style={styles.disconnectText}>Remove</Text>
+                    </PressableScale>
+                  ) : null}
+                </View>
+              ) : couple.role !== "coach" ? (
+                <View style={styles.coachAddCard}>
+                  <Text style={styles.coachAddTitle}>🎓 Add a coach</Text>
+                  <Text style={styles.coachAddSub}>A coach sees and can change everything, just like a partner.</Text>
+                  {coachError ? <View style={styles.errorBox}><Text style={styles.errorText}>{coachError}</Text></View> : null}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TextInput
+                      style={[styles.emailInput, { flex: 1, marginBottom: 0 }]}
+                      placeholder="coach@email.com"
+                      placeholderTextColor={C.t3}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      value={coachEmail}
+                      onChangeText={setCoachEmail}
+                    />
+                    <PressableScale onPress={onAddCoach} disabled={coachBusy || !coachEmail.trim()} style={[styles.coachAddBtn, !coachEmail.trim() && { opacity: 0.5 }]}>
+                      {coachBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.coachAddBtnText}>Add</Text>}
+                    </PressableScale>
+                  </View>
+                </View>
+              ) : null}
             </Animated.View>
 
             {/* ── Split section ─────────────────────────────────────────── */}
@@ -552,6 +631,36 @@ function makeStyles(C: Palette) {
   connectedText: { color: C.accent, fontSize: 12, fontWeight: "600" },
   disconnectBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: C.elevated, borderWidth: 1, borderColor: C.border },
   disconnectText: { color: C.t3, fontSize: 12 },
+  // Chat button
+  chatBtn: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: C.accentFade, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: C.accentBorder, marginBottom: 16,
+  },
+  chatBtnIcon: { fontSize: 22 },
+  chatBtnTitle: { color: C.accent, fontWeight: "800", fontSize: 16 },
+  chatBtnSub: { color: C.t2, fontSize: 12, marginTop: 2 },
+  chatChevron: { color: C.accent, fontSize: 22, fontWeight: "700" },
+  chatBadge: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: C.red, alignItems: "center", justifyContent: "center", paddingHorizontal: 7 },
+  chatBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  // Coach
+  coachCard: {
+    backgroundColor: C.card, borderRadius: 18, padding: 14,
+    flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: C.border,
+  },
+  coachAvatar: {
+    width: 44, height: 44, borderRadius: 12, backgroundColor: C.goldFade,
+    alignItems: "center", justifyContent: "center", marginRight: 12,
+    borderWidth: 1.5, borderColor: C.goldBorder,
+  },
+  coachAvatarText: { color: C.gold, fontWeight: "800", fontSize: 15 },
+  coachName: { color: C.t1, fontWeight: "700", fontSize: 15 },
+  coachRole: { color: C.gold, fontSize: 12, fontWeight: "600", marginTop: 2 },
+  coachAddCard: { backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.border },
+  coachAddTitle: { color: C.t1, fontWeight: "700", fontSize: 15, marginBottom: 4 },
+  coachAddSub: { color: C.t3, fontSize: 12, marginBottom: 12, lineHeight: 17 },
+  coachAddBtn: { backgroundColor: C.accent, borderRadius: 14, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
+  coachAddBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   // Split
   sectionLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.8 },
   splitHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 4 },

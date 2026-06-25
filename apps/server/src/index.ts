@@ -16,6 +16,8 @@ import scheduleRoutes from "./routes/schedule";
 import budgetRoutes from "./routes/budgets";
 import partnerRoutes from "./routes/partner";
 import proposalRoutes from "./routes/proposals";
+import messageRoutes from "./routes/messages";
+import pushRoutes    from "./routes/push";
 import contactRoutes  from "./routes/contact";
 import wdsfRoutes     from "./routes/wdsf";
 
@@ -68,6 +70,8 @@ app.use("/api/schedule", scheduleRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/api/proposals", proposalRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/push",     pushRoutes);
 app.use("/api/contact",  contactRoutes);
 app.use("/api/wdsf",    wdsfRoutes);
 

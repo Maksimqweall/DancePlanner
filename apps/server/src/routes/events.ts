@@ -12,6 +12,7 @@ import {
   createChecklistItemSchema,
   updateChecklistItemSchema,
 } from "../lib/validation";
+import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
@@ -65,6 +66,7 @@ router.post(
       data: { ...data, ownerId: req.userId! },
     });
     res.status(201).json({ event });
+    logActivity(req.userId!, { resource: "events", action: "added", summary: event.title });
   })
 );
 
@@ -76,6 +78,7 @@ router.patch(
     const data = updateEventSchema.parse(req.body);
     const event = await prisma.event.update({ where: { id: param(req, "id") }, data });
     res.json({ event });
+    logActivity(req.userId!, { resource: "events", action: "updated", summary: event.title });
   })
 );
 
@@ -84,7 +87,7 @@ router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
     const eventId = param(req, "id");
-    await getOwnedEvent(eventId, req.userId!);
+    const ev = await getOwnedEvent(eventId, req.userId!);
 
     // Remove attached files from disk (best-effort, outside transaction).
     const attachments = await prisma.attachment.findMany({ where: { eventId } });
@@ -112,6 +115,7 @@ router.delete(
     });
 
     res.status(204).end();
+    logActivity(req.userId!, { resource: "events", action: "deleted", summary: ev.title });
   })
 );
 
@@ -121,12 +125,13 @@ router.delete(
 router.post(
   "/:id/checklist",
   asyncHandler(async (req, res) => {
-    await getOwnedEvent(param(req, "id"), req.userId!);
+    const ev = await getOwnedEvent(param(req, "id"), req.userId!);
     const data = createChecklistItemSchema.parse(req.body);
     const item = await prisma.checklistItem.create({
       data: { eventId: param(req, "id"), text: data.text },
     });
     res.status(201).json({ item });
+    logActivity(req.userId!, { resource: "events", action: "updated", summary: `${ev.title} · checklist: ${data.text}` });
   })
 );
 
@@ -134,7 +139,7 @@ router.post(
 router.patch(
   "/:id/checklist/:itemId",
   asyncHandler(async (req, res) => {
-    await getOwnedEvent(param(req, "id"), req.userId!);
+    const ev = await getOwnedEvent(param(req, "id"), req.userId!);
     const data = updateChecklistItemSchema.parse(req.body);
     const existing = await prisma.checklistItem.findUnique({
       where: { id: param(req, "itemId") },
@@ -147,6 +152,10 @@ router.patch(
       data,
     });
     res.json({ item });
+    logActivity(req.userId!, {
+      resource: "events", action: "updated",
+      summary: `${ev.title} · ${item.text} → ${item.isDone ? "done" : "to-do"}`,
+    });
   })
 );
 
@@ -154,7 +163,7 @@ router.patch(
 router.delete(
   "/:id/checklist/:itemId",
   asyncHandler(async (req, res) => {
-    await getOwnedEvent(param(req, "id"), req.userId!);
+    const ev = await getOwnedEvent(param(req, "id"), req.userId!);
     const existing = await prisma.checklistItem.findUnique({
       where: { id: param(req, "itemId") },
     });
@@ -163,6 +172,7 @@ router.delete(
     }
     await prisma.checklistItem.delete({ where: { id: param(req, "itemId") } });
     res.status(204).end();
+    logActivity(req.userId!, { resource: "events", action: "updated", summary: `${ev.title} · removed checklist: ${existing.text}` });
   })
 );
 
@@ -173,7 +183,7 @@ router.post(
   "/:id/attachments",
   upload.single("file"),
   asyncHandler(async (req, res) => {
-    await getOwnedEvent(param(req, "id"), req.userId!);
+    const ev = await getOwnedEvent(param(req, "id"), req.userId!);
     if (!req.file) {
       throw new HttpError(400, "No file uploaded (expected field 'file')");
     }
@@ -194,6 +204,7 @@ router.post(
       },
     });
     res.status(201).json({ attachment });
+    logActivity(req.userId!, { resource: "events", action: "updated", summary: `${ev.title} · attachment: ${label}` });
   })
 );
 
@@ -201,7 +212,7 @@ router.post(
 router.delete(
   "/:id/attachments/:attId",
   asyncHandler(async (req, res) => {
-    await getOwnedEvent(param(req, "id"), req.userId!);
+    const ev = await getOwnedEvent(param(req, "id"), req.userId!);
     const att = await prisma.attachment.findUnique({ where: { id: param(req, "attId") } });
     if (!att || att.eventId !== param(req, "id")) {
       throw new HttpError(404, "Attachment not found");
@@ -209,6 +220,7 @@ router.delete(
     removeUploadedFile(att.fileUrl);
     await prisma.attachment.delete({ where: { id: param(req, "attId") } });
     res.status(204).end();
+    logActivity(req.userId!, { resource: "events", action: "updated", summary: `${ev.title} · removed attachment: ${att.label}` });
   })
 );
 

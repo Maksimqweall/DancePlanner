@@ -6,7 +6,8 @@ function getStores() {
   const { useFinanceStore } = require("../store/useFinanceStore");
   const { useScheduleStore } = require("../store/useScheduleStore");
   const { usePartnerStore } = require("../store/usePartnerStore");
-  return { useFinanceStore, useScheduleStore, usePartnerStore };
+  const { useChatStore } = require("../store/useChatStore");
+  return { useFinanceStore, useScheduleStore, usePartnerStore, useChatStore };
 }
 
 let socket: WebSocket | null = null;
@@ -48,9 +49,16 @@ export async function connectSync() {
   socket.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data as string) as { type: string; resource?: string };
-      if (msg.type !== "sync" || !msg.resource) return;
 
-      const { useFinanceStore, useScheduleStore, usePartnerStore } = getStores();
+      const { useFinanceStore, useScheduleStore, usePartnerStore, useChatStore } = getStores();
+
+      // New chat / activity-feed message → refresh the feed + unread badge.
+      if (msg.type === "message") {
+        useChatStore.getState().handleIncoming();
+        return;
+      }
+
+      if (msg.type !== "sync" || !msg.resource) return;
       switch (msg.resource) {
         case "expenses":
           useFinanceStore.getState().refresh();

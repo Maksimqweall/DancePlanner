@@ -28,6 +28,8 @@ interface PartnerState {
   fetchPartner: () => Promise<void>;
   linkPartner: (email: string) => Promise<void>;
   unlinkPartner: () => Promise<void>;
+  addCoach: (email: string) => Promise<void>;
+  removeCoach: () => Promise<void>;
 
   fetchProposals: (direction?: "inbox" | "sent" | "all") => Promise<void>;
   createProposal: (input: CreateProposalInput) => Promise<void>;
@@ -62,6 +64,16 @@ export const usePartnerStore = create<PartnerState>((set, get) => ({
   unlinkPartner: async () => {
     await api.del("/partner");
     set({ couple: null, proposals: [], split: null, pendingCount: 0 });
+  },
+
+  addCoach: async (email) => {
+    const data = await api.post<{ couple: Couple }>("/partner/coach", { email });
+    set({ couple: data.couple });
+  },
+
+  removeCoach: async () => {
+    await api.del("/partner/coach");
+    await get().fetchPartner();
   },
 
   fetchProposals: async (direction = "all") => {

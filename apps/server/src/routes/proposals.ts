@@ -4,19 +4,17 @@ import { requireAuth } from "../middleware/auth";
 import { asyncHandler, HttpError, param, queryString } from "../lib/http";
 import { createProposalSchema, respondProposalSchema } from "../lib/validation";
 import type { ExpenseCategory, SessionType } from "@prisma/client";
-import { notifyPartner } from "../lib/partnerNotify";
 import { notify } from "../lib/wsManager";
+import { findCoupleIdsForUser, otherMemberIds } from "../lib/coupleMembers";
+import { sendPushToUsers } from "../lib/push";
+import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
 
+// Couple including the coach as a full member.
 async function findActiveCouple(userId: string) {
-  return prisma.couple.findFirst({
-    where: {
-      isActive: true,
-      OR: [{ leadId: userId }, { followId: userId }],
-    },
-  });
+  return findCoupleIdsForUser(userId);
 }
 
 function proposalTypeToExpenseCategory(type: string): ExpenseCategory {
@@ -87,9 +85,31 @@ router.post(
       include: { sender: { select: SENDER_SELECT } },
     });
 
+    // Post the proposal into the couple chat feed so it shows up for everyone.
+    const costStr = proposal.cost ? ` — ${proposal.cost} ${proposal.currency}` : "";
+    const message = await prisma.message.create({
+      data: {
+        coupleId: couple.id,
+        authorId: req.userId!,
+        kind: "PROPOSAL",
+        body: `Proposal: ${proposal.title}${costStr}`,
+        proposalId: proposal.id,
+        meta: { type: proposal.type, cost: proposal.cost, currency: proposal.currency } as object,
+      },
+    });
+
     res.status(201).json({ proposal });
-    // Notify partner about the new proposal (badge + inbox)
-    notifyPartner(req.userId!, "proposals");
+
+    const recipients = otherMemberIds(couple, req.userId!);
+    for (const uid of recipients) {
+      notify(uid, { type: "message", coupleId: couple.id, messageId: message.id });
+      notify(uid, { type: "sync", resource: "proposals" });
+    }
+    sendPushToUsers(recipients, {
+      title: `${proposal.sender.firstName} sent a proposal`,
+      body: `${proposal.title}${costStr}`,
+      data: { type: "chat", coupleId: couple.id },
+    });
   })
 );
 
@@ -121,8 +141,9 @@ router.patch(
         include: { sender: { select: SENDER_SELECT } },
       });
       res.json({ proposal: updated });
-      // Notify sender their proposal was declined
+      // Notify sender their proposal was declined + feed entry + push to all members
       notify(proposal.senderId, { type: "sync", resource: "proposals" });
+      logActivity(req.userId!, { resource: "proposals", action: "declined", summary: proposal.title });
       return;
     }
 
@@ -190,6 +211,7 @@ router.patch(
     if (sessionType && details.date) {
       notify(proposal.senderId, { type: "sync", resource: "schedule" });
     }
+    logActivity(req.userId!, { resource: "proposals", action: "approved", summary: proposal.title });
   })
 );
 
@@ -209,8 +231,8 @@ router.delete(
 
     await prisma.proposal.delete({ where: { id: proposalId } });
     res.status(204).end();
-    // Notify the other partner that the proposal was cancelled
-    notifyPartner(req.userId!, "proposals");
+    // Feed entry + notify all members the proposal was cancelled
+    logActivity(req.userId!, { resource: "proposals", action: "deleted", summary: proposal.title });
   })
 );
 

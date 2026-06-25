@@ -159,9 +159,34 @@ export interface Couple {
   id: string;
   leadId: string;
   followId: string;
+  coachId?: string | null;
   isActive: boolean;
   createdAt: string;
   partner: CouplePartner;
+  lead?: CouplePartner;
+  follow?: CouplePartner;
+  coach?: CouplePartner | null;
+  role?: "lead" | "follow" | "coach";
+}
+
+export interface ChatMessageAuthor {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export type ChatMessageKind = "SYSTEM" | "TEXT" | "PROPOSAL";
+
+export interface ChatMessage {
+  id: string;
+  coupleId: string;
+  authorId: string | null;
+  kind: ChatMessageKind;
+  body: string;
+  meta?: Record<string, unknown> | null;
+  proposalId?: string | null;
+  createdAt: string;
+  author?: ChatMessageAuthor | null;
 }
 
 export interface SplitView {

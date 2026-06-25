@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler, HttpError, param } from "../lib/http";
 import { budgetUpsertSchema, MONTH_RE } from "../lib/validation";
+import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
@@ -35,6 +36,7 @@ router.put(
       select: { month: true, amount: true },
     });
     res.json({ budget });
+    logActivity(req.userId!, { resource: "budgets", action: "updated", summary: `${month} → ${amount}` });
   })
 );
 
@@ -45,6 +47,7 @@ router.delete(
     const month = param(req, "month");
     await prisma.monthlyBudget.deleteMany({ where: { userId: req.userId, month } });
     res.status(204).end();
+    logActivity(req.userId!, { resource: "budgets", action: "deleted", summary: `${month} budget reset` });
   })
 );
 

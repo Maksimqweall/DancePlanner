@@ -7,9 +7,13 @@ import {
   updateScheduleSchema,
 } from "../lib/validation";
 import { notifyPartner } from "../lib/partnerNotify";
+import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
+
+const scheduleSummary = (e: { title: string; date: Date }) =>
+  `${e.title} — ${e.date.toISOString().slice(0, 10)}`;
 
 type SessionType =
   | "INDIVIDUAL"
@@ -185,10 +189,11 @@ router.post(
     });
 
     res.status(201).json({ entry });
-    // If couple entry was created, notify partner to refresh their calendar
+    // Real-time refetch hints (kept for couple/partner-paid edge cases)
     if (data.coupleEntry) notifyPartner(req.userId!, "schedule");
-    // If partner paid, notify them to refresh expenses too
     if (data.paidBy === "PARTNER") notifyPartner(req.userId!, "expenses");
+    // Activity feed + push to partner & coach (every session change is reported)
+    logActivity(req.userId!, { resource: "schedule", action: "added", summary: scheduleSummary(entry) });
   })
 );
 
@@ -271,6 +276,7 @@ router.patch(
     });
 
     res.json({ entry });
+    logActivity(req.userId!, { resource: "schedule", action: "updated", summary: scheduleSummary(entry) });
   })
 );
 
@@ -325,6 +331,7 @@ router.delete(
       }
     });
     res.status(204).end();
+    logActivity(req.userId!, { resource: "schedule", action: "deleted", summary: scheduleSummary(existing) });
   })
 );
 

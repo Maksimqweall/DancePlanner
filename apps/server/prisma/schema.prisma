@@ -34,12 +34,16 @@ model User {
   // Связи
   couplesAsLead   Couple[]   @relation("LeadPartner")
   couplesAsFollow Couple[]   @relation("FollowPartner")
+  couplesAsCoach  Couple[]   @relation("CoachPartner") // Couples where this user is the coach
   proposalsSent   Proposal[] @relation("ProposalSender")
   expenses        Expense[]
   ownedEvents     Event[]    @relation("EventOwner") // Projects this user owns directly (Module 1)
   scheduleEntries ScheduleEntry[] // Calendar sessions (Module 2)
   budgets         MonthlyBudget[] // Per-month spending limits (Module 1)
-  
+  messages        Message[]      @relation("MessageAuthor") // Chat/activity messages authored
+  messageReads    MessageRead[]  // Per-couple read state
+  pushTokens      PushToken[]    // Expo push notification tokens
+
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -48,15 +52,67 @@ model Couple {
   id          String     @id @default(uuid())
   leadId      String
   followId    String
+  coachId     String?    // Optional coach — a third member with full access to the couple
   isActive    Boolean    @default(true)
-  
+
   lead        User       @relation("LeadPartner", fields: [leadId], references: [id])
   follow      User       @relation("FollowPartner", fields: [followId], references: [id])
-  
+  coach       User?      @relation("CoachPartner", fields: [coachId], references: [id])
+
   proposals   Proposal[]
   events      Event[]
-  
+  messages    Message[]
+  reads       MessageRead[]
+
   createdAt   DateTime   @default(now())
+}
+
+// ==========================================
+// МОДУЛЬ: Chat / Activity feed (партнёры + тренер)
+// ==========================================
+// One feed per couple. Holds chat text, posted proposals, and SYSTEM activity
+// entries auto-created on every change so partners + coach see everything.
+model Message {
+  id         String      @id @default(uuid())
+  coupleId   String
+  authorId   String?     // null for SYSTEM activity entries
+  kind       MessageKind @default(TEXT)
+  body       String
+  meta       Json?       // structured details (resource, action, amount, etc.)
+  proposalId String?     // linked Proposal when kind = PROPOSAL
+
+  couple     Couple      @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author     User?       @relation("MessageAuthor", fields: [authorId], references: [id])
+
+  createdAt  DateTime    @default(now())
+
+  @@index([coupleId, createdAt])
+}
+
+// Per-user read pointer for unread badge counts.
+model MessageRead {
+  id         String   @id @default(uuid())
+  coupleId   String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  couple     Couple   @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([coupleId, userId])
+}
+
+// Expo push notification token registered per device.
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String?
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ==========================================
@@ -210,6 +266,12 @@ model MonthlyBudget {
 }
 
 // --- Энумераторы (Enums) ---
+
+enum MessageKind {
+  SYSTEM   // auto-generated activity entry (a change was made)
+  TEXT     // free-text chat message
+  PROPOSAL // a proposal posted into the chat
+}
 
 enum ProposalType {
   TRAINING

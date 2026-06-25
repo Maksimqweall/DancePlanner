@@ -500,7 +500,7 @@ function fmtYear(t: number | undefined): string {
 function ProgressModal({ competitions, onClose }: { competitions: WdsfCompetition[]; onClose: () => void }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
-  const [tab, setTab] = useState<"trends" | "dances" | "compare">("trends");
+  const [tab, setTab] = useState<"trends" | "dances" | "compare" | "judges">("trends");
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -516,7 +516,7 @@ function ProgressModal({ competitions, onClose }: { competitions: WdsfCompetitio
           </TouchableOpacity>
         </View>
         <View style={s.tabBar}>
-          {([{ key: "trends", label: "Trends" }, { key: "dances", label: "Dances" }, { key: "compare", label: "Compare 2" }] as const).map(t => (
+          {([{ key: "trends", label: "Trends" }, { key: "dances", label: "Dances" }, { key: "compare", label: "Compare 2" }, { key: "judges", label: "Judges" }] as const).map(t => (
             <TouchableOpacity key={t.key} style={[s.tabItem, tab === t.key && s.tabItemActive]} onPress={() => setTab(t.key)}>
               <Text style={[s.tabLabel, tab === t.key && s.tabLabelActive]}>{t.label}</Text>
             </TouchableOpacity>
@@ -526,6 +526,7 @@ function ProgressModal({ competitions, onClose }: { competitions: WdsfCompetitio
           {tab === "trends" && <TrendsView competitions={competitions} />}
           {tab === "dances" && <DanceDynamicsView competitions={competitions} />}
           {tab === "compare" && <CompareEventsView competitions={competitions} />}
+          {tab === "judges" && <JudgeRankingView competitions={competitions} />}
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>
@@ -859,6 +860,232 @@ function CompareEventsView({ competitions }: { competitions: WdsfCompetition[] }
       </View>
 
       {body}
+    </View>
+  );
+}
+
+// ─── Cross-tournament judge rankings ──────────────────────────────────────────
+// Aggregate per-judge scores across the last N tournaments. Judges are matched by
+// NAME (panels differ between events, so the letter "A" is a different person each
+// time); judges without a resolved name are kept per-event so they never merge.
+
+interface JudgeAgg { name: string; value: number; samples: number; tournaments: number }
+interface JudgeRankings { q2: JudgeAgg[]; q3: JudgeAgg[]; f2: JudgeAgg[]; f3: JudgeAgg[] }
+
+function aggregateJudgeRankings(list: CompetitionAnalytics[]): JudgeRankings {
+  type Acc = { name: string; num: number; den: number; tournaments: Set<string> };
+
+  const keyOf = (letter: string, names: Record<string, string>, slug: string) => {
+    const full = names?.[letter]?.trim();
+    if (full) return { key: full.toLowerCase(), name: full };
+    return { key: `${slug}::${letter}`, name: letter }; // unresolved → keep per-event
+  };
+  const bump = (m: Map<string, Acc>, letter: string, names: Record<string, string>, slug: string, addNum: number, addDen: number) => {
+    if (!letter) return;
+    const { key, name } = keyOf(letter, names, slug);
+    let a = m.get(key);
+    if (!a) { a = { name, num: 0, den: 0, tournaments: new Set() }; m.set(key, a); }
+    a.num += addNum; a.den += addDen; a.tournaments.add(slug);
+  };
+
+  const q2 = new Map<string, Acc>(), q3 = new Map<string, Acc>(), f2 = new Map<string, Acc>(), f3 = new Map<string, Acc>();
+
+  for (const an of list) {
+    const names = an.judgeNames ?? {};
+    const slug = an.competitionSlug || an.rankingUrl || an.competitionName;
+    for (const r of an.rounds) for (const d of r.dances) for (const c of d.crosses) {
+      bump(q2, c.judge, names, slug, c.marked ? 1 : 0, 1);
+    }
+    if (an.scores3) for (const r of an.scores3.rounds) for (const d of r.dances) for (const je of d.judgeEntries) {
+      bump(q3, je.judge, names, slug, score3JudgeMark(je), 1);
+    }
+    if (an.final) for (const d of an.final.dances) for (const je of d.judgeEntries) {
+      bump(f2, je.judge, names, slug, je.place, 1);
+    }
+    if (an.final3) for (const d of an.final3.dances) for (const je of d.judgeEntries) {
+      bump(f3, je.judge, names, slug, score3JudgeMark(je), 1);
+    }
+  }
+
+  const finalize = (m: Map<string, Acc>, higherBetter: boolean, scale = 1): JudgeAgg[] =>
+    [...m.values()]
+      .filter(a => a.den > 0)
+      .map(a => ({ name: a.name, value: (a.num / a.den) * scale, samples: a.den, tournaments: a.tournaments.size }))
+      .sort((x, y) => (higherBetter ? y.value - x.value : x.value - y.value));
+
+  return {
+    q2: finalize(q2, true, 100), // % of possible crosses earned
+    q3: finalize(q3, true),
+    f2: finalize(f2, false),     // average placement, lower is better
+    f3: finalize(f3, true),
+  };
+}
+
+// One ranked category (best → worst). Bars are normalised so the best judge is
+// always the fullest bar, regardless of whether higher or lower values are better.
+function JudgeRankCategory({ title, subtitle, data, fmt, lowerBetter = false }: {
+  title: string;
+  subtitle: string;
+  data: JudgeAgg[];
+  fmt: (v: number) => string;
+  lowerBetter?: boolean;
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  if (data.length === 0) return null;
+
+  // Headline best/worst prefer judges with enough data points; fall back to all.
+  const MIN = 3;
+  const strong = data.filter(d => d.samples >= MIN);
+  const pool = strong.length >= 2 ? strong : data;
+  const best = pool[0];
+  const worst = pool[pool.length - 1];
+
+  const vals = data.map(d => d.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const frac = (v: number) => {
+    if (max === min) return 1;
+    return lowerBetter ? (max - v) / (max - min) : (v - min) / (max - min);
+  };
+
+  return (
+    <View style={{ gap: 8 }}>
+      <SectionHeader noMargin title={title} subtitle={subtitle} />
+      <View style={s.judgeInsightRow}>
+        <View style={s.judgeInsightCard}>
+          <Text style={s.judgeInsightIcon}>🏅</Text>
+          <Text style={[s.judgeInsightLabel, { color: C.gold }]}>Best</Text>
+          <Text style={s.judgeInsightName} numberOfLines={1}>{best.name}</Text>
+          <Text style={s.judgeInsightVal}>{fmt(best.value)} · {best.tournaments}t</Text>
+        </View>
+        <View style={s.judgeInsightCard}>
+          <Text style={s.judgeInsightIcon}>🧊</Text>
+          <Text style={[s.judgeInsightLabel, { color: C.red }]}>Strictest</Text>
+          <Text style={s.judgeInsightName} numberOfLines={1}>{worst.name}</Text>
+          <Text style={s.judgeInsightVal}>{fmt(worst.value)} · {worst.tournaments}t</Text>
+        </View>
+      </View>
+      <View style={s.sectionCard}>
+        {data.map((d, i) => {
+          const isFirst = i === 0, isLast = i === data.length - 1;
+          const col = isFirst ? C.gold : isLast ? C.red : C.t1;
+          return (
+            <View key={`${d.name}-${i}`} style={[s.barRow, i < data.length - 1 && s.rowBorder]}>
+              <Text style={[s.judgeNameLabel, { color: col }]} numberOfLines={1}>{d.name}</Text>
+              <View style={s.barRowTrack}>
+                <View style={[s.barRowFill, { width: `${Math.round(Math.max(0.05, frac(d.value)) * 100)}%`, backgroundColor: col }]} />
+              </View>
+              <Text style={s.barRowVal}>{fmt(d.value)}</Text>
+              <Text style={s.barRowPct}>{d.tournaments}t</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function JudgeRankingView({ competitions }: { competitions: WdsfCompetition[] }) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const fetchAnalytics = useWdsfStore(st => st.fetchAnalytics);
+  const cache = useWdsfStore(st => st.analyticsCache);
+
+  // Most-recent-first competitions that have an analysable results URL.
+  const withUrls = useMemo(
+    () => competitions
+      .filter(c => c.competitionUrl)
+      .sort((a, b) => parseCompDate(b.date) - parseCompDate(a.date)),
+    [competitions],
+  );
+
+  const [scope, setScope] = useState<5 | 10 | 15>(5);
+  const targetUrls = useMemo(
+    () => withUrls.slice(0, scope).map(c => c.competitionUrl!),
+    [withUrls, scope],
+  );
+  const urlsKey = targetUrls.join("|");
+
+  // Fetch each target's analytics (cached in the store), 4 at a time so we don't
+  // hammer the WDSF site. Re-runs whenever the scope (and thus url set) changes.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const POOL = 4;
+      for (let i = 0; i < targetUrls.length; i += POOL) {
+        if (cancelled) return;
+        await Promise.all(targetUrls.slice(i, i + POOL).map(u => fetchAnalytics(u)));
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlsKey, fetchAnalytics]);
+
+  const settled = targetUrls.filter(u => cache[u] !== undefined).length;
+  const loaded = useMemo(
+    () => targetUrls.map(u => cache[u]).filter((a): a is CompetitionAnalytics => !!a),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [urlsKey, cache],
+  );
+  const rankings = useMemo(() => aggregateJudgeRankings(loaded), [loaded]);
+
+  const total = targetUrls.length;
+  const done = settled >= total;
+  const hasAny = rankings.q2.length || rankings.q3.length || rankings.f2.length || rankings.f3.length;
+
+  if (withUrls.length === 0) {
+    return (
+      <View style={{ padding: 16 }}>
+        <View style={[s.sectionCard, { padding: 16 }]}>
+          <Text style={{ color: C.t2, textAlign: "center" }}>No tournaments with detailed score data to analyse yet.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ padding: 16, gap: 14 }}>
+      <SectionHeader
+        noMargin
+        title="Judges across tournaments"
+        subtitle={`From your last ${Math.min(scope, withUrls.length)} tournament${Math.min(scope, withUrls.length) === 1 ? "" : "s"}`}
+      />
+
+      <View style={s.roundFilterRow}>
+        {([5, 10, 15] as const).map(n => (
+          <TouchableOpacity
+            key={n}
+            style={[s.roundFilterChip, scope === n && s.roundFilterChipActive]}
+            onPress={() => setScope(n)}
+          >
+            <Text style={[s.roundFilterChipText, scope === n && s.roundFilterChipTextActive]}>Last {n}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {!done && (
+        <View style={[s.sectionCard, { padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }]}>
+          <ActivityIndicator color={C.accent} />
+          <Text style={{ color: C.t2, fontSize: 13 }}>Loading tournaments… {settled}/{total}</Text>
+        </View>
+      )}
+
+      {done && !hasAny ? (
+        <View style={[s.sectionCard, { padding: 16 }]}>
+          <Text style={{ color: C.t2, textAlign: "center" }}>No judge-level score data found in these tournaments.</Text>
+        </View>
+      ) : null}
+
+      <JudgeRankCategory title="System 2.0 · Qualifying" subtitle="Crosses earned per judge · higher = liked you more" data={rankings.q2} fmt={(v) => `${v.toFixed(0)}%`} />
+      <JudgeRankCategory title="System 3.0 · Qualifying" subtitle="Average mark per judge · higher = better" data={rankings.q3} fmt={(v) => v.toFixed(2)} />
+      <JudgeRankCategory title="Finals · System 2.0" subtitle="Average placement per judge · lower = better" data={rankings.f2} fmt={(v) => `#${v.toFixed(1)}`} lowerBetter />
+      <JudgeRankCategory title="Finals · System 3.0" subtitle="Average final score per judge · higher = better" data={rankings.f3} fmt={(v) => v.toFixed(2)} />
+
+      {hasAny ? (
+        <Text style={{ color: C.t3, fontSize: 11, paddingHorizontal: 4, lineHeight: 16 }}>
+          Judges are matched by name across events. Panels differ, so many appear in only a few tournaments — the “t” count shows how many. Gold = best, red = strictest.
+        </Text>
+      ) : null}
     </View>
   );
 }

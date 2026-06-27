@@ -269,6 +269,21 @@ model MonthlyBudget {
   @@unique([userId, month])
 }
 
+// ==========================================
+// МОДУЛЬ: WDSF World Ranking cache (Tournament Rating)
+// ==========================================
+// Cached top-N world-ranking snapshot per (CombinedType, month). Shared across all
+// users and competitions; past months are immutable so they cache indefinitely.
+model WdsfRankingSnapshot {
+  id            String   @id @default(uuid())
+  combinedType  String   // e.g. "1_180_56_0_0" (Adult Standard)
+  snapshotMonth String   // "YYYY-MM" derived from the tournament date
+  data          Json     // RankedCouple[] (top-N)
+  fetchedAt     DateTime @default(now())
+
+  @@unique([combinedType, snapshotMonth])
+}
+
 // --- Энумераторы (Enums) ---
 
 enum MessageKind {

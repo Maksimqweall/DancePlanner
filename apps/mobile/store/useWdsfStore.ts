@@ -148,6 +148,26 @@ export interface CompetitionAnalytics {
   judgeNames: Record<string, string>;
 }
 
+// ─── Tournament Rating (field-strength tier vs WDSF World Ranking) ─────────────
+
+export type TournamentTier = "S" | "A" | "B" | "C" | "D" | "Unrated";
+
+export interface TournamentRating {
+  available: boolean;
+  reason?: string;
+  tier: TournamentTier;
+  rating: number; // 0–10
+  participants: number;
+  n30: number;
+  n50: number;
+  n100: number;
+  n200: number;
+  bestRank: number | null;
+  matched: { coupleName: string; worldRank: number; points: number }[];
+  combinedType: string;
+  snapshotMonth: string | null;
+}
+
 // One rival couple's full breakdown across both judging systems (for side-by-side comparison)
 export interface CoupleScores {
   rounds: PrelimRound[];          // System 2.0 qualifying rounds (crosses)
@@ -166,6 +186,8 @@ interface WdsfState {
   analyticsLoading: Record<string, boolean>;
   coupleScoresCache: Record<string, CoupleScores | null>;
   coupleScoresLoading: Record<string, boolean>;
+  ratingCache: Record<string, TournamentRating | null>;
+  ratingLoading: Record<string, boolean>;
 
   fetchProfile: () => Promise<void>;
   linkByMin: (min: string) => Promise<void>;
@@ -175,6 +197,12 @@ interface WdsfState {
   fetchAnalytics: (competitionUrl: string) => Promise<CompetitionAnalytics | null>;
   clearAnalyticsCache: (competitionUrl: string) => void;
   fetchCoupleScores: (competitionUrl: string, coupleNumber: string) => Promise<CoupleScores | null>;
+  fetchTournamentRating: (
+    competitionUrl: string,
+    category: string,
+    discipline: string,
+    date?: string,
+  ) => Promise<TournamentRating | null>;
 }
 
 export const useWdsfStore = create<WdsfState>((set, get) => ({
@@ -185,6 +213,8 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
   analyticsLoading: {},
   coupleScoresCache: {},
   coupleScoresLoading: {},
+  ratingCache: {},
+  ratingLoading: {},
 
   fetchProfile: async () => {
     set({ loading: true, error: null });
@@ -228,7 +258,7 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { profile } = await api.post<{ profile: WdsfProfile }>("/wdsf/refresh");
-      set({ profile, analyticsCache: {} }); // clear analytics cache on refresh
+      set({ profile, analyticsCache: {}, ratingCache: {} }); // clear caches on refresh
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Refresh failed" });
     } finally {
@@ -240,7 +270,7 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await api.del("/wdsf/unlink");
-      set({ profile: null, analyticsCache: {}, analyticsLoading: {} });
+      set({ profile: null, analyticsCache: {}, analyticsLoading: {}, ratingCache: {}, ratingLoading: {} });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Failed to unlink" });
     } finally {
@@ -300,6 +330,32 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
       set(s => ({
         coupleScoresCache: { ...s.coupleScoresCache, [key]: null },
         coupleScoresLoading: { ...s.coupleScoresLoading, [key]: false },
+      }));
+      return null;
+    }
+  },
+
+  fetchTournamentRating: async (competitionUrl, category, discipline, date) => {
+    const key = `${competitionUrl}|${category}|${discipline}`;
+    const cached = get().ratingCache[key];
+    if (cached !== undefined) return cached;
+
+    set(s => ({ ratingLoading: { ...s.ratingLoading, [key]: true } }));
+    try {
+      const params = new URLSearchParams({ competitionUrl, category, discipline });
+      if (date) params.set("date", date);
+      const { rating } = await api.get<{ rating: TournamentRating }>(
+        `/wdsf/tournament-rating?${params}`
+      );
+      set(s => ({
+        ratingCache: { ...s.ratingCache, [key]: rating },
+        ratingLoading: { ...s.ratingLoading, [key]: false },
+      }));
+      return rating;
+    } catch {
+      set(s => ({
+        ratingCache: { ...s.ratingCache, [key]: null },
+        ratingLoading: { ...s.ratingLoading, [key]: false },
       }));
       return null;
     }

@@ -2,9 +2,9 @@ import { load } from "cheerio";
 import type { CheerioAPI, Cheerio } from "cheerio";
 import type { Element } from "domhandler";
 
-const WDSF_BASE = "https://www.worlddancesport.org";
+export const WDSF_BASE = "https://www.worlddancesport.org";
 
-const FETCH_HEADERS = {
+export const FETCH_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "Accept-Language": "en-US,en;q=0.5",
@@ -194,7 +194,7 @@ function extractSlug(url: string): string {
 }
 
 /** Build URL variants for a competition */
-function buildCompUrls(slugOrUrl: string) {
+export function buildCompUrls(slugOrUrl: string) {
   const slug = extractSlug(slugOrUrl);
   return {
     slug,
@@ -301,7 +301,7 @@ function buildMarkColumnMap($table: Cheerio<Element>, $: CheerioAPI): ColInfo[] 
 
 // ─── Ranking page scraper ─────────────────────────────────────────────────────
 
-async function scrapeRankingPage(rankingUrl: string): Promise<{
+export async function scrapeRankingPage(rankingUrl: string): Promise<{
   competitionName: string;
   entries: RankingEntry[];
 }> {

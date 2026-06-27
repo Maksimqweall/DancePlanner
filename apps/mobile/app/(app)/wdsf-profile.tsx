@@ -30,6 +30,7 @@ import {
   type Scores3Result,
   type RankingEntry,
   type CoupleScores,
+  type TournamentTier,
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
@@ -41,6 +42,9 @@ import { useToastStore } from "../../store/useToastStore";
 
 const WDSF_SEARCH_URL = "https://www.worlddancesport.org/Athletes";
 const { width: SW } = Dimensions.get("window");
+
+// How many recent competitions get their tier rating prefetched for history badges.
+const RATING_PREFETCH_LIMIT = 24;
 
 export default function WdsfProfileScreen() {
   const C = useC();
@@ -199,6 +203,25 @@ function ProfileView({
     : "—";
   const finalsCount = numericPlaces.filter(p => p <= 6).length;
   const bestDance   = "—"; // filled from analytics when loaded
+
+  // Prefetch tier ratings for the most recent competitions so history rows show
+  // their S/A/B/C/D badge. Low concurrency; server caches the heavy ranking lists.
+  const fetchTournamentRating = useWdsfStore(st => st.fetchTournamentRating);
+  useEffect(() => {
+    const targets = profile.competitions
+      .filter(c => c.competitionUrl && c.category && c.discipline)
+      .slice(0, RATING_PREFETCH_LIMIT);
+    let cancelled = false;
+    (async () => {
+      const POOL = 3;
+      for (let i = 0; i < targets.length && !cancelled; i += POOL) {
+        await Promise.all(targets.slice(i, i + POOL).map(c =>
+          fetchTournamentRating(c.competitionUrl!, c.category, c.discipline, c.date)
+        ));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [profile.competitions, fetchTournamentRating]);
 
   const handleUnlink = () => {
     if (Platform.OS === "web") { onUnlink(); return; }
@@ -1120,6 +1143,9 @@ function OverviewTab({ analytics, comp }: { analytics: CompetitionAnalytics; com
         <Text style={s.coupleChipNumber}>{analytics.coupleNumber}</Text>
         <Text style={s.coupleChipName}>{analytics.coupleName}</Text>
       </View>
+
+      {/* Tournament rating (field strength vs WDSF World Ranking) */}
+      <TournamentRatingCard comp={comp} />
 
       {/* Big stats */}
       <View style={s.overviewGrid}>
@@ -2367,6 +2393,113 @@ function SectionHeader({ title, subtitle, noMargin }: { title: string; subtitle?
   );
 }
 
+// ─── Tournament Rating ────────────────────────────────────────────────────────
+
+type GradTuple = readonly [string, string, ...string[]];
+const TIER_GRADIENTS: Record<TournamentTier, GradTuple> = {
+  S: GRADIENTS.gold,
+  A: GRADIENTS.brand,
+  B: GRADIENTS.purple,
+  C: ["#0EA5E9", "#38BDF8", "#22D3EE"],
+  D: ["#64748B", "#94A3B8", "#94A3B8"],
+  Unrated: ["#64748B", "#94A3B8", "#94A3B8"],
+};
+const TIER_NAME: Record<TournamentTier, string> = {
+  S: "S-Tier", A: "A-Tier", B: "B-Tier", C: "C-Tier", D: "D-Tier", Unrated: "Unrated",
+};
+function tierColor(tier: TournamentTier, C: Palette): string {
+  switch (tier) {
+    case "S": return C.gold;
+    case "A": return C.accent;
+    case "B": return C.purple;
+    case "C": return "#0EA5E9";
+    default:  return C.t2;
+  }
+}
+function ratingKey(comp: WdsfCompetition): string {
+  return `${comp.competitionUrl}|${comp.category}|${comp.discipline}`;
+}
+
+// Prominent S/A/B/C/D card shown at the top of a competition's Overview tab.
+function TournamentRatingCard({ comp }: { comp: WdsfCompetition }) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const fetchTournamentRating = useWdsfStore(st => st.fetchTournamentRating);
+  const key = ratingKey(comp);
+  const rating  = useWdsfStore(st => st.ratingCache[key]);
+  const loading = useWdsfStore(st => st.ratingLoading[key] ?? false);
+
+  const canRate = !!comp.competitionUrl && !!comp.category && !!comp.discipline;
+
+  useEffect(() => {
+    if (canRate) fetchTournamentRating(comp.competitionUrl!, comp.category, comp.discipline, comp.date);
+  }, [key, canRate, fetchTournamentRating]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!canRate) return null;
+
+  if (loading && rating === undefined) {
+    return (
+      <View style={s.ratingCardLoading}>
+        <ActivityIndicator color={C.accent} />
+        <Text style={s.ratingLoadingText}>Rating tournament field…</Text>
+      </View>
+    );
+  }
+
+  if (!rating || !rating.available || rating.tier === "Unrated") {
+    const msg = rating && rating.tier === "Unrated"
+      ? "No couples from the WDSF world top-200 competed in this field."
+      : rating?.reason ?? "Field rating is unavailable for this competition.";
+    return (
+      <View style={s.ratingCardUnavailable}>
+        <Text style={s.ratingUnavailableTitle}>Tournament Rating</Text>
+        <Text style={s.ratingUnavailableText}>{msg}</Text>
+      </View>
+    );
+  }
+
+  const color = tierColor(rating.tier, C);
+  const preview = rating.matched.slice(0, 3)
+    .map(m => `#${m.worldRank} ${m.coupleName}`)
+    .join("   ·   ");
+
+  return (
+    <View style={[s.ratingCard, { borderColor: color + "55" }]}>
+      <View style={s.ratingTierTile}>
+        <LinearGradient colors={TIER_GRADIENTS[rating.tier]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <Text style={s.ratingTierLetter}>{rating.tier}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.ratingTitle}>Tournament Rating</Text>
+        <View style={s.ratingScoreRow}>
+          <Text style={[s.ratingScore, { color }]}>{rating.rating.toFixed(1)}</Text>
+          <Text style={s.ratingScoreMax}> / 10</Text>
+          <Text style={[s.ratingTierLabel, { color }]}>   {TIER_NAME[rating.tier]}</Text>
+        </View>
+        <Text style={s.ratingBreakdown}>
+          World top-30: {rating.n30}  ·  top-50: {rating.n50}  ·  top-100: {rating.n100}  ·  top-200: {rating.n200}
+        </Text>
+        {preview ? <Text style={s.ratingMatched} numberOfLines={2}>{preview}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+// Compact tier badge for a competition history row. Reads from cache only — the
+// History list prefetches ratings; otherwise the badge fills in once opened.
+function TierBadge({ comp }: { comp: WdsfCompetition }) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const rating = useWdsfStore(st => comp.competitionUrl ? st.ratingCache[ratingKey(comp)] : undefined);
+  if (!rating || !rating.available || rating.tier === "Unrated") return null;
+  const color = tierColor(rating.tier, C);
+  return (
+    <View style={[s.tierBadge, { backgroundColor: color + "1A", borderColor: color + "55" }]}>
+      <Text style={[s.tierBadgeText, { color }]}>{rating.tier}</Text>
+    </View>
+  );
+}
+
 function InfoRow({
   label, value, highlight, isLast,
 }: {
@@ -2432,6 +2565,7 @@ function CompetitionRow({ comp, isLast, onPress }: {
         <Text style={s.rowSub} numberOfLines={1}>{[comp.date, meta].filter(Boolean).join("  ·  ")}</Text>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <TierBadge comp={comp} />
         {hasNumPlace ? (
           <View style={[s.placeBadge, placeNum === 1 && { backgroundColor: C.goldFade, borderColor: C.goldBorder }]}>
             <Text style={[s.placeText, { color: placeColor }]}>
@@ -2684,6 +2818,39 @@ function makeStyles(C: Palette) {
   danceCompareLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   danceCompareName:  { color: C.t1, fontSize: 14, fontWeight: "700", textAlign: "center" },
   danceCompareVal:   { color: C.t2, fontSize: 12 },
+
+  // Tournament rating card
+  ratingCard: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: C.card, borderRadius: 18, borderWidth: 1, padding: 14, overflow: "hidden",
+  },
+  ratingTierTile: {
+    width: 62, height: 62, borderRadius: 16, alignItems: "center", justifyContent: "center", overflow: "hidden",
+  },
+  ratingTierLetter: { color: "#fff", fontSize: 32, fontWeight: "900", letterSpacing: -1 },
+  ratingTitle: { color: C.t2, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
+  ratingScoreRow: { flexDirection: "row", alignItems: "baseline", marginTop: 2 },
+  ratingScore: { fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
+  ratingScoreMax: { color: C.t3, fontSize: 13, fontWeight: "700" },
+  ratingTierLabel: { fontSize: 13, fontWeight: "800" },
+  ratingBreakdown: { color: C.t2, fontSize: 12, marginTop: 4, lineHeight: 16 },
+  ratingMatched: { color: C.t3, fontSize: 11, marginTop: 3, lineHeight: 15 },
+  ratingCardLoading: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 16,
+  },
+  ratingLoadingText: { color: C.t2, fontSize: 13, fontWeight: "600" },
+  ratingCardUnavailable: {
+    backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 14,
+  },
+  ratingUnavailableTitle: { color: C.t2, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
+  ratingUnavailableText: { color: C.t3, fontSize: 12, lineHeight: 16 },
+
+  // Tier badge (history row)
+  tierBadge: {
+    borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, minWidth: 22, alignItems: "center",
+  },
+  tierBadgeText: { fontSize: 12, fontWeight: "900" },
 
   // Crosses tab
   barRow:      { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, gap: 8 },

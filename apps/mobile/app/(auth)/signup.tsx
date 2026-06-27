@@ -8,13 +8,15 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
+  Modal,
 } from "react-native";
 import { Link } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import GradientButton from "../../components/ui/GradientButton";
-import type { Palette } from "../../lib/theme";
+import { GRADIENTS, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 
 function InputField({
@@ -48,6 +50,7 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showNameNotice, setShowNameNotice] = useState(true);
 
   const onSubmit = async () => {
     setError(null);
@@ -75,6 +78,7 @@ export default function Signup() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.root}
     >
+      <NameNoticeModal visible={showNameNotice} onClose={() => setShowNameNotice(false)} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.delay(50).duration(500)} style={styles.header}>
           <Text style={styles.title}>Create account</Text>
@@ -142,6 +146,52 @@ export default function Signup() {
   );
 }
 
+// Near-fullscreen notice shown on the signup screen: stresses that the name and
+// surname must be real and match the athlete's WDSF/DTV card, otherwise the
+// competition-analysis features (which look the athlete up by name) won't work.
+function NameNoticeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const C = useC();
+  const styles = useMemo(() => makeStyles(C), [C]);
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <View style={styles.noticeOverlay}>
+        <Animated.View entering={FadeInUp.duration(360)} style={styles.noticeCard}>
+          <LinearGradient
+            colors={GRADIENTS.brand}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.noticeIconWrap}
+          >
+            <Text style={styles.noticeIcon}>🩰</Text>
+          </LinearGradient>
+
+          <Text style={styles.noticeTitle}>Use your real name</Text>
+
+          <Text style={styles.noticeBody}>
+            To unlock <Text style={styles.noticeStrong}>competition analysis</Text>, ranking and
+            your performance stats, Dance Planner has to find you in the WDSF database.
+          </Text>
+          <Text style={styles.noticeBody}>
+            Enter your first name and surname{" "}
+            <Text style={styles.noticeStrong}>exactly as they appear on your WDSF / DTV card</Text>{" "}
+            (correct spelling, accents and order). If the name doesn't match, your profile cannot be
+            linked.
+          </Text>
+
+          <View style={styles.noticeExample}>
+            <Text style={styles.noticeExampleLabel}>Example</Text>
+            <Text style={styles.noticeExampleText}>First name: Jana · Surname: Nováková</Text>
+          </View>
+
+          <GradientButton onPress={onClose} style={{ marginTop: 20, alignSelf: "stretch" }}>
+            <Text style={styles.buttonText}>I understand</Text>
+          </GradientButton>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 function makeStyles(C: Palette) {
   return StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
@@ -185,5 +235,67 @@ function makeStyles(C: Palette) {
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   footerText: { color: C.t2, fontSize: 14 },
   footerLink: { color: C.accent, fontWeight: '600', fontSize: 14 },
+
+  // Name notice modal
+  noticeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  noticeCard: {
+    backgroundColor: C.elevated,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  noticeIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  noticeIcon: { fontSize: 34 },
+  noticeTitle: {
+    color: C.t1,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  noticeBody: {
+    color: C.t2,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  noticeStrong: { color: C.t1, fontWeight: '700' },
+  noticeExample: {
+    alignSelf: 'stretch',
+    backgroundColor: C.accentFade,
+    borderWidth: 1,
+    borderColor: C.accentBorder,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  noticeExampleLabel: {
+    color: C.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  noticeExampleText: { color: C.t1, fontSize: 14, fontWeight: '600' },
   });
 }

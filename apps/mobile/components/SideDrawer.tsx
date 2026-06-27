@@ -9,7 +9,8 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useSegments } from "expo-router";
 import Svg, { Path, Rect, Circle, Line } from "react-native-svg";
-import { C } from "../lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { C, GRADIENTS } from "../lib/theme";
 import type { Palette } from "../lib/theme";
 import { useC } from "../lib/useTheme";
 import { useT } from "../lib/i18n";
@@ -177,9 +178,14 @@ export default function SideDrawer() {
           {/* Avatar with glow */}
           <View style={s.avatarWrap}>
             <View style={s.avatarGlow} />
-            <View style={s.avatar}>
-              <Text style={s.avatarText}>{initials || "?"}</Text>
-            </View>
+            <LinearGradient
+              colors={GRADIENTS.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={s.avatar}
+            >
+              <Text style={[s.avatarText, { color: "#fff" }]}>{initials || "?"}</Text>
+            </LinearGradient>
           </View>
           <View style={s.userInfo}>
             <Text style={s.userName} numberOfLines={1}>
@@ -257,6 +263,14 @@ export default function SideDrawer() {
   );
 }
 
+// Map an item's accent to its matching gradient so each active pill keeps its
+// identity (gold for Events/WDSF, purple for Calendar/About, brand otherwise).
+function gradientFor(accent: string): readonly [string, string, ...string[]] {
+  if (accent === C.gold)   return GRADIENTS.gold;
+  if (accent === C.purple) return GRADIENTS.purple;
+  return GRADIENTS.brand;
+}
+
 // ── Reusable nav item ────────────────────────────────────────────────────────
 function NavItem({
   label, active, accent, badge, icon, onPress,
@@ -270,10 +284,18 @@ function NavItem({
       onPress={onPress}
       style={({ pressed }) => [
         s.navItem,
-        active  && { backgroundColor: accent },
+        active && { backgroundColor: accent, shadowColor: accent, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
         !active && pressed && s.navItemPressed,
       ]}
     >
+      {active ? (
+        <LinearGradient
+          colors={gradientFor(accent)}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 15 }]}
+        />
+      ) : null}
       {icon}
       <Text style={[s.navLabel, active && s.navLabelActive]}>{label}</Text>
       {badge > 0 ? (

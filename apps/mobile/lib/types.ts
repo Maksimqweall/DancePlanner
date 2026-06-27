@@ -40,6 +40,7 @@ export interface User {
   lastName: string;
   monthlyBudget: number | null;
   currency: string;
+  privacyAccepted: boolean;
 }
 
 export interface Expense {

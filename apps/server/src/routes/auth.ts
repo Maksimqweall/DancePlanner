@@ -23,6 +23,7 @@ function publicUser(user: {
   lastName: string;
   monthlyBudget: number | null;
   currency: string;
+  privacyAcceptedAt: Date | null;
 }) {
   return {
     id: user.id,
@@ -31,6 +32,7 @@ function publicUser(user: {
     lastName: user.lastName,
     monthlyBudget: user.monthlyBudget,
     currency: user.currency,
+    privacyAccepted: user.privacyAcceptedAt != null,
   };
 }
 
@@ -104,6 +106,19 @@ router.patch(
     const user = await prisma.user.update({
       where: { id: req.userId },
       data: { monthlyBudget: data.monthlyBudget, currency: data.currency },
+    });
+    res.json({ user: publicUser(user) });
+  })
+);
+
+// POST /api/auth/accept-privacy — record Privacy Policy consent for this account
+router.post(
+  "/accept-privacy",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { privacyAcceptedAt: new Date() },
     });
     res.json({ user: publicUser(user) });
   })

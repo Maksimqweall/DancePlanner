@@ -30,6 +30,10 @@ model User {
   monthlyBudget Float?
   // Preferred display currency (ISO 4217 code, e.g. EUR, USD, GBP)
   currency      String     @default("EUR")
+
+  // Consent: when the user accepted the Privacy Policy. Null = not yet accepted
+  // (new accounts), which gates the app behind the acceptance screen.
+  privacyAcceptedAt DateTime?
   
   // Связи
   couplesAsLead   Couple[]   @relation("LeadPartner")

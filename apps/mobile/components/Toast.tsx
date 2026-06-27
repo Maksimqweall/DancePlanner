@@ -8,8 +8,10 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useToastStore } from "../store/useToastStore";
 import { useC } from "../lib/useTheme";
+import { GRADIENTS } from "../lib/theme";
 
 const AUTO_HIDE_MS = 4200;
 const OFFSCREEN = -160;
@@ -57,6 +59,12 @@ export default function Toast() {
         onPress={dismiss}
         style={[styles.card, { backgroundColor: C.card, borderColor: C.accentBorder, shadowColor: "#000" }]}
       >
+        <LinearGradient
+          colors={GRADIENTS.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.accentBar}
+        />
         {toast.icon ? <Text style={styles.icon}>{toast.icon}</Text> : null}
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: C.t1 }]} numberOfLines={1}>{toast.title}</Text>
@@ -92,6 +100,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 12,
   },
+  accentBar: { position: "absolute", left: 7, top: 12, bottom: 12, width: 4, borderRadius: 2 },
   icon: { fontSize: 22 },
   title: { fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
   body: { fontSize: 12.5, fontWeight: "500", marginTop: 2, lineHeight: 17 },

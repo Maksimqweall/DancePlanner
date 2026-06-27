@@ -13,7 +13,7 @@ import { Link } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
-import PressableScale from "../../components/ui/PressableScale";
+import GradientButton from "../../components/ui/GradientButton";
 import type { Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 
@@ -124,13 +124,13 @@ export default function Signup() {
             onChangeText={setPassword}
           />
 
-          <PressableScale onPress={onSubmit} disabled={submitting} scaleTo={0.97} style={styles.button}>
+          <GradientButton onPress={onSubmit} disabled={submitting} style={{ marginTop: 8 }}>
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>Create account</Text>
             )}
-          </PressableScale>
+          </GradientButton>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>

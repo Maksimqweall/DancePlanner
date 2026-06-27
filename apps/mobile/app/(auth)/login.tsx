@@ -12,7 +12,7 @@ import { Link } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
-import PressableScale from "../../components/ui/PressableScale";
+import GradientButton from "../../components/ui/GradientButton";
 import type { Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 import Svg, { Path, Circle, Defs, RadialGradient, Stop, Ellipse } from "react-native-svg";
@@ -99,13 +99,13 @@ export default function Login() {
             onBlur={() => setPasswordFocused(false)}
           />
 
-          <PressableScale onPress={onSubmit} disabled={submitting} scaleTo={0.97} style={styles.button}>
+          <GradientButton onPress={onSubmit} disabled={submitting} style={{ marginTop: 8 }}>
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>Sign in</Text>
             )}
-          </PressableScale>
+          </GradientButton>
 
           <View style={styles.forgotRow}>
             <Link href="/forgot-password" style={styles.forgotLink}>Forgot password?</Link>

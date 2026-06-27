@@ -106,3 +106,20 @@ export const SPRING = {
   bouncy:  { damping: 10, stiffness: 200, mass: 0.5 },
   drawer:  { damping: 22, stiffness: 260, mass: 0.8 },
 } as const;
+
+// ── Signature gradients ──────────────────────────────────────────────────────
+// The brand sweep (indigo → violet → purple) is the hero; the rest stay tonally
+// close so the whole app feels cohesive. These read well on both light and dark
+// backgrounds, so they're shared across palettes. Pass straight to
+// <LinearGradient colors={GRADIENTS.brand} /> or the <GradientButton> primitive.
+export const GRADIENTS = {
+  brand:    ["#6366F1", "#8B5CF6", "#A855F7"],
+  brandRev: ["#A855F7", "#8B5CF6", "#6366F1"],
+  purple:   ["#7C3AED", "#A855F7", "#D946EF"],
+  gold:     ["#F59E0B", "#FB923C", "#F97316"],
+  success:  ["#10B981", "#34D399", "#6EE7B7"],
+  sunset:   ["#6366F1", "#A855F7", "#EC4899"],
+  rose:     ["#F43F5E", "#EC4899", "#D946EF"],
+} as const;
+
+export type GradientName = keyof typeof GRADIENTS;

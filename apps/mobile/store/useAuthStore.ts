@@ -18,6 +18,7 @@ interface AuthState {
     lastName: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  acceptPrivacy: () => Promise<void>;
   setMonthlyBudget: (budget: number) => Promise<void>;
   setCurrency: (currency: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -75,6 +76,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     await tokenStorage.clear();
     setAuthToken(null);
     set({ status: "unauthenticated", user: null });
+  },
+
+  acceptPrivacy: async () => {
+    const { user } = await api.post<{ user: User }>("/auth/accept-privacy", {});
+    set({ user });
   },
 
   setMonthlyBudget: async (budget) => {

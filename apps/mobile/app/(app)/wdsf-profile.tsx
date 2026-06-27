@@ -32,7 +32,9 @@ import {
   type CoupleScores,
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
-import type { Palette } from "../../lib/theme";
+import GradientButton from "../../components/ui/GradientButton";
+import { LinearGradient } from "expo-linear-gradient";
+import { GRADIENTS, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 import { useT } from "../../lib/i18n";
 import { useToastStore } from "../../store/useToastStore";
@@ -100,9 +102,9 @@ function SetupScreen({
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.setupContent} showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.setupHero}>
-        <View style={s.wdsfLogoBox}>
-          <Text style={s.wdsfLogoText}>WDSF</Text>
-        </View>
+        <LinearGradient colors={GRADIENTS.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.wdsfLogoBox}>
+          <Text style={[s.wdsfLogoText, { color: "#fff" }]}>WDSF</Text>
+        </LinearGradient>
         <Text style={s.setupTitle}>Connect WDSF Profile</Text>
         <Text style={s.setupSub}>
           Link your World DanceSport Federation profile to see your competition history,
@@ -128,11 +130,11 @@ function SetupScreen({
           </Text>
         </Text>
         {error ? <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View> : null}
-        <PressableScale style={s.primaryBtn} onPress={handleLinkMin} disabled={loading}>
+        <GradientButton onPress={handleLinkMin} disabled={loading} contentStyle={{ paddingVertical: 14 }}>
           {loading
             ? <ActivityIndicator color="#fff" size="small" />
             : <Text style={s.primaryBtnText}>Search my profile</Text>}
-        </PressableScale>
+        </GradientButton>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(140).duration(400)}>
@@ -155,9 +157,9 @@ function SetupScreen({
             <Text style={s.inputHint}>
               Open your profile on worlddancesport.org and copy the URL from the address bar.
             </Text>
-            <PressableScale style={s.primaryBtn} onPress={handleLinkUrl} disabled={loading}>
+            <GradientButton onPress={handleLinkUrl} disabled={loading} contentStyle={{ paddingVertical: 14 }}>
               {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.primaryBtnText}>Link this profile</Text>}
-            </PressableScale>
+            </GradientButton>
           </View>
         ) : null}
       </Animated.View>
@@ -212,6 +214,12 @@ function ProfileView({
 
         {/* Hero card */}
         <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.heroCard}>
+          <LinearGradient
+            colors={["rgba(99,102,241,0.20)", "rgba(168,85,247,0.10)", "transparent"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 24 }]}
+          />
           <View style={s.heroPhotoWrap}>
             {!imgError ? (
               <Image

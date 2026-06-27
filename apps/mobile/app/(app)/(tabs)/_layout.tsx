@@ -1,6 +1,7 @@
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Rect, Circle } from "react-native-svg";
 import type { BottomTabBarProps } from "expo-router/build/react-navigation/bottom-tabs";
 import { DrawerProvider, useDrawer } from "../../../lib/DrawerContext";
@@ -126,7 +127,15 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
             >
-              <View style={[tb.iconWrap, isFocused && { backgroundColor: `${meta.accent}18` }]}>
+              <View style={tb.iconWrap}>
+                {isFocused ? (
+                  <LinearGradient
+                    colors={[`${meta.accent}33`, `${meta.accent}0D`]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
+                  />
+                ) : null}
                 <TabIcon name={route.name} color={color} size={22} />
                 {hasBadge ? (
                   <View style={[tb.badge, { backgroundColor: T.red }]}>

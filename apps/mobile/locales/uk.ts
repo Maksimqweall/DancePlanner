@@ -13,6 +13,7 @@ export const uk: Translations = {
     settings: "Налаштування",
     aboutUs: "Про нас",
     wdsfProfile: "Профіль WDSF",
+    rating: "Рейтинг",
     signOut: "Вийти",
   },
   toasts: {

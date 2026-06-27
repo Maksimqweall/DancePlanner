@@ -82,6 +82,13 @@ function MedalIcon({ color, size = 20 }: { color: string; size?: number }) {
     </Svg>
   );
 }
+function RatingIcon({ color, size = 20 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 3L14.5 8.6L20.5 9.3L16 13.3L17.3 19.2L12 16.1L6.7 19.2L8 13.3L3.5 9.3L9.5 8.6L12 3Z" stroke={color} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
+    </Svg>
+  );
+}
 function LogoutIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -126,6 +133,7 @@ export default function SideDrawer() {
     projects:  lang.nav.events,
     partner:   lang.nav.partner,
     "about-app": lang.nav.aboutUs,
+    rating:    lang.nav.rating,
   };
 
   const translateX     = useSharedValue(-DRAWER_W - 24);
@@ -229,6 +237,16 @@ export default function SideDrawer() {
               badge={0}
               icon={<MedalIcon color={activeKey === "wdsf-profile" ? "#fff" : T.t2} size={20} />}
               onPress={() => navigate("/wdsf-profile")}
+            />
+          ) : null}
+          {wdsfLinked ? (
+            <NavItem
+              label={lang.nav.rating}
+              active={activeKey === "rating"}
+              accent={C.accent}
+              badge={0}
+              icon={<RatingIcon color={activeKey === "rating" ? "#fff" : T.t2} size={20} />}
+              onPress={() => navigate("/rating")}
             />
           ) : null}
           {NAV_SECONDARY.map(({ key, href, icon: Icon, accent }) => {

@@ -11,6 +11,7 @@ export const en = {
     settings: "Settings",
     aboutUs: "About Us",
     wdsfProfile: "WDSF Profile",
+    rating: "Rating",
     signOut: "Sign out",
   },
   toasts: {

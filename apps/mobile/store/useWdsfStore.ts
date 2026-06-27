@@ -176,6 +176,65 @@ export interface CoupleScores {
   final3: Score3Round | null;     // System 3.0 final
 }
 
+// ─── Couple Rating (overall 1–10 strength + world/regional rank) ───────────────
+
+export interface CoupleRatingComponent {
+  key: "avgPlace" | "tier" | "worldStanding" | "finalsPodium" | "trend";
+  label: string;
+  weight: number;
+  score: number; // 0..1
+  detail: string;
+}
+
+export interface CoupleRatingPenalty {
+  key: string;
+  label: string;
+  amount: number;
+  detail: string;
+}
+
+export interface DeepEventSignal {
+  event: string;
+  date: string;
+  tier: TournamentTier;
+  eventRating: number;
+  myPlace: number | null;
+  fieldSize: number;
+  myWorldRank: number | null;
+  upsetWins: number;
+  badLosses: number;
+  roundOneExit: boolean;
+  reachedFinal: boolean;
+}
+
+export interface CoupleRating {
+  available: boolean;
+  reason?: string;
+  rating: number; // 1..10
+  tier: TournamentTier;
+  baseRating: number;
+  worldRank: number | null;
+  regionalRank: number | null;
+  region: string | null;
+  components: CoupleRatingComponent[];
+  penalties: CoupleRatingPenalty[];
+  stats: {
+    competitionsConsidered: number;
+    avgPlace: number | null;
+    finals: number;
+    podiums: number;
+    firstPlaces: number;
+    monthsSinceLast: number | null;
+    recentAvgPlace: number | null;
+    olderAvgPlace: number | null;
+    deepEventsAnalyzed: number;
+    upsetWins: number;
+    badLosses: number;
+    roundOneExits: number;
+  };
+  events: DeepEventSignal[];
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 interface WdsfState {
@@ -188,6 +247,9 @@ interface WdsfState {
   coupleScoresLoading: Record<string, boolean>;
   ratingCache: Record<string, TournamentRating | null>;
   ratingLoading: Record<string, boolean>;
+  coupleRating: CoupleRating | null;
+  coupleRatingLoading: boolean;
+  coupleRatingError: string | null;
 
   fetchProfile: () => Promise<void>;
   linkByMin: (min: string) => Promise<void>;
@@ -203,6 +265,7 @@ interface WdsfState {
     discipline: string,
     date?: string,
   ) => Promise<TournamentRating | null>;
+  fetchCoupleRating: (force?: boolean) => Promise<CoupleRating | null>;
 }
 
 export const useWdsfStore = create<WdsfState>((set, get) => ({
@@ -215,6 +278,9 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
   coupleScoresLoading: {},
   ratingCache: {},
   ratingLoading: {},
+  coupleRating: null,
+  coupleRatingLoading: false,
+  coupleRatingError: null,
 
   fetchProfile: async () => {
     set({ loading: true, error: null });
@@ -258,7 +324,7 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { profile } = await api.post<{ profile: WdsfProfile }>("/wdsf/refresh");
-      set({ profile, analyticsCache: {}, ratingCache: {} }); // clear caches on refresh
+      set({ profile, analyticsCache: {}, ratingCache: {}, coupleRating: null }); // clear caches on refresh
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Refresh failed" });
     } finally {
@@ -270,7 +336,7 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await api.del("/wdsf/unlink");
-      set({ profile: null, analyticsCache: {}, analyticsLoading: {}, ratingCache: {}, ratingLoading: {} });
+      set({ profile: null, analyticsCache: {}, analyticsLoading: {}, ratingCache: {}, ratingLoading: {}, coupleRating: null, coupleRatingError: null });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Failed to unlink" });
     } finally {
@@ -357,6 +423,24 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
         ratingCache: { ...s.ratingCache, [key]: null },
         ratingLoading: { ...s.ratingLoading, [key]: false },
       }));
+      return null;
+    }
+  },
+
+  fetchCoupleRating: async (force = false) => {
+    const existing = get().coupleRating;
+    if (existing && !force) return existing;
+
+    set({ coupleRatingLoading: true, coupleRatingError: null });
+    try {
+      const { rating } = await api.get<{ rating: CoupleRating }>("/wdsf/couple-rating");
+      set({ coupleRating: rating, coupleRatingLoading: false });
+      return rating;
+    } catch (e) {
+      set({
+        coupleRatingError: e instanceof Error ? e.message : "Failed to compute rating",
+        coupleRatingLoading: false,
+      });
       return null;
     }
   },

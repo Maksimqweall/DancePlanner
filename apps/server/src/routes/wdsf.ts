@@ -16,12 +16,21 @@ import {
 } from "../lib/wdsfScraper";
 import {
   combinedTypeFor,
+  combinedTypeFromText,
   fetchWorldRanking,
   computeTournamentRating,
   RANKING_TOP_N,
   type RankedCouple,
   type TournamentRating,
 } from "../lib/wdsfRanking";
+import {
+  computeCoupleRating,
+  deriveWorldStanding,
+  analyzeEvent,
+  parseWdsfDate,
+  type DeepEventSignal,
+  type CoupleRating,
+} from "../lib/wdsfCoupleRating";
 
 const router = Router();
 router.use(requireAuth);
@@ -287,7 +296,10 @@ router.get(
 
     const { snapshotMonth, dateISO } = parseTournamentMonth(date);
 
-    const combinedType = combinedTypeFor(category, discipline);
+    // Prefer the explicit category/discipline; fall back to scanning the competition
+    // slug, which is reliable even when a profile's columns are mis-parsed.
+    const combinedType =
+      combinedTypeFor(category, discipline) ?? combinedTypeFromText(competitionUrl);
     if (!combinedType) {
       res.json({
         rating: unavailableRating(
@@ -314,6 +326,138 @@ router.get(
 
     const rating = computeTournamentRating(entries, ranking, combinedType, snapshotMonth);
     ratingResultCache.set(cacheKey, { rating, at: Date.now() });
+    res.json({ rating });
+  })
+);
+
+// ─── Couple-rating helpers ─────────────────────────────────────────────────────
+
+// How many of the most recent mappable events get the full deep treatment
+// (start list + World Ranking snapshot + round-by-round marks). Capped because
+// each event costs several page fetches.
+const DEEP_EVENTS = 6;
+
+// Per-user couple-rating cache (whole computed result). Keyed by uuid|month.
+const coupleRatingCache = new Map<string, { rating: CoupleRating; at: number }>();
+
+/** Resolve the CombinedType for a competition (category/discipline → slug fallback). */
+function combinedTypeForComp(c: { category: string; discipline: string; competitionUrl: string | null }): string | null {
+  return (
+    combinedTypeFor(c.category || "", c.discipline || "") ??
+    (c.competitionUrl ? combinedTypeFromText(c.competitionUrl) : null)
+  );
+}
+
+/**
+ * Pick the world-ranking list that best represents the couple right now: the most
+ * recent competition whose category/discipline maps to a combined ranking.
+ */
+function pickCombinedType(profile: WdsfProfile): string | null {
+  const sorted = [...profile.competitions].sort(
+    (a, b) => (parseWdsfDate(b.date)?.getTime() ?? 0) - (parseWdsfDate(a.date)?.getTime() ?? 0),
+  );
+  for (const c of sorted) {
+    const ct = combinedTypeForComp(c);
+    if (ct) return ct;
+  }
+  return null;
+}
+
+/** Deep-analyse one competition: start list + ranking snapshot + the pair's marks. */
+async function analyzeCompetitionDeep(
+  comp: WdsfProfile["competitions"][number],
+  athleteUuid: string,
+): Promise<DeepEventSignal | null> {
+  const combinedType = combinedTypeForComp(comp);
+  if (!combinedType || !comp.competitionUrl) return null;
+
+  const { snapshotMonth, dateISO } = parseTournamentMonth(comp.date);
+  const urls = buildCompUrls(comp.competitionUrl);
+
+  const [{ entries }, ranking] = await Promise.all([
+    scrapeRankingPage(urls.ranking),
+    getRankingSnapshot(combinedType, snapshotMonth, dateISO),
+  ]);
+
+  // The pair's round-by-round marks (for round-1-exit detection) — needs the start
+  // number from the result list. Best-effort; null if we can't resolve it.
+  const myEntry = entries.find((e) =>
+    e.athleteUrls.some((u) => extractUuid(u)?.toLowerCase() === athleteUuid.toLowerCase()),
+  );
+  let scores = null;
+  if (myEntry?.coupleNumber) {
+    try {
+      scores = await scrapeCoupleScores(comp.competitionUrl, myEntry.coupleNumber);
+    } catch (err) {
+      console.error("couple-rating: couple-scores fetch failed:", err);
+    }
+  }
+
+  return analyzeEvent({
+    event: comp.event,
+    date: comp.date,
+    entries,
+    ranking,
+    combinedType,
+    snapshotMonth,
+    athleteUuid,
+    scores,
+  });
+}
+
+// GET /api/wdsf/couple-rating — overall 1–10 couple rating (TEST) + world/regional rank
+router.get(
+  "/couple-rating",
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { wdsfProfileUrl: true, wdsfData: true },
+    });
+    if (!user?.wdsfProfileUrl || !user.wdsfData) {
+      throw new HttpError(400, "No WDSF profile linked");
+    }
+
+    const profile = user.wdsfData as unknown as WdsfProfile;
+    const uuid = extractUuid(user.wdsfProfileUrl);
+    if (!uuid) throw new HttpError(400, "Could not extract UUID from profile URL");
+
+    const cacheKey = `${uuid}|${currentMonthKey()}`;
+    const cached = coupleRatingCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+      res.json({ rating: cached.rating });
+      return;
+    }
+
+    // 1) Current world + regional standing (one snapshot for the couple's main list).
+    let standing = null;
+    const mainType = pickCombinedType(profile);
+    if (mainType) {
+      try {
+        const ranking = await getRankingSnapshot(mainType, currentMonthKey(), null);
+        standing = deriveWorldStanding(ranking, uuid, profile.represents || null);
+      } catch (err) {
+        console.error("couple-rating: world standing lookup failed:", err);
+      }
+    }
+
+    // 2) Deep per-event signals for the most recent mappable events (real tier,
+    //    upset wins vs higher-ranked couples, bad losses, round-1 exits).
+    const recentMappable = [...profile.competitions]
+      .filter((c) => c.competitionUrl && combinedTypeForComp(c))
+      .sort((a, b) => (parseWdsfDate(b.date)?.getTime() ?? 0) - (parseWdsfDate(a.date)?.getTime() ?? 0))
+      .slice(0, DEEP_EVENTS);
+
+    const settled = await Promise.allSettled(
+      recentMappable.map((c) => analyzeCompetitionDeep(c, uuid)),
+    );
+    const deep: DeepEventSignal[] = [];
+    for (const r of settled) {
+      if (r.status === "fulfilled" && r.value) deep.push(r.value);
+      else if (r.status === "rejected") console.error("couple-rating: deep event failed:", r.reason);
+    }
+
+    const rating = computeCoupleRating(profile, { standing, deep });
+    coupleRatingCache.set(cacheKey, { rating, at: Date.now() });
     res.json({ rating });
   })
 );

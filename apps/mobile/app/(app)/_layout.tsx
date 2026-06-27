@@ -45,6 +45,7 @@ export default function AppLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="project/[id]" options={{ title: "Project" }} />
         <Stack.Screen name="wdsf-profile" options={{ title: "WDSF Profile" }} />
+        <Stack.Screen name="rating" options={{ title: "Rating" }} />
         <Stack.Screen name="about-app" options={{ title: "About Dance Planner" }} />
         <Stack.Screen name="chat" options={{ title: "Chat" }} />
       </Stack>

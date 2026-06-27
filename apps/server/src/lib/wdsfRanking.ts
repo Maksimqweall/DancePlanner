@@ -91,6 +91,28 @@ export function combinedTypeFor(category: string, discipline: string): string | 
   return `1_${age}_${disc}_0_0`;
 }
 
+// Age-group tokens, most-specific first so "Senior I" never shadows "Senior III".
+const AGE_TOKENS: [RegExp, string][] = [
+  [/\bsenior v\b/, "220"], [/\bsenior iv\b/, "196"], [/\bsenior iii\b/, "183"],
+  [/\bsenior ii\b/, "182"], [/\bsenior i\b/, "181"],
+  [/\bunder 21\b|\bu21\b/, "190"], [/\bjunior ii\b/, "178"],
+  [/\byouth\b/, "179"], [/\badult\b/, "180"], [/\brising stars\b/, "186"],
+];
+
+/**
+ * Derive a `CombinedType` by scanning free text (a competition slug/URL or name,
+ * e.g. ".../GrandSlam-Blackpool-Adult-Standard-65351") for age + discipline tokens.
+ * Resilient fallback for when a profile's category/discipline columns are unreliable.
+ */
+export function combinedTypeFromText(text: string): string | null {
+  const s = text.toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
+  if (/\bten dance\b|\b10 dance\b/.test(s)) return null; // unsupported (no combined ranking)
+  const disc = /\bstandard\b|\bballroom\b/.test(s) ? "56" : /\blatin\b/.test(s) ? "55" : null;
+  if (!disc) return null;
+  for (const [re, code] of AGE_TOKENS) if (re.test(s)) return `1_${code}_${disc}_0_0`;
+  return null;
+}
+
 // ─── Ranking fetch ─────────────────────────────────────────────────────────────
 
 export interface RankedCouple {
@@ -249,6 +271,28 @@ const TIER_RULES: { tier: Exclude<Tier, "Unrated">; cond: (c: Counts) => boolean
   { tier: "D", band: [1, 2.9], cond: (c) => c.n200 >= 1 },
 ];
 
+// Age-group rating caps. Younger divisions have far shallower world rankings than
+// Adult, so even a "stacked" field shouldn't reach the very top of the 0–10 scale.
+// Keyed by the WDSF age-group code (the `<age>` in CombinedType `1_<age>_<disc>_0_0`).
+//   179 Youth · 190 Under 21 → max 8 (A-tier ceiling)
+//   178 Junior II (youngest division with a combined ranking) → max 6.9 (B-tier ceiling)
+const AGE_RATING_CAP: Record<string, number> = {
+  "179": 8,    // Youth
+  "190": 8,    // Under 21
+  "178": 6.9,  // Junior II (and younger)
+};
+
+function ratingCapFor(combinedType: string): number | null {
+  const age = combinedType.split("_")[1];
+  return age in AGE_RATING_CAP ? AGE_RATING_CAP[age] : null;
+}
+
+// Map a rating value back to its tier (highest band whose floor it clears).
+function tierForRating(rating: number): Tier {
+  for (const r of TIER_RULES) if (rating >= r.band[0]) return r.tier;
+  return "Unrated";
+}
+
 // Per-couple weight by world-rank bracket, used to size the rating within a band.
 function coupleWeight(rank: number): number {
   if (rank <= 30) return 3;
@@ -341,11 +385,20 @@ export function computeTournamentRating(
     (bestRank !== null && bestRank <= 3 ? 1.5 : bestRank !== null && bestRank <= 10 ? 0.7 : 0);
   const [lo, hi] = rule.band;
   const intensity = Math.min(1, score / SATURATION_SCORE);
-  const rating = Math.round((lo + (hi - lo) * intensity) * 10) / 10;
+  let rating = Math.round((lo + (hi - lo) * intensity) * 10) / 10;
+  let tier: Tier = rule.tier;
+
+  // Clamp younger divisions to their age-group ceiling, then re-derive the tier
+  // so the badge letter stays consistent with the (capped) number.
+  const cap = ratingCapFor(combinedType);
+  if (cap !== null && rating > cap) {
+    rating = cap;
+    tier = tierForRating(rating);
+  }
 
   return {
     available: true,
-    tier: rule.tier,
+    tier,
     rating,
     participants: allCouples.length,
     ...counts,

@@ -13,6 +13,7 @@ export const de: Translations = {
     settings: "Einstellungen",
     aboutUs: "Über uns",
     wdsfProfile: "WDSF-Profil",
+    rating: "Bewertung",
     signOut: "Abmelden",
   },
   toasts: {

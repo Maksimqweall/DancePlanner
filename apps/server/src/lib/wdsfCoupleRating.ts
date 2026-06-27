@@ -40,7 +40,7 @@ const WEIGHTS = {
   upsets: 0.09, // MEDIUM — upset wins vs higher-ranked couples
   finalsPodium: 0.1, // MEDIUM — finals & podiums
   trend: 0.09, // form trend (recent vs older placements)
-} as const;
+} as const;  
 
 const MAX_COMPS = 40; // history depth feeding profile-level stats
 const ASSUMED_FIELD = 30; // field-size assumption when an event omits the entry count

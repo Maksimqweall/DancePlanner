@@ -34,13 +34,13 @@ import {
 // so the model can be inspected and tuned.
 
 const WEIGHTS = {
-  avgPlace: 0.2, // STRONG — average finishing place
-  tier: 0.5, // STRONG — level of events usually danced (S–D, real when deep)
-  worldRank: 0.5, // STRONG — World Ranking standing (high influence)
-  upsets: 0.05, // MEDIUM — upset wins vs higher-ranked couples
-  finalsPodium: 0.05, // MEDIUM — finals & podiums
-  trend: 0.09, // form trend (recent vs older placements)
-} as const;  
+  avgPlace: 0.35,      // STRONG (35%) — База. Как высоко ты забираешься по турам.
+  tier: 0.25,          // STRONG (25%) — Контекст. Победа на Grand Slam стоит дороже победы на локалке.
+  trend: 0.15,         // MEDIUM (15%) — Форма. Растешь ты или падаешь по сравнению с прошлым месяцем.
+  upsets: 0.10,        // HYPE (10%) — Апсеты. Наказал пару, которая выше тебя в мировом рейтинге? Получи буст!
+  finalsPodium: 0.10,  // CLUTCH (10%) — Доминация. Умение доходить до медалей.
+  worldRank: 0.05      // LOW (5%) — Якорь. Просто легкая поправка на глобальный статус пары.
+} as const;
 
 const MAX_COMPS = 40; // history depth feeding profile-level stats
 const ASSUMED_FIELD = 30; // field-size assumption when an event omits the entry count

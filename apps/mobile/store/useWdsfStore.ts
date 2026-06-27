@@ -179,7 +179,7 @@ export interface CoupleScores {
 // ─── Couple Rating (overall 1–10 strength + world/regional rank) ───────────────
 
 export interface CoupleRatingComponent {
-  key: "avgPlace" | "tier" | "worldStanding" | "finalsPodium" | "trend";
+  key: "avgPlace" | "tier" | "worldRank" | "upsets" | "finalsPodium" | "trend";
   label: string;
   weight: number;
   score: number; // 0..1

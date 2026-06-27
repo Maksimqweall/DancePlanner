@@ -34,11 +34,12 @@ import {
 // so the model can be inspected and tuned.
 
 const WEIGHTS = {
-  avgPlace: 0.33, // STRONG — average finishing place (nudged up)
+  avgPlace: 0.33, // STRONG — average finishing place
   tier: 0.31, // STRONG — level of events usually danced (S–D, real when deep)
-  worldStanding: 0.2, // world-rank standing + upset wins vs higher-ranked (nudged down)
-  finalsPodium: 0.18, // finals & podiums (nudged up)
-  trend: 0.1, // form trend (recent vs older placements)
+  worldRank: 0.2, // STRONG — World Ranking standing (high influence)
+  upsets: 0.11, // MEDIUM — upset wins vs higher-ranked couples
+  finalsPodium: 0.18, // MEDIUM — finals & podiums
+  trend: 0.09, // form trend (recent vs older placements)
 } as const;
 
 const MAX_COMPS = 40; // history depth feeding profile-level stats
@@ -383,34 +384,46 @@ export function computeCoupleRating(
     levelDetail = `name-based estimate (${(levelScore * 100).toFixed(0)}%)`;
   }
 
-  // 3) World standing — own world-rank percentile blended with real upset wins
-  //    (couples beaten that were ranked above the pair).
+  // 3) World Ranking standing — own world-rank percentile (HIGH influence).
   const percentile = standing ? clamp01(1 - (standing.rank - 1) / Math.max(standing.totalRanked, 1)) : 0;
-  const upsetScore = clamp01(upsetWins / UPSET_SATURATION);
-  const worldStandingScore = deep.length
-    ? clamp01(percentile * 0.6 + upsetScore * 0.4)
-    : percentile;
-  const worldStandingDetail = standing
-    ? `world #${standing.rank}/${standing.totalRanked}` +
-      (deep.length ? `, ${upsetWins} upset wins` : "")
-    : deep.length
-      ? `unranked, ${upsetWins} upset wins`
-      : "not in ranking";
+  const worldRankScore = percentile;
+  const worldRankDetail = standing
+    ? `world #${standing.rank}/${standing.totalRanked}`
+    : "not in ranking";
 
-  // 4) Finals + podiums share.
+  // 4) Upset wins — couples beaten that were ranked ABOVE the pair (MEDIUM influence).
+  //    Only measurable from deep events; when none exist we fold this budget back into
+  //    the World Ranking component so an unmeasurable signal can't drag the rating down.
+  const upsetScore = clamp01(upsetWins / UPSET_SATURATION);
+  const upsetsDetail = deep.length
+    ? `${upsetWins} win${upsetWins === 1 ? "" : "s"} over higher-ranked couples (${deep.length} events)`
+    : "no deep events analysed";
+
+  // 5) Finals + podiums share.
   const finalsPodiumScore = clamp01((finals / placed.length) * 0.6 + (podiums / placed.length) * 0.4);
 
-  // 5) Trend — positive when recent placements improved over older ones.
+  // 6) Trend — positive when recent placements improved over older ones.
   const trendDelta = olderAvgPlace - recentAvgPlace;
   const trendScore = clamp01(0.5 + trendDelta / 20);
 
   const components: CoupleRatingComponent[] = [
     { key: "avgPlace", label: "Average placement", weight: WEIGHTS.avgPlace, score: avgPlaceScore, detail: `avg place ${avgPlace.toFixed(1)} over ${placed.length} comps` },
     { key: "tier", label: "Tournament level", weight: WEIGHTS.tier, score: levelScore, detail: levelDetail },
-    { key: "worldStanding", label: "World ranking & upsets", weight: WEIGHTS.worldStanding, score: worldStandingScore, detail: worldStandingDetail },
+  ];
+  if (deep.length) {
+    components.push(
+      { key: "worldRank", label: "World ranking", weight: WEIGHTS.worldRank, score: worldRankScore, detail: worldRankDetail },
+      { key: "upsets", label: "Upset wins", weight: WEIGHTS.upsets, score: upsetScore, detail: upsetsDetail },
+    );
+  } else {
+    components.push(
+      { key: "worldRank", label: "World ranking", weight: WEIGHTS.worldRank + WEIGHTS.upsets, score: worldRankScore, detail: worldRankDetail },
+    );
+  }
+  components.push(
     { key: "finalsPodium", label: "Finals & podiums", weight: WEIGHTS.finalsPodium, score: finalsPodiumScore, detail: `${finals} finals, ${podiums} podiums` },
     { key: "trend", label: "Form trend", weight: WEIGHTS.trend, score: trendScore, detail: `recent ${recentAvgPlace.toFixed(1)} vs older ${olderAvgPlace.toFixed(1)}` },
-  ];
+  );
 
   const weighted = components.reduce((s, c) => s + c.score * c.weight, 0);
   const base = weighted * 10;

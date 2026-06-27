@@ -36,9 +36,9 @@ import {
 const WEIGHTS = {
   avgPlace: 0.33, // STRONG — average finishing place
   tier: 0.31, // STRONG — level of events usually danced (S–D, real when deep)
-  worldRank: 0.2, // STRONG — World Ranking standing (high influence)
-  upsets: 0.11, // MEDIUM — upset wins vs higher-ranked couples
-  finalsPodium: 0.18, // MEDIUM — finals & podiums
+  worldRank: 0.3, // STRONG — World Ranking standing (high influence)
+  upsets: 0.09, // MEDIUM — upset wins vs higher-ranked couples
+  finalsPodium: 0.1, // MEDIUM — finals & podiums
   trend: 0.09, // form trend (recent vs older placements)
 } as const;
 

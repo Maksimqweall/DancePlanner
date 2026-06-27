@@ -191,9 +191,28 @@ function RatingView({
         </View>
         <Text style={s.baseNote}>
           Base score {rating.baseRating.toFixed(1)} / 10 from weighted components
-          {rating.penalties.length ? ", before penalties below." : "."}
+          {rating.bonuses.length || rating.penalties.length ? ", before the adjustments below." : "."}
         </Text>
       </Animated.View>
+
+      {/* Bonuses — prestige-tournament boosts */}
+      {rating.bonuses.length > 0 ? (
+        <Animated.View entering={FadeInDown.delay(185).duration(420)} style={s.section}>
+          <SectionHeader title="Bonuses" subtitle="Marquee tournament boosts" />
+          <View style={s.sectionCard}>
+            {rating.bonuses.map((b, i) => (
+              <View key={b.key} style={[s.penaltyRow, i < rating.bonuses.length - 1 && s.rowBorder]}>
+                <View style={s.bonusDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.penaltyLabel}>{b.label}</Text>
+                  <Text style={s.penaltyDetail} numberOfLines={2}>{b.detail}</Text>
+                </View>
+                <Text style={s.bonusAmount}>+{b.amount.toFixed(1)}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      ) : null}
 
       {/* Penalties */}
       {rating.penalties.length > 0 ? (
@@ -491,6 +510,10 @@ function makeStyles(C: Palette) {
     penaltyLabel: { color: C.t1, fontSize: 14, fontWeight: "600" },
     penaltyDetail: { color: C.t3, fontSize: 11, marginTop: 2 },
     penaltyAmount: { color: C.red, fontSize: 16, fontWeight: "800" },
+
+    // Bonuses
+    bonusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
+    bonusAmount: { color: "#10B981", fontSize: 16, fontWeight: "800" },
 
     // Event rows
     eventRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },

@@ -96,6 +96,7 @@ export interface CoupleRating {
   region: string | null; // from Represents
   components: CoupleRatingComponent[];
   penalties: CoupleRatingPenalty[];
+  bonuses: CoupleRatingPenalty[]; // prestige-tournament boosts (added to the base)
   stats: {
     competitionsConsidered: number;
     avgPlace: number | null;
@@ -157,6 +158,25 @@ function eventLevelHeuristic(comp: WdsfCompetition): number {
   if (/national championship/.test(s)) return 0.45;
   return 0.35;
 }
+
+// Prestige multiplier by tournament NAME. A strong result at a marquee event earns
+// an outsized boost; a plain Open earns none. Order matters — the specific series
+// ("World Open", "International Open") must be tested before the bare "open".
+function prestigeMultiplier(comp: WdsfCompetition): { mult: number; label: string } {
+  const s = `${comp.event} ${comp.category}`.toLowerCase();
+  if (/grand\s*slam|world\s+championship|european\s+championship/.test(s))
+    return { mult: 5, label: "Grand Slam / World / European Championship" };
+  if (/world\s+open/.test(s)) return { mult: 2, label: "World Open" };
+  if (/international\s+open/.test(s)) return { mult: 1.5, label: "International Open" };
+  if (/\bopen\b/.test(s)) return { mult: 1, label: "Open" };
+  return { mult: 1, label: "Other" };
+}
+
+// Prestige-boost tuning.
+const PRESTIGE_UNIT = 0.6;      // points per full (mult−1) unit on a perfect, fresh result
+const PRESTIGE_CAP = 4;         // total boost can't exceed this many rating points
+const PRESTIGE_MIN_PERF = 0.6;  // only genuinely good placements (≥60th pct) earn a boost
+const PRESTIGE_DECAY_MONTHS = 36; // boost fades to 0 over this many months
 
 function tierForRating(rating: number): Tier {
   for (const b of RATING_BANDS) if (rating >= b.floor) return b.tier;
@@ -327,7 +347,7 @@ export function computeCoupleRating(
       rating: 1, tier: "D", baseRating: 0,
       worldRank: standing?.rank ?? null,
       regionalRank: standing?.regionalRank ?? null,
-      region, components: [], penalties: [],
+      region, components: [], penalties: [], bonuses: [],
       stats: {
         competitionsConsidered: 0, avgPlace: null, finals: 0, podiums: 0, firstPlaces: 0,
         monthsSinceLast: null, recentAvgPlace: null, olderAvgPlace: null,
@@ -466,8 +486,44 @@ export function computeCoupleRating(
     }
   }
 
+  // ── Prestige boost ──
+  // A strong placement at a marquee tournament (by name) earns an outsized boost:
+  // ×5 for Grand Slam / World / European Championship, ×2 World Open, ×1.5
+  // International Open, ×1 plain Open (no boost). Scaled by how well the couple
+  // actually danced there and how recent it was; capped so it can't run away.
+  const bonuses: CoupleRatingPenalty[] = [];
+  const prestigeHits: { contribution: number; label: string; place: number; event: string }[] = [];
+  for (const c of placed) {
+    const { mult, label } = prestigeMultiplier(c.comp);
+    if (mult <= 1) continue; // plain Open / other → no boost
+    const place = c.parsed.place as number;
+    const field = c.parsed.field ?? ASSUMED_FIELD;
+    const perf = clamp01(1 - (place - 1) / Math.max(field - 1, 1));
+    if (perf < PRESTIGE_MIN_PERF) continue; // only genuinely good results boost
+    const ageMonths = c.date ? (now.getTime() - c.date.getTime()) / (1000 * 60 * 60 * 24 * 30.44) : PRESTIGE_DECAY_MONTHS;
+    const recency = clamp01(1 - ageMonths / PRESTIGE_DECAY_MONTHS);
+    if (recency <= 0) continue;
+    // perf^1.5 sharpens the curve so a near-win counts far more than a mid-field finish.
+    const contribution = Math.pow(perf, 1.5) * (mult - 1) * PRESTIGE_UNIT * recency;
+    if (contribution <= 0) continue;
+    prestigeHits.push({ contribution, label, place, event: c.comp.event });
+  }
+  if (prestigeHits.length) {
+    prestigeHits.sort((a, b) => b.contribution - a.contribution);
+    const rawBoost = prestigeHits.reduce((s, h) => s + h.contribution, 0);
+    const boost = Math.min(PRESTIGE_CAP, rawBoost);
+    const top = prestigeHits.slice(0, 3).map((h) => `${h.event} (#${h.place})`).join(", ");
+    bonuses.push({
+      key: "prestige",
+      label: "Marquee performances",
+      amount: Math.round(boost * 10) / 10,
+      detail: `Strong results at high-tier events: ${top}${prestigeHits.length > 3 ? ` +${prestigeHits.length - 3} more` : ""}`,
+    });
+  }
+
   const penaltyTotal = penalties.reduce((s, p) => s + p.amount, 0);
-  const rating = Math.max(1, Math.min(10, Math.round((base - penaltyTotal) * 10) / 10));
+  const bonusTotal = bonuses.reduce((s, b) => s + b.amount, 0);
+  const rating = Math.max(1, Math.min(10, Math.round((base - penaltyTotal + bonusTotal) * 10) / 10));
 
   return {
     available: true,
@@ -479,6 +535,7 @@ export function computeCoupleRating(
     region,
     components,
     penalties,
+    bonuses,
     stats: {
       competitionsConsidered: placed.length,
       avgPlace: Math.round(avgPlace * 10) / 10,

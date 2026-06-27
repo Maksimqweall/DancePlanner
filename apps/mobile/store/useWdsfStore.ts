@@ -218,6 +218,7 @@ export interface CoupleRating {
   region: string | null;
   components: CoupleRatingComponent[];
   penalties: CoupleRatingPenalty[];
+  bonuses: CoupleRatingPenalty[];
   stats: {
     competitionsConsidered: number;
     avgPlace: number | null;

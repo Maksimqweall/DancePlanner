@@ -24,6 +24,8 @@ import { useThemeStore, type ThemeMode } from "../../../store/useThemeStore";
 import { useLanguageStore, type Language } from "../../../store/useLanguageStore";
 import { api } from "../../../lib/api";
 import { useWdsfStore } from "../../../store/useWdsfStore";
+import { useHintsStore } from "../../../store/useHintsStore";
+import { useToastStore } from "../../../store/useToastStore";
 
 const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string }[] = [
   { key: "light",  label: "Light",  icon: "☀" },
@@ -66,6 +68,13 @@ export default function SettingsScreen() {
   const defaultBudget = user?.monthlyBudget ?? 1000;
   const monthBudget   = budgets[currentMonth] ?? defaultBudget;
   const initials      = (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
+
+  const resetHints = useHintsStore((st) => st.resetHints);
+  const showToast  = useToastStore((st) => st.show);
+  const handleShowTips = () => {
+    resetHints();
+    showToast({ icon: "💡", title: T.settings.showTips, body: T.settings.showTipsToast });
+  };
 
   const handleLogout = () => {
     if (Platform.OS === "web") { logout(); return; }
@@ -245,6 +254,16 @@ export default function SettingsScreen() {
             <View>
               <Text style={s.settingsRowTitle}>{T.settings.aboutApp}</Text>
               <Text style={s.settingsRowSub}>{T.settings.aboutAppSub}</Text>
+            </View>
+            <Text style={s.settingsRowChevron}>›</Text>
+          </PressableScale>
+
+          <View style={s.rowDivider} />
+
+          <PressableScale onPress={handleShowTips} style={s.settingsRow}>
+            <View>
+              <Text style={s.settingsRowTitle}>{T.settings.showTips}</Text>
+              <Text style={s.settingsRowSub}>{T.settings.showTipsSub}</Text>
             </View>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>

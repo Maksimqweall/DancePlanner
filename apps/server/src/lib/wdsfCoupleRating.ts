@@ -165,9 +165,9 @@ function eventLevelHeuristic(comp: WdsfCompetition): number {
 function prestigeMultiplier(comp: WdsfCompetition): { mult: number; label: string } {
   const s = `${comp.event} ${comp.category}`.toLowerCase();
   if (/grand\s*slam|world\s+championship|european\s+championship/.test(s))
-    return { mult: 5, label: "Grand Slam / World / European Championship" };
-  if (/world\s+open/.test(s)) return { mult: 2, label: "World Open" };
-  if (/international\s+open/.test(s)) return { mult: 1.5, label: "International Open" };
+    return { mult: 2, label: "Grand Slam / World / European Championship" };
+  if (/world\s+open/.test(s)) return { mult: 1.5, label: "World Open" };
+  if (/international\s+open/.test(s)) return { mult: 1.2, label: "International Open" };
   if (/\bopen\b/.test(s)) return { mult: 1, label: "Open" };
   return { mult: 1, label: "Other" };
 }

@@ -4,12 +4,18 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
 import { useAuthStore } from "../store/useAuthStore";
 import { useOnboardingStore } from "../store/useOnboardingStore";
 import { useC, useScheme } from "../lib/useTheme";
+import { FONT_ASSETS, installTypography } from "../lib/typography";
 import SplashScreen from "../components/SplashScreen";
 
+// Apply the Plus Jakarta Sans typography globally as soon as this module loads.
+installTypography();
+
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts(FONT_ASSETS);
   const status              = useAuthStore((s) => s.status);
   const user                = useAuthStore((s) => s.user);
   const hydrate             = useAuthStore((s) => s.hydrate);
@@ -52,8 +58,9 @@ export default function RootLayout() {
     }
   }, [splashDone, status, segments, router, hasSeenOnboarding, user]);
 
-  // Show animated splash until it finishes (hydration always completes within it)
-  if (!splashDone) {
+  // Show animated splash until it finishes AND the premium fonts are ready, so the
+  // first painted screen is already in Plus Jakarta Sans (no flash of system font).
+  if (!splashDone || !fontsLoaded) {
     return (
       <>
         <StatusBar style={statusBarStyle} />

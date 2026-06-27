@@ -31,9 +31,10 @@ import {
   monthKeyFromIso,
 } from "../../../lib/display";
 import type { ForecastMonth } from "../../../lib/types";
-import type { Palette } from "../../../lib/theme";
+import { SHADOWS, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
+import Hint from "../../../components/ui/Hint";
 import { useLanguageStore } from "../../../store/useLanguageStore";
 
 const LANG_LOCALE: Record<string, string> = { en: "en-US", ru: "ru-RU", uk: "uk-UA", de: "de-DE" };
@@ -140,6 +141,15 @@ export default function Dashboard() {
           <Text style={s.avatarText}>{initials || "?"}</Text>
         </View>
       </Animated.View>
+
+      <Hint
+        id="dashboard.welcome"
+        title={T.hints.dashboardTitle}
+        text={T.hints.dashboardText}
+        gradient="brand"
+        icon="bulb"
+        style={{ marginHorizontal: 0 }}
+      />
 
       {/* Month selector */}
       <Animated.View entering={FadeInDown.delay(50).duration(420)} style={s.monthRow}>
@@ -470,14 +480,14 @@ function makeStyles(C: Palette) {
     heroLeft: { color: "rgba(255,255,255,0.92)", fontSize: 12, fontWeight: "600", marginTop: 10 },
 
     statsRow: { flexDirection: "row", gap: 10, marginTop: 16 },
-    statChip: { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 13, borderWidth: 1, borderColor: C.border },
+    statChip: { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 13, borderWidth: 1, borderColor: C.border, ...SHADOWS.sm },
     statDot: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center", marginBottom: 10 },
     statDotInner: { width: 12, height: 12, borderRadius: 4 },
     statValue: { color: C.t1, fontSize: 17, fontWeight: "800", letterSpacing: -0.4 },
     statLabel: { color: C.t3, fontSize: 11, fontWeight: "600", marginTop: 1 },
     spark: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: 16, marginTop: 8 },
 
-    card: { backgroundColor: C.card, borderRadius: 22, padding: 16, marginTop: 16, borderWidth: 1, borderColor: C.border },
+    card: { backgroundColor: C.card, borderRadius: 22, padding: 16, marginTop: 16, borderWidth: 1, borderColor: C.border, ...SHADOWS.md },
     cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     cardTitle: { color: C.t1, fontSize: 15, fontWeight: "800" },
     cardHint: { color: C.t3, fontSize: 12 },
@@ -494,7 +504,7 @@ function makeStyles(C: Palette) {
     emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: C.border },
     emptyText: { color: C.t3, fontSize: 14, lineHeight: 20 },
 
-    forecastCard: { backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: C.border },
+    forecastCard: { backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: C.border, ...SHADOWS.sm },
     forecastHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
     forecastMonth: { color: C.t1, fontWeight: "700", fontSize: 15 },
     forecastAmount: { color: C.gold, fontWeight: "800", fontSize: 15 },

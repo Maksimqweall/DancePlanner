@@ -14,10 +14,12 @@ import {
 import type { Project, ScheduleEntry } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
 import { AnimatedBar } from "../../../components/ui/AnimatedProgress";
-import { C } from "../../../lib/theme";
+import { C, SHADOWS } from "../../../lib/theme";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
 import { useLanguageStore } from "../../../store/useLanguageStore";
+import Hint from "../../../components/ui/Hint";
 
 const PROJECT_COLOR = C.purple;
 
@@ -69,6 +71,7 @@ const MAX_ZOOM = ZOOM_HEIGHT.length - 1;
 export default function CalendarScreen() {
   const router = useRouter();
   const C = useC();
+  const t = useT();
   const styles = useMemo(() => makeStyles(C), [C]);
   const calendarTheme = useMemo(() => makeCalendarTheme(C), [C]);
   const { language } = useLanguageStore();
@@ -185,6 +188,15 @@ export default function CalendarScreen() {
     <View style={styles.screen}>
       <ScrollView style={styles.scroll}>
         <View style={styles.topPad}>
+
+          <Hint
+            id="calendar.intro"
+            title={t.hints.calendarTitle}
+            text={t.hints.calendarText}
+            gradient="purple"
+            icon="bulb"
+            style={{ marginHorizontal: 0, marginBottom: 12 }}
+          />
 
           {/* ── Header ───────────────────────────────────────────────────── */}
           <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.calHeader}>
@@ -490,6 +502,7 @@ function makeStyles(C: Palette) {
   statsCard: {
     flexDirection: "row", backgroundColor: C.card, borderRadius: 22,
     padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.borderStrong, alignItems: "center",
+    ...SHADOWS.sm,
   },
   statChip: { flex: 1, alignItems: "center", gap: 2 },
   statChipIcon: { fontSize: 18, marginBottom: 2 },
@@ -500,6 +513,7 @@ function makeStyles(C: Palette) {
   weekCard: {
     backgroundColor: C.card, borderRadius: 22, padding: 16,
     marginBottom: 10, borderWidth: 1, borderColor: C.borderStrong,
+    ...SHADOWS.sm,
   },
   weekLabel: { color: C.t3, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginBottom: 12 },
   weekBars: { flexDirection: "row", justifyContent: "space-around", alignItems: "flex-end" },

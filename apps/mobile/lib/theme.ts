@@ -120,6 +120,40 @@ export const GRADIENTS = {
   success:  ["#10B981", "#34D399", "#6EE7B7"],
   sunset:   ["#6366F1", "#A855F7", "#EC4899"],
   rose:     ["#F43F5E", "#EC4899", "#D946EF"],
+  ocean:    ["#0EA5E9", "#38BDF8", "#22D3EE"],
+  aurora:   ["#6366F1", "#22D3EE", "#34D399"],
+  ember:    ["#F43F5E", "#FB923C", "#F59E0B"],
+  midnight: ["#312E81", "#4F46E5", "#7C3AED"],
 } as const;
 
 export type GradientName = keyof typeof GRADIENTS;
+
+// Very-low-alpha sweeps for tinting card surfaces behind content (premium "frosted"
+// depth without overpowering the text). Pair with a matching solid card under them.
+export const SURFACE_TINTS = {
+  brand:  ["rgba(99,102,241,0.10)", "rgba(168,85,247,0.04)", "transparent"],
+  gold:   ["rgba(245,158,11,0.10)", "rgba(249,115,22,0.04)", "transparent"],
+  purple: ["rgba(168,85,247,0.10)", "rgba(217,70,239,0.04)", "transparent"],
+  ocean:  ["rgba(14,165,233,0.10)", "rgba(34,211,238,0.04)", "transparent"],
+  rose:   ["rgba(244,63,94,0.10)", "rgba(236,72,153,0.04)", "transparent"],
+} as const;
+
+// ── Elevation / shadow system ────────────────────────────────────────────────
+// Soft, modern shadows that read on both palettes. Spread these into a style.
+// `glow()` makes a coloured halo for hero cards, CTAs and focused elements.
+export const SHADOWS = {
+  xs: { shadowColor: "#0A0A18", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.10, shadowRadius: 3, elevation: 2 },
+  sm: { shadowColor: "#0A0A18", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.13, shadowRadius: 8, elevation: 4 },
+  md: { shadowColor: "#0A0A18", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.17, shadowRadius: 18, elevation: 9 },
+  lg: { shadowColor: "#0A0A18", shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.22, shadowRadius: 30, elevation: 16 },
+} as const;
+
+export function glow(color: string, radius = 22, opacity = 0.45) {
+  return {
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: opacity,
+    shadowRadius: radius,
+    elevation: 12,
+  };
+}

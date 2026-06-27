@@ -16,9 +16,10 @@ import PressableScale from "../../../components/ui/PressableScale";
 import { AnimatedBar } from "../../../components/ui/AnimatedProgress";
 import { formatMoney, monthLong } from "../../../lib/display";
 import { ApiError } from "../../../lib/api";
-import type { Palette } from "../../../lib/theme";
+import { SHADOWS, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
+import Hint from "../../../components/ui/Hint";
 import { DateField } from "../../../components/DateTimeField";
 import type { ProposalType } from "../../../lib/types";
 
@@ -274,6 +275,15 @@ export default function PartnerScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+        <Hint
+          id="partner.intro"
+          title={T.hints.partnerTitle}
+          text={T.hints.partnerText}
+          gradient="rose"
+          icon="bulb"
+          style={{ marginHorizontal: 0 }}
+        />
 
         {/* ── No partner ───────────────────────────────────────────────────── */}
         {!couple ? (
@@ -600,6 +610,7 @@ function makeStyles(C: Palette) {
   heroCard: {
     backgroundColor: C.card, borderRadius: 24, padding: 24,
     alignItems: "center", borderWidth: 1, borderColor: C.border, marginBottom: 20,
+    ...SHADOWS.md,
   },
   heroEmoji: { fontSize: 48, marginBottom: 16 },
   heroTitle: { color: C.t1, fontSize: 22, fontWeight: "800", marginBottom: 10, textAlign: "center" },
@@ -616,6 +627,7 @@ function makeStyles(C: Palette) {
   partnerCard: {
     backgroundColor: C.card, borderRadius: 20, padding: 16,
     flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: C.border,
+    ...SHADOWS.sm,
   },
   partnerAvatar: {
     width: 52, height: 52, borderRadius: 14, backgroundColor: C.accentFade,

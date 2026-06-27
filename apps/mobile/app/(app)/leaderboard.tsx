@@ -17,7 +17,8 @@ import {
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
-import { GRADIENTS, type Palette } from "../../lib/theme";
+import Hint from "../../components/ui/Hint";
+import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 import { useT } from "../../lib/i18n";
 
@@ -151,6 +152,14 @@ function LeaderboardView({
         </PressableScale>
       </Animated.View>
 
+      <Hint
+        id="leaderboard.intro"
+        title={t.hints.leaderboardTitle}
+        text={t.hints.leaderboardText}
+        gradient="gold"
+        icon="spark"
+      />
+
       {/* Podium — top 3 */}
       {podium.length === 3 ? (
         <Animated.View entering={FadeInDown.delay(60).duration(420)} style={s.podiumRow}>
@@ -273,6 +282,7 @@ function makeStyles(C: Palette) {
       margin: 20, marginBottom: 10, backgroundColor: C.card, borderRadius: 24,
       borderWidth: 1, borderColor: C.border, alignItems: "center",
       paddingVertical: 24, paddingHorizontal: 20, overflow: "hidden",
+      ...SHADOWS.md, ...glow(C.accent, 24, 0.22),
     },
     heroTitle: { color: C.t1, fontSize: 24, fontWeight: "900", letterSpacing: -0.6 },
     heroSub: { color: C.t2, fontSize: 13, textAlign: "center", marginTop: 6, lineHeight: 18 },
@@ -308,6 +318,7 @@ function makeStyles(C: Palette) {
     pillarBase: {
       backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14,
       alignItems: "center", paddingVertical: 10, paddingHorizontal: 14, marginTop: 8, minWidth: 84,
+      ...SHADOWS.sm,
     },
     pillarBaseFirst: { paddingVertical: 14, borderColor: C.accentBorder },
     pillarRating: { fontSize: 22, fontWeight: "900", letterSpacing: -1 },
@@ -317,6 +328,7 @@ function makeStyles(C: Palette) {
     listCard: {
       marginHorizontal: 20, backgroundColor: C.card, borderRadius: 18,
       borderWidth: 1, borderColor: C.border, overflow: "hidden",
+      ...SHADOWS.sm,
     },
     row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
     rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },

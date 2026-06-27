@@ -35,7 +35,8 @@ import {
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
 import { LinearGradient } from "expo-linear-gradient";
-import { GRADIENTS, type Palette } from "../../lib/theme";
+import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
+import Hint from "../../components/ui/Hint";
 import { useC } from "../../lib/useTheme";
 import { useT } from "../../lib/i18n";
 import { useToastStore } from "../../store/useToastStore";
@@ -115,6 +116,15 @@ function SetupScreen({
           ranking, partners and licence status in Dance Planner.
         </Text>
       </Animated.View>
+
+      <Hint
+        id="wdsf.connect"
+        title={t.hints.wdsfTitle}
+        text={t.hints.wdsfText}
+        gradient="brand"
+        icon="spark"
+        style={{ marginHorizontal: 0, marginBottom: 14 }}
+      />
 
       <Animated.View entering={FadeInDown.delay(80).duration(400)} style={s.setupCard}>
         <Text style={s.inputLabel}>Member ID Number (MIN)</Text>
@@ -2640,6 +2650,7 @@ function makeStyles(C: Palette) {
   setupCard: {
     backgroundColor: C.card, borderRadius: 18,
     borderWidth: 1, borderColor: C.border, padding: 18, marginBottom: 16,
+    ...SHADOWS.sm,
   },
   inputLabel: { color: C.t2, fontSize: 13, fontWeight: "600", marginBottom: 8 },
   input: {
@@ -2661,6 +2672,7 @@ function makeStyles(C: Palette) {
     margin: 20, backgroundColor: C.card, borderRadius: 24,
     borderWidth: 1, borderColor: C.border,
     alignItems: "center", paddingVertical: 28, paddingHorizontal: 20,
+    ...SHADOWS.md, ...glow(C.accent, 24, 0.18),
   },
   heroPhotoWrap:        { position: "relative", marginBottom: 16 },
   heroPhoto:            { width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderColor: C.accentBorder },

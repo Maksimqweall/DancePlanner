@@ -19,8 +19,10 @@ import {
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
-import { GRADIENTS, type Palette } from "../../lib/theme";
+import Hint from "../../components/ui/Hint";
+import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
+import { useT } from "../../lib/i18n";
 
 // ─── Tier visuals (shared language with the tournament-rating cards) ───────────
 type GradTuple = readonly [string, string, ...string[]];
@@ -119,12 +121,22 @@ function RatingView({
   onRefresh: () => void;
 }) {
   const C = useC();
+  const t = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   const color = tierColor(rating.tier, C);
   const st = rating.stats;
 
   return (
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
+
+      <Hint
+        id="rating.intro"
+        title={t.hints.ratingTitle}
+        text={t.hints.ratingText}
+        gradient="brand"
+        icon="info"
+        style={{ marginTop: 16 }}
+      />
 
       {/* Hero — circular rating gauge */}
       <Animated.View entering={FadeInDown.delay(0).duration(420)} style={s.heroCard}>
@@ -439,6 +451,7 @@ function makeStyles(C: Palette) {
       margin: 20, marginBottom: 10, backgroundColor: C.card, borderRadius: 24,
       borderWidth: 1, borderColor: C.border, alignItems: "center",
       paddingVertical: 28, paddingHorizontal: 20, overflow: "hidden",
+      ...SHADOWS.md, ...glow(C.accent, 26, 0.20),
     },
     ringCenter: { position: "absolute", alignItems: "center", justifyContent: "center" },
     ringValue: { fontSize: 46, fontWeight: "900", letterSpacing: -2 },
@@ -454,6 +467,7 @@ function makeStyles(C: Palette) {
     rankCard: {
       flex: 1, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border,
       paddingVertical: 16, paddingHorizontal: 16, overflow: "hidden",
+      ...SHADOWS.sm,
     },
     rankAccent: { position: "absolute", top: 0, left: 0, right: 0, height: 4 },
     rankLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
@@ -464,6 +478,7 @@ function makeStyles(C: Palette) {
     statsRow: {
       marginHorizontal: 20, marginBottom: 10, backgroundColor: C.card, borderRadius: 18,
       borderWidth: 1, borderColor: C.border, flexDirection: "row",
+      ...SHADOWS.sm,
     },
     statBox: { flex: 1, alignItems: "center", paddingVertical: 14 },
     statValue: { color: C.t1, fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
@@ -491,6 +506,7 @@ function makeStyles(C: Palette) {
     sectionHeaderSub: { color: C.t3, fontSize: 11 },
     sectionCard: {
       backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border, overflow: "hidden",
+      ...SHADOWS.sm,
     },
     rowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
 

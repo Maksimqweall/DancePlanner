@@ -24,9 +24,10 @@ import {
 } from "../../../lib/display";
 import type { Category, Expense } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
-import type { Palette } from "../../../lib/theme";
+import { SHADOWS, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
+import Hint from "../../../components/ui/Hint";
 
 type Period = "3M" | "6M" | "1Y";
 
@@ -184,6 +185,15 @@ export default function ExpensesScreen() {
             <Text style={styles.addBtnText}>+ {T.common.add}</Text>
           </PressableScale>
         </Animated.View>
+
+        <Hint
+          id="finance.intro"
+          title={T.hints.financeTitle}
+          text={T.hints.financeText}
+          gradient="gold"
+          icon="bulb"
+          style={{ marginHorizontal: 0 }}
+        />
 
         {/* ── Hero Budget Card ─────────────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(40).duration(500)}>
@@ -412,6 +422,7 @@ function makeStyles(C: Palette) {
   breakdownCard: {
     backgroundColor: C.card, borderRadius: 24, padding: 18,
     marginBottom: 16, borderWidth: 1, borderColor: C.borderStrong,
+    ...SHADOWS.md,
   },
   sectionLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: 16 },
   catRow: { flexDirection: "row", alignItems: "center", marginBottom: 14, gap: 12 },
@@ -425,13 +436,14 @@ function makeStyles(C: Palette) {
   totalsRow: {
     flexDirection: "row", backgroundColor: C.card, borderRadius: 18,
     padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.borderStrong,
+    ...SHADOWS.sm,
   },
   totalItem: { flex: 1, alignItems: "center" },
   totalDivider: { width: 1, backgroundColor: C.border, marginVertical: 4 },
   totalLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 6 },
   totalAmount: { color: C.t1, fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
   // Chart
-  chartCard: { backgroundColor: C.card, borderRadius: 20, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  chartCard: { backgroundColor: C.card, borderRadius: 20, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: C.border, ...SHADOWS.sm },
   // Empty
   emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 24, alignItems: "center", borderWidth: 1, borderColor: C.border },
   emptyEmoji: { fontSize: 32, textAlign: "center", marginBottom: 12 },

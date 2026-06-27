@@ -34,10 +34,10 @@ import {
 // so the model can be inspected and tuned.
 
 const WEIGHTS = {
-  avgPlace: 0.3, // STRONG — average finishing place
-  tier: 0.25, // STRONG — level of events usually danced (S–D, real when deep)
-  worldStanding: 0.2, // STRONG — world-rank standing + upset wins vs higher-ranked
-  finalsPodium: 0.15, // MEDIUM — finals & podiums
+  avgPlace: 0.33, // STRONG — average finishing place (nudged up)
+  tier: 0.28, // STRONG — level of events usually danced (S–D, real when deep)
+  worldStanding: 0.15, // world-rank standing + upset wins vs higher-ranked (nudged down)
+  finalsPodium: 0.18, // finals & podiums (nudged up)
   trend: 0.1, // form trend (recent vs older placements)
 } as const;
 

@@ -25,6 +25,7 @@ export const en = {
     emptyTitle: "Leaderboard is empty",
     emptySub: "No dancers with a linked WDSF profile yet. Link yours to appear here.",
     connect: "Connect WDSF Profile",
+    recompute: "Recompute all",
     disclaimer: "Ranked by the experimental couple rating (1–10). Open the Rating tab to refine yours with deep event analysis.",
   },
   toasts: {

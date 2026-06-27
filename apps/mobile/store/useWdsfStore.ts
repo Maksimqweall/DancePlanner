@@ -472,7 +472,9 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
 
     set({ leaderboardLoading: true, leaderboardError: null });
     try {
-      const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>("/wdsf/leaderboard");
+      const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>(
+        force ? "/wdsf/leaderboard?refresh=1" : "/wdsf/leaderboard",
+      );
       set({ leaderboard, leaderboardLoading: false });
       return leaderboard;
     } catch (e) {

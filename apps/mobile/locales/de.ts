@@ -27,6 +27,7 @@ export const de: Translations = {
     emptyTitle: "Bestenliste ist leer",
     emptySub: "Noch keine Tänzer mit verknüpftem WDSF-Profil. Verknüpfe deins, um hier zu erscheinen.",
     connect: "WDSF-Profil verknüpfen",
+    recompute: "Alle neu berechnen",
     disclaimer: "Sortiert nach der experimentellen Paarbewertung (1–10). Öffne den Tab „Bewertung“, um deine mit tiefer Turnieranalyse zu verfeinern.",
   },
   toasts: {

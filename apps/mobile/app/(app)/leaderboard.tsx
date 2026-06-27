@@ -142,6 +142,13 @@ function LeaderboardView({
         <View style={s.heroCountPill}>
           <Text style={s.heroCountText}>{rows.length} {t.leaderboard.dancers}</Text>
         </View>
+        <PressableScale style={s.recomputeBtn} onPress={onRefresh} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color={C.accent} size="small" />
+          ) : (
+            <Text style={s.recomputeBtnText}>↻ {t.leaderboard.recompute}</Text>
+          )}
+        </PressableScale>
       </Animated.View>
 
       {/* Podium — top 3 */}
@@ -274,6 +281,12 @@ function makeStyles(C: Palette) {
       borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5,
     },
     heroCountText: { color: C.accent, fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
+    recomputeBtn: {
+      marginTop: 12, minHeight: 34, justifyContent: "center", alignItems: "center",
+      backgroundColor: C.elevated, borderWidth: 1, borderColor: C.border,
+      borderRadius: 12, paddingHorizontal: 18, paddingVertical: 8,
+    },
+    recomputeBtnText: { color: C.t1, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
 
     // Podium
     podiumRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 10, paddingHorizontal: 20, marginBottom: 12 },

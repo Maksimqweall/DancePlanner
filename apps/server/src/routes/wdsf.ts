@@ -425,16 +425,18 @@ async function persistRatingSnapshot(userId: string, rating: CoupleRating, deep:
 }
 
 /**
- * Light couple rating for the leaderboard — profile-level stats + current world
- * standing only (NO deep per-event scraping). Cheap enough to run for every user;
- * the deep rating from the Rating tab supersedes it when present and fresh.
+ * Full DEEP couple rating — current world standing + deep per-event analysis (real
+ * tier, upset wins, bad losses, round-1 exits). This is the same computation the
+ * Rating tab runs; the leaderboard uses it for every dancer so the board is a real
+ * mini-competition rather than a profile-stats approximation.
  * `snapshotCache` de-duplicates ranking-snapshot fetches across users in one request.
  */
-async function computeLightRating(
+async function computeDeepRating(
   profile: WdsfProfile,
   uuid: string,
   snapshotCache: Map<string, RankedCouple[]>,
 ): Promise<CoupleRating> {
+  // 1) Current world + regional standing (one snapshot for the couple's main list).
   let standing = null;
   const mainType = pickCombinedType(profile);
   if (mainType) {
@@ -446,10 +448,26 @@ async function computeLightRating(
       }
       standing = deriveWorldStanding(ranking, uuid, profile.represents || null);
     } catch (err) {
-      console.error("leaderboard: world standing lookup failed:", err);
+      console.error("rating: world standing lookup failed:", err);
     }
   }
-  return computeCoupleRating(profile, { standing });
+
+  // 2) Deep per-event signals for the most recent mappable events.
+  const recentMappable = [...profile.competitions]
+    .filter((c) => c.competitionUrl && combinedTypeForComp(c))
+    .sort((a, b) => (parseWdsfDate(b.date)?.getTime() ?? 0) - (parseWdsfDate(a.date)?.getTime() ?? 0))
+    .slice(0, DEEP_EVENTS);
+
+  const settled = await Promise.allSettled(
+    recentMappable.map((c) => analyzeCompetitionDeep(c, uuid)),
+  );
+  const deep: DeepEventSignal[] = [];
+  for (const r of settled) {
+    if (r.status === "fulfilled" && r.value) deep.push(r.value);
+    else if (r.status === "rejected") console.error("rating: deep event failed:", r.reason);
+  }
+
+  return computeCoupleRating(profile, { standing, deep });
 }
 
 // GET /api/wdsf/couple-rating — overall 1–10 couple rating (TEST) + world/regional rank
@@ -475,35 +493,7 @@ router.get(
       return;
     }
 
-    // 1) Current world + regional standing (one snapshot for the couple's main list).
-    let standing = null;
-    const mainType = pickCombinedType(profile);
-    if (mainType) {
-      try {
-        const ranking = await getRankingSnapshot(mainType, currentMonthKey(), null);
-        standing = deriveWorldStanding(ranking, uuid, profile.represents || null);
-      } catch (err) {
-        console.error("couple-rating: world standing lookup failed:", err);
-      }
-    }
-
-    // 2) Deep per-event signals for the most recent mappable events (real tier,
-    //    upset wins vs higher-ranked couples, bad losses, round-1 exits).
-    const recentMappable = [...profile.competitions]
-      .filter((c) => c.competitionUrl && combinedTypeForComp(c))
-      .sort((a, b) => (parseWdsfDate(b.date)?.getTime() ?? 0) - (parseWdsfDate(a.date)?.getTime() ?? 0))
-      .slice(0, DEEP_EVENTS);
-
-    const settled = await Promise.allSettled(
-      recentMappable.map((c) => analyzeCompetitionDeep(c, uuid)),
-    );
-    const deep: DeepEventSignal[] = [];
-    for (const r of settled) {
-      if (r.status === "fulfilled" && r.value) deep.push(r.value);
-      else if (r.status === "rejected") console.error("couple-rating: deep event failed:", r.reason);
-    }
-
-    const rating = computeCoupleRating(profile, { standing, deep });
+    const rating = await computeDeepRating(profile, uuid, new Map());
     coupleRatingCache.set(cacheKey, { rating, at: Date.now() });
     await persistRatingSnapshot(req.userId!, rating, true);
     res.json({ rating });
@@ -511,13 +501,19 @@ router.get(
 );
 
 // GET /api/wdsf/leaderboard — global ranking of all WDSF-linked registered users by
-// their overall couple rating (highest first). Users without a fresh snapshot get a
-// cheap light rating computed on the spot; the Rating tab upgrades it to deep later.
+// their overall couple rating (highest first). It's a real mini-competition: every
+// dancer is scored with the same DEEP rating the Rating tab uses. Snapshots are
+// cached on the user row (24h) so the board doesn't re-scrape everyone on each load;
+// `?refresh=1` forces a full deep recompute (used when the coefficients change).
 const LEADERBOARD_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 router.get(
   "/leaderboard",
   asyncHandler(async (req, res) => {
+    // `?refresh=1` forces a full recompute of every user's rating, ignoring the
+    // 24h snapshot cache — used when the rating coefficients change.
+    const force = req.query.refresh === "1" || req.query.refresh === "true";
+
     const users = await prisma.user.findMany({
       where: { wdsfProfileUrl: { not: null } },
       select: {
@@ -548,21 +544,22 @@ router.get(
       let deep = u.wdsfRatingDeep;
 
       const fresh =
+        !force &&
         rating != null && u.wdsfRatingAt != null &&
         Date.now() - u.wdsfRatingAt.getTime() < LEADERBOARD_TTL_MS;
 
       if (!fresh) {
         try {
           const profile = u.wdsfData as unknown as WdsfProfile;
-          const computed = await computeLightRating(profile, uuid, snapshotCache);
-          await persistRatingSnapshot(u.id, computed, false);
+          const computed = await computeDeepRating(profile, uuid, snapshotCache);
+          await persistRatingSnapshot(u.id, computed, true);
           rating = computed.available ? computed.rating : null;
           tier = computed.available ? computed.tier : null;
           worldRank = computed.worldRank;
           region = computed.region;
-          deep = false;
+          deep = true;
         } catch (err) {
-          console.error("leaderboard: light rating failed for", u.id, err);
+          console.error("leaderboard: deep rating failed for", u.id, err);
         }
       }
 

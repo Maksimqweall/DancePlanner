@@ -89,6 +89,16 @@ function RatingIcon({ color, size = 20 }: { color: string; size?: number }) {
     </Svg>
   );
 }
+function LeaderboardIcon({ color, size = 20 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="9.5" y="7" width="5" height="14" rx="1" stroke={color} strokeWidth="1.75" strokeLinejoin="round" />
+      <Rect x="3" y="12" width="5" height="9" rx="1" stroke={color} strokeWidth="1.75" strokeLinejoin="round" />
+      <Rect x="16" y="14" width="5" height="7" rx="1" stroke={color} strokeWidth="1.75" strokeLinejoin="round" />
+      <Path d="M12 2L12.7 3.5L14.3 3.7L13.1 4.8L13.4 6.4L12 5.6L10.6 6.4L10.9 4.8L9.7 3.7L11.3 3.5L12 2Z" fill={color} />
+    </Svg>
+  );
+}
 function LogoutIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -134,6 +144,7 @@ export default function SideDrawer() {
     partner:   lang.nav.partner,
     "about-app": lang.nav.aboutUs,
     rating:    lang.nav.rating,
+    leaderboard: lang.nav.leaderboard,
   };
 
   const translateX     = useSharedValue(-DRAWER_W - 24);
@@ -249,6 +260,14 @@ export default function SideDrawer() {
               onPress={() => navigate("/rating")}
             />
           ) : null}
+          <NavItem
+            label={lang.nav.leaderboard}
+            active={activeKey === "leaderboard"}
+            accent={C.purple}
+            badge={0}
+            icon={<LeaderboardIcon color={activeKey === "leaderboard" ? "#fff" : T.t2} size={20} />}
+            onPress={() => navigate("/leaderboard")}
+          />
           {NAV_SECONDARY.map(({ key, href, icon: Icon, accent }) => {
             const active = key === activeKey;
             return (

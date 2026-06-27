@@ -235,6 +235,20 @@ export interface CoupleRating {
   events: DeepEventSignal[];
 }
 
+// ─── Leaderboard (global ranking of WDSF-linked users) ─────────────────────────
+
+export interface LeaderboardRow {
+  position: number;
+  userId: string;
+  name: string;
+  rating: number; // 1..10
+  tier: TournamentTier;
+  region: string | null;
+  worldRank: number | null;
+  deep: boolean; // computed with deep event analysis
+  isMe: boolean;
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 interface WdsfState {
@@ -250,6 +264,9 @@ interface WdsfState {
   coupleRating: CoupleRating | null;
   coupleRatingLoading: boolean;
   coupleRatingError: string | null;
+  leaderboard: LeaderboardRow[] | null;
+  leaderboardLoading: boolean;
+  leaderboardError: string | null;
 
   fetchProfile: () => Promise<void>;
   linkByMin: (min: string) => Promise<void>;
@@ -266,6 +283,7 @@ interface WdsfState {
     date?: string,
   ) => Promise<TournamentRating | null>;
   fetchCoupleRating: (force?: boolean) => Promise<CoupleRating | null>;
+  fetchLeaderboard: (force?: boolean) => Promise<LeaderboardRow[] | null>;
 }
 
 export const useWdsfStore = create<WdsfState>((set, get) => ({
@@ -281,6 +299,9 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
   coupleRating: null,
   coupleRatingLoading: false,
   coupleRatingError: null,
+  leaderboard: null,
+  leaderboardLoading: false,
+  leaderboardError: null,
 
   fetchProfile: async () => {
     set({ loading: true, error: null });
@@ -440,6 +461,24 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
       set({
         coupleRatingError: e instanceof Error ? e.message : "Failed to compute rating",
         coupleRatingLoading: false,
+      });
+      return null;
+    }
+  },
+
+  fetchLeaderboard: async (force = false) => {
+    const existing = get().leaderboard;
+    if (existing && !force) return existing;
+
+    set({ leaderboardLoading: true, leaderboardError: null });
+    try {
+      const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>("/wdsf/leaderboard");
+      set({ leaderboard, leaderboardLoading: false });
+      return leaderboard;
+    } catch (e) {
+      set({
+        leaderboardError: e instanceof Error ? e.message : "Failed to load leaderboard",
+        leaderboardLoading: false,
       });
       return null;
     }

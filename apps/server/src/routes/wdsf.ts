@@ -405,6 +405,53 @@ async function analyzeCompetitionDeep(
   });
 }
 
+/** Persist a couple-rating snapshot on the user so the leaderboard can sort without re-scraping. */
+async function persistRatingSnapshot(userId: string, rating: CoupleRating, deep: boolean): Promise<void> {
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        wdsfRating: rating.available ? rating.rating : null,
+        wdsfRatingTier: rating.available ? rating.tier : null,
+        wdsfWorldRank: rating.worldRank,
+        wdsfRegion: rating.region,
+        wdsfRatingDeep: deep,
+        wdsfRatingAt: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error("leaderboard: persist rating snapshot failed:", err);
+  }
+}
+
+/**
+ * Light couple rating for the leaderboard — profile-level stats + current world
+ * standing only (NO deep per-event scraping). Cheap enough to run for every user;
+ * the deep rating from the Rating tab supersedes it when present and fresh.
+ * `snapshotCache` de-duplicates ranking-snapshot fetches across users in one request.
+ */
+async function computeLightRating(
+  profile: WdsfProfile,
+  uuid: string,
+  snapshotCache: Map<string, RankedCouple[]>,
+): Promise<CoupleRating> {
+  let standing = null;
+  const mainType = pickCombinedType(profile);
+  if (mainType) {
+    try {
+      let ranking = snapshotCache.get(mainType);
+      if (!ranking) {
+        ranking = await getRankingSnapshot(mainType, currentMonthKey(), null);
+        snapshotCache.set(mainType, ranking);
+      }
+      standing = deriveWorldStanding(ranking, uuid, profile.represents || null);
+    } catch (err) {
+      console.error("leaderboard: world standing lookup failed:", err);
+    }
+  }
+  return computeCoupleRating(profile, { standing });
+}
+
 // GET /api/wdsf/couple-rating — overall 1–10 couple rating (TEST) + world/regional rank
 router.get(
   "/couple-rating",
@@ -458,7 +505,88 @@ router.get(
 
     const rating = computeCoupleRating(profile, { standing, deep });
     coupleRatingCache.set(cacheKey, { rating, at: Date.now() });
+    await persistRatingSnapshot(req.userId!, rating, true);
     res.json({ rating });
+  })
+);
+
+// GET /api/wdsf/leaderboard — global ranking of all WDSF-linked registered users by
+// their overall couple rating (highest first). Users without a fresh snapshot get a
+// cheap light rating computed on the spot; the Rating tab upgrades it to deep later.
+const LEADERBOARD_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+router.get(
+  "/leaderboard",
+  asyncHandler(async (req, res) => {
+    const users = await prisma.user.findMany({
+      where: { wdsfProfileUrl: { not: null } },
+      select: {
+        id: true, firstName: true, lastName: true,
+        wdsfProfileUrl: true, wdsfData: true,
+        wdsfRating: true, wdsfRatingTier: true, wdsfWorldRank: true,
+        wdsfRegion: true, wdsfRatingDeep: true, wdsfRatingAt: true,
+      },
+    });
+
+    const snapshotCache = new Map<string, RankedCouple[]>();
+
+    interface Row {
+      userId: string; name: string; rating: number; tier: string;
+      region: string | null; worldRank: number | null; deep: boolean; isMe: boolean;
+    }
+    const rows: Row[] = [];
+
+    for (const u of users) {
+      if (!u.wdsfData || !u.wdsfProfileUrl) continue;
+      const uuid = extractUuid(u.wdsfProfileUrl);
+      if (!uuid) continue;
+
+      let rating = u.wdsfRating;
+      let tier = u.wdsfRatingTier;
+      let worldRank = u.wdsfWorldRank;
+      let region = u.wdsfRegion;
+      let deep = u.wdsfRatingDeep;
+
+      const fresh =
+        rating != null && u.wdsfRatingAt != null &&
+        Date.now() - u.wdsfRatingAt.getTime() < LEADERBOARD_TTL_MS;
+
+      if (!fresh) {
+        try {
+          const profile = u.wdsfData as unknown as WdsfProfile;
+          const computed = await computeLightRating(profile, uuid, snapshotCache);
+          await persistRatingSnapshot(u.id, computed, false);
+          rating = computed.available ? computed.rating : null;
+          tier = computed.available ? computed.tier : null;
+          worldRank = computed.worldRank;
+          region = computed.region;
+          deep = false;
+        } catch (err) {
+          console.error("leaderboard: light rating failed for", u.id, err);
+        }
+      }
+
+      if (rating == null) continue;
+      rows.push({
+        userId: u.id,
+        name: `${u.firstName} ${u.lastName}`.trim(),
+        rating,
+        tier: tier ?? "Unrated",
+        region: region ?? null,
+        worldRank: worldRank ?? null,
+        deep,
+        isMe: u.id === req.userId,
+      });
+    }
+
+    rows.sort((a, b) =>
+      b.rating - a.rating ||
+      (a.worldRank ?? 1e9) - (b.worldRank ?? 1e9) ||
+      a.name.localeCompare(b.name),
+    );
+
+    const leaderboard = rows.map((r, i) => ({ position: i + 1, ...r }));
+    res.json({ leaderboard, generatedAt: new Date().toISOString() });
   })
 );
 

@@ -23,6 +23,16 @@ model User {
   wdsfUpdatedAt   DateTime?  // When WDSF data was last fetched
   dtvId           String?    // DTV ID номер
 
+  // Leaderboard: cached couple-rating snapshot (so the global board can sort users
+  // without re-scraping). Filled by the couple-rating endpoint (deep) or a light
+  // pass from the leaderboard endpoint (profile + world standing only).
+  wdsfRating       Float?     // overall 1–10 strength rating
+  wdsfRatingTier   String?    // S/A/B/C/D band
+  wdsfWorldRank    Int?       // WDSF World Ranking position (null = unranked)
+  wdsfRegion       String?    // Represents country (for regional grouping)
+  wdsfRatingDeep   Boolean    @default(false) // true = computed with deep event analysis
+  wdsfRatingAt     DateTime?  // when the snapshot was computed
+
   resetToken       String?
   resetTokenExpiry DateTime?
 

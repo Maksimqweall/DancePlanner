@@ -174,9 +174,9 @@ function prestigeMultiplier(comp: WdsfCompetition): { mult: number; label: strin
 
 // Prestige-boost tuning.
 const PRESTIGE_UNIT = 0.6;      // points per full (mult−1) unit on a perfect, fresh result
-const PRESTIGE_CAP = 4;         // total boost can't exceed this many rating points
+const PRESTIGE_CAP = 2;         // total boost can't exceed this many rating points
 const PRESTIGE_MIN_PERF = 0.6;  // only genuinely good placements (≥60th pct) earn a boost
-const PRESTIGE_DECAY_MONTHS = 36; // boost fades to 0 over this many months
+const PRESTIGE_DECAY_MONTHS = 6; // boost fades to 0 over this many months
 
 function tierForRating(rating: number): Tier {
   for (const b of RATING_BANDS) if (rating >= b.floor) return b.tier;

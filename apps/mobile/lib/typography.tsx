@@ -4,7 +4,7 @@
 // premium typeface with correct weights (RN can't synthesise weights from a single
 // static family, so we resolve a concrete face per weight).
 import React from "react";
-import { Text, TextInput, StyleSheet, type TextStyle, type StyleProp } from "react-native";
+import { Text, TextInput, StyleSheet, Platform, type TextStyle, type StyleProp } from "react-native";
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -64,9 +64,15 @@ export function installTypography(): void {
       if (!el || !el.props) return el;
       const flat = (StyleSheet.flatten(el.props.style) || {}) as TextStyle;
       if (flat.fontFamily) return el; // explicit family wins
-      return React.cloneElement(el, {
-        style: [{ fontFamily: familyFor(flat.fontWeight) }, el.props.style],
-      });
+      const fontFamily = familyFor(flat.fontWeight);
+      // On web, RN-web has already produced a DOM element whose `style` must be a
+      // plain object — passing an array makes React DOM try to set indexed props on
+      // CSSStyleDeclaration and throw. So merge into one object there; arrays are
+      // fine (and cheaper) on native.
+      const style = Platform.OS === "web"
+        ? { ...flat, fontFamily }
+        : [{ fontFamily }, el.props.style];
+      return React.cloneElement(el, { style });
     };
   }
 }

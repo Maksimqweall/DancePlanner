@@ -1451,6 +1451,46 @@ export async function verifyAndScrape(
   return profile;
 }
 
+/** Normalise a name for comparison: lowercase, strip diacritics & punctuation, collapse spaces. */
+function normalizeName(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // drop combining diacritical marks
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Tokenise a normalised name into a set of word tokens. */
+function nameTokens(s: string): Set<string> {
+  return new Set(normalizeName(s).split(" ").filter(Boolean));
+}
+
+/**
+ * Does a Dance Planner account's name match a scraped WDSF profile?
+ * The athlete's first and last name must each appear among the profile's name
+ * tokens (order-independent, diacritic- and case-insensitive). This blocks a
+ * user from linking someone else's WDSF profile.
+ */
+export function nameMatchesProfile(
+  firstName: string,
+  lastName: string,
+  profile: WdsfProfile,
+): boolean {
+  const profileTokens = new Set<string>([
+    ...nameTokens(profile.name || ""),
+    ...nameTokens(profile.firstName || ""),
+    ...nameTokens(profile.lastName || ""),
+  ]);
+  if (profileTokens.size === 0) return false;
+
+  const userTokens = [...nameTokens(`${firstName} ${lastName}`)];
+  if (userTokens.length === 0) return false;
+
+  return userTokens.every((tok) => profileTokens.has(tok));
+}
+
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

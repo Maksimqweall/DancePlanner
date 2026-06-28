@@ -207,10 +207,17 @@ export interface DeepEventSignal {
   reachedFinal: boolean;
 }
 
+// Chess-style Elo presentation. The server still computes a 0–10 strength score
+// (`rating`) and maps it linearly onto the Elo scale (1000–2800), i.e. ELO_PER_POINT
+// Elo per rating point. Penalty/bonus amounts are in rating points, so multiplying
+// by ELO_PER_POINT expresses them in Elo.
+export const ELO_PER_POINT = 200;
+
 export interface CoupleRating {
   available: boolean;
   reason?: string;
-  rating: number; // 1..10
+  rating: number; // 1..10 (internal strength score)
+  elo: number; // chess-style Elo (1000..2800)
   tier: TournamentTier;
   baseRating: number;
   worldRank: number | null;
@@ -242,7 +249,8 @@ export interface LeaderboardRow {
   position: number;
   userId: string;
   name: string;
-  rating: number; // 1..10
+  rating: number; // 1..10 (internal strength score)
+  elo: number; // chess-style Elo (1000..2800)
   tier: TournamentTier;
   region: string | null;
   worldRank: number | null;

@@ -55,6 +55,25 @@ const RATING_BANDS: { tier: Exclude<Tier, "Unrated">; floor: number }[] = [
   { tier: "D", floor: 1 },
 ];
 
+// ─── Elo scale (chess-style presentation) ──────────────────────────────────────
+//
+// The engine still computes a 0–10 strength score internally (every component,
+// penalty and bonus below is in those points). For display we map that score onto
+// a familiar chess Elo scale so the rating reads like a chess rating:
+//   rating 1  → 1000   (D / beginner floor)
+//   rating 10 → 2800   (S / world-elite ceiling)
+// The map is linear, so exactly ELO_PER_POINT (=200) Elo per rating point — which
+// also lets penalties/bonuses be shown in Elo by multiplying their amount by 200.
+// Tier letters follow straight from the rating, so the Elo bands are:
+//   D 1000–1399 · C 1400–1799 · B 1800–2199 · A 2200–2599 · S 2600–2800.
+export const ELO_FLOOR = 1000;
+export const ELO_PER_POINT = 200;
+
+/** Map the internal 0–10 strength rating onto the chess Elo scale (1000–2800). */
+export function ratingToElo(rating: number): number {
+  return Math.round(ELO_FLOOR + (rating - 1) * ELO_PER_POINT);
+}
+
 export interface CoupleRatingComponent {
   key: keyof typeof WEIGHTS;
   label: string;
@@ -88,7 +107,8 @@ export interface DeepEventSignal {
 export interface CoupleRating {
   available: boolean;
   reason?: string;
-  rating: number; // 1..10
+  rating: number; // 1..10 (internal strength score)
+  elo: number; // chess-style Elo (1000..2800), derived from `rating`
   tier: Tier;
   baseRating: number; // 0..10 before penalties
   worldRank: number | null;
@@ -344,7 +364,7 @@ export function computeCoupleRating(
     return {
       available: false,
       reason: "No competition results with a parseable placement.",
-      rating: 1, tier: "D", baseRating: 0,
+      rating: 1, elo: ratingToElo(1), tier: "D", baseRating: 0,
       worldRank: standing?.rank ?? null,
       regionalRank: standing?.regionalRank ?? null,
       region, components: [], penalties: [], bonuses: [],
@@ -528,6 +548,7 @@ export function computeCoupleRating(
   return {
     available: true,
     rating,
+    elo: ratingToElo(rating),
     tier: tierForRating(rating),
     baseRating: Math.round(base * 10) / 10,
     worldRank: standing?.rank ?? null,

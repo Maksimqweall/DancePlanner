@@ -12,6 +12,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-na
 import { LinearGradient } from "expo-linear-gradient";
 import {
   useWdsfStore,
+  ELO_PER_POINT,
   type CoupleRating,
   type CoupleRatingComponent,
   type DeepEventSignal,
@@ -145,7 +146,7 @@ function RatingView({
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 24 }]}
         />
-        <RatingRing rating={rating.rating} tier={rating.tier} color={color} />
+        <RatingRing elo={rating.elo} tier={rating.tier} color={color} />
         <Text style={[s.tierName, { color }]}>{TIER_NAME[rating.tier]}</Text>
         <View style={[s.tierPill, { backgroundColor: `${color}1A`, borderColor: `${color}55` }]}>
           <Text style={[s.tierPillText, { color }]}>Tier {rating.tier}</Text>
@@ -202,7 +203,7 @@ function RatingView({
           ))}
         </View>
         <Text style={s.baseNote}>
-          Base score {rating.baseRating.toFixed(1)} / 10 from weighted components
+          Base Elo {Math.round(1000 + (rating.baseRating - 1) * ELO_PER_POINT)} from weighted components
           {rating.bonuses.length || rating.penalties.length ? ", before the adjustments below." : "."}
         </Text>
       </Animated.View>
@@ -219,7 +220,7 @@ function RatingView({
                   <Text style={s.penaltyLabel}>{b.label}</Text>
                   <Text style={s.penaltyDetail} numberOfLines={2}>{b.detail}</Text>
                 </View>
-                <Text style={s.bonusAmount}>+{b.amount.toFixed(1)}</Text>
+                <Text style={s.bonusAmount}>+{Math.round(b.amount * ELO_PER_POINT)}</Text>
               </View>
             ))}
           </View>
@@ -238,7 +239,7 @@ function RatingView({
                   <Text style={s.penaltyLabel}>{p.label}</Text>
                   <Text style={s.penaltyDetail} numberOfLines={2}>{p.detail}</Text>
                 </View>
-                <Text style={s.penaltyAmount}>−{p.amount.toFixed(1)}</Text>
+                <Text style={s.penaltyAmount}>−{Math.round(p.amount * ELO_PER_POINT)}</Text>
               </View>
             ))}
           </View>
@@ -266,8 +267,9 @@ function RatingView({
           {loading ? <ActivityIndicator color={C.accent} size="small" /> : <Text style={s.refreshBtnText}>↺ Recalculate rating</Text>}
         </PressableScale>
         <Text style={s.disclaimer}>
-          Experimental rating. Built from your average placement, the strength (S–D) of the
-          fields you dance, your standing vs the WDSF World Ranking, finals & podiums, and form.
+          Experimental Elo rating (chess-style, 1000–2800). Built from your average placement, the
+          strength (S–D) of the fields you dance, your standing vs the WDSF World Ranking, finals &
+          podiums, and form.
         </Text>
       </Animated.View>
 
@@ -278,13 +280,14 @@ function RatingView({
 
 // ─── Circular gauge ──────────────────────────────────────────────────────────
 
-function RatingRing({ rating, tier, color }: { rating: number; tier: TournamentTier; color: string }) {
+function RatingRing({ elo, tier, color }: { elo: number; tier: TournamentTier; color: string }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
   const SIZE = 168, STROKE = 13;
   const r = (SIZE - STROKE) / 2;
   const circ = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(1, rating / 10));
+  // Fill the ring by where the Elo sits in the 1000–2800 scale.
+  const pct = Math.max(0, Math.min(1, (elo - 1000) / 1800));
   const grad = TIER_GRADIENTS[tier];
 
   return (
@@ -306,10 +309,8 @@ function RatingRing({ rating, tier, color }: { rating: number; tier: TournamentT
         />
       </Svg>
       <View style={s.ringCenter}>
-        <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-          <Text style={[s.ringValue, { color }]}>{rating.toFixed(1)}</Text>
-          <Text style={s.ringMax}>/10</Text>
-        </View>
+        <Text style={[s.ringValue, { color }]}>{elo}</Text>
+        <Text style={s.ringMax}>ELO</Text>
         <Text style={s.ringTierLetter}>{tier}</Text>
       </View>
     </View>
@@ -454,8 +455,8 @@ function makeStyles(C: Palette) {
       ...SHADOWS.md, ...glow(C.accent, 26, 0.20),
     },
     ringCenter: { position: "absolute", alignItems: "center", justifyContent: "center" },
-    ringValue: { fontSize: 46, fontWeight: "900", letterSpacing: -2 },
-    ringMax: { color: C.t3, fontSize: 16, fontWeight: "800", marginLeft: 2 },
+    ringValue: { fontSize: 42, fontWeight: "900", letterSpacing: -1.5 },
+    ringMax: { color: C.t3, fontSize: 13, fontWeight: "800", letterSpacing: 2, marginTop: 1 },
     ringTierLetter: { color: C.t3, fontSize: 13, fontWeight: "800", letterSpacing: 3, marginTop: 2 },
     tierName: { fontSize: 20, fontWeight: "800", letterSpacing: -0.4, marginTop: 16 },
     tierPill: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5, borderWidth: 1, marginTop: 8 },

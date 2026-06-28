@@ -12,6 +12,7 @@ import {
   scrapeRankingPage,
   buildCompUrls,
   extractUuid,
+  nameMatchesProfile,
   type WdsfProfile,
 } from "../lib/wdsfScraper";
 import {
@@ -28,6 +29,7 @@ import {
   deriveWorldStanding,
   analyzeEvent,
   parseWdsfDate,
+  ratingToElo,
   type DeepEventSignal,
   type CoupleRating,
 } from "../lib/wdsfCoupleRating";
@@ -181,6 +183,16 @@ router.post(
       throw new HttpError(400, `WDSF profile found but verification failed: ${msg}`);
     }
 
+    // Step 2b: the linked profile's name must match this account's name, so a user
+    // can't connect someone else's WDSF profile.
+    if (!nameMatchesProfile(user.firstName, user.lastName, profile)) {
+      throw new HttpError(403,
+        `This WDSF profile (${profile.name}) does not match your account name ` +
+        `(${user.firstName} ${user.lastName}). Update your name in Dance Planner to ` +
+        `exactly match your WDSF/DTV card, then try again.`
+      );
+    }
+
     // Step 3: save to DB
     await prisma.user.update({
       where: { id: req.userId },
@@ -207,7 +219,23 @@ router.post(
 
     if (!extractUuid(url)) throw new HttpError(400, "URL does not contain a valid WDSF athlete UUID");
 
+    const account = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { firstName: true, lastName: true },
+    });
+    if (!account) throw new HttpError(404, "User not found");
+
     const profile = await scrapeAthleteProfile(url);
+
+    // The linked profile's name must match this account's name, so a user can't
+    // connect someone else's WDSF profile.
+    if (!nameMatchesProfile(account.firstName, account.lastName, profile)) {
+      throw new HttpError(403,
+        `This WDSF profile (${profile.name}) does not match your account name ` +
+        `(${account.firstName} ${account.lastName}). Update your name in Dance Planner to ` +
+        `exactly match your WDSF/DTV card, then try again.`
+      );
+    }
 
     await prisma.user.update({
       where: { id: req.userId },
@@ -527,7 +555,7 @@ router.get(
     const snapshotCache = new Map<string, RankedCouple[]>();
 
     interface Row {
-      userId: string; name: string; rating: number; tier: string;
+      userId: string; name: string; rating: number; elo: number; tier: string;
       region: string | null; worldRank: number | null; deep: boolean; isMe: boolean;
     }
     const rows: Row[] = [];
@@ -568,6 +596,7 @@ router.get(
         userId: u.id,
         name: `${u.firstName} ${u.lastName}`.trim(),
         rating,
+        elo: ratingToElo(rating),
         tier: tier ?? "Unrated",
         region: region ?? null,
         worldRank: worldRank ?? null,
@@ -577,7 +606,7 @@ router.get(
     }
 
     rows.sort((a, b) =>
-      b.rating - a.rating ||
+      b.elo - a.elo ||
       (a.worldRank ?? 1e9) - (b.worldRank ?? 1e9) ||
       a.name.localeCompare(b.name),
     );

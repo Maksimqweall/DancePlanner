@@ -204,7 +204,7 @@ function PodiumPillar({ row, place }: { row: LeaderboardRow; place: 1 | 2 | 3 })
       </Text>
       {row.region ? <Text style={s.pillarRegion} numberOfLines={1}>{row.region}</Text> : null}
       <View style={[s.pillarBase, isFirst && s.pillarBaseFirst]}>
-        <Text style={[s.pillarRating, { color }]}>{row.rating.toFixed(1)}</Text>
+        <Text style={[s.pillarRating, { color }]}>{row.elo}</Text>
         <Text style={s.pillarTier}>Tier {row.tier}</Text>
       </View>
     </View>
@@ -242,9 +242,9 @@ function Row({ row, isLast }: { row: LeaderboardRow; isLast: boolean }) {
         {sub ? <Text style={s.rowSub} numberOfLines={1}>{sub}</Text> : null}
       </View>
 
-      {/* Tier + rating */}
+      {/* Tier + Elo */}
       <View style={s.rowRight}>
-        <Text style={[s.rowRating, { color }]}>{row.rating.toFixed(1)}</Text>
+        <Text style={[s.rowRating, { color }]}>{row.elo}</Text>
         <View style={[s.tierPill, { backgroundColor: `${color}1A`, borderColor: `${color}40` }]}>
           <Text style={[s.tierPillText, { color }]}>{row.tier}</Text>
         </View>

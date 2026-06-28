@@ -47,6 +47,19 @@ const WEIGHTS = {
 } as const;
 
 const MAX_COMPS = 40; // history depth feeding profile-level stats
+
+// A category goes "inactive" once the couple hasn't competed in it for this long. An
+// inactive category is hidden from the leaderboard and flagged on the Rating tab; it
+// reactivates automatically the next time the couple dances that category.
+export const INACTIVITY_MONTHS = 12;
+
+/** True when `lastDancedMs` (epoch ms, 0/undefined = never) is older than the cutoff. */
+export function isCategoryInactive(lastDancedMs: number | null | undefined, now: Date = new Date()): boolean {
+  if (!lastDancedMs) return false; // unknown date → don't penalise as inactive
+  const months = (now.getTime() - lastDancedMs) / (1000 * 60 * 60 * 24 * 30.44);
+  return months > INACTIVITY_MONTHS;
+}
+
 const ASSUMED_FIELD = 30; // field-size assumption when an event omits the entry count
 const UPSET_SATURATION = 12; // upset wins at which the upset signal maxes out
 

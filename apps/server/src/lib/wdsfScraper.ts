@@ -928,11 +928,14 @@ function parseAdjudicatorTable(
 async function scrapeScoresPage(
   scoresUrl: string,
   coupleNumber: string,
-): Promise<{ prelim: Scores3Result | null; final3: Score3Round | null }> {
-  const empty = { prelim: null, final3: null };
+): Promise<{ prelim: Scores3Result | null; final3: Score3Round | null; skatingFinal: FinalResult | null }> {
+  const empty = { prelim: null, final3: null, skatingFinal: null };
   const res = await fetch(scoresUrl, { headers: FETCH_HEADERS });
   if (!res.ok) return empty;
-  return parseScoresHtml(await res.text(), coupleNumber);
+  const html = await res.text();
+  // Marquee events (Grand Slam / Championships) serve their final in a skating layout on
+  // THIS page with no /Final/ page, so parse that fallback alongside the System 3.0 data.
+  return { ...parseScoresHtml(html, coupleNumber), skatingFinal: parseSkatingFinalHtml(html, coupleNumber) };
 }
 
 /** Pure parser for the System 3.0 Scores page HTML (separated for testability). */
@@ -1087,6 +1090,125 @@ export function parseScoresHtml(
   return { prelim, final3 };
 }
 
+// ─── Skating-style Scores page (Grand Slam / Championship finals) ──────────────
+//
+// Marquee events (Grand Slam, World/European Championship) are scored with System 3.0
+// marks but WDSF renders them on the /Scores/ page in a SKATING layout (`table.js-skating`
+// per dance + a `table.list.skating` standings summary) — there is NO /Final/ page and
+// NO `table.js-scores`, so both scrapeFinalPage and parseScoresHtml come up empty and a
+// finalist is wrongly reported as "did not reach the Final". This parser reads that
+// skating layout into a System-2.0-style FinalResult (per-dance + per-judge placements).
+
+/** A judge cell on a js-skating page renders as `<mark><br/><place>` (e.g. "9.800<br/>1"). */
+function placeFromSkatingCell(html: string): number | null {
+  const parts = html.split(/<br\s*\/?>/i);
+  const last = parts[parts.length - 1].replace(/<[^>]+>/g, "").trim();
+  const n = parseInt(last, 10);
+  return isNaN(n) || n < 1 ? null : n;
+}
+
+/** Parse a skating-style /Scores/ page into a FinalResult for `coupleNumber`, or null. */
+export function parseSkatingFinalHtml(html: string, coupleNumber: string): FinalResult | null {
+  const $ = load(html);
+  if (!$("table.js-skating").length) return null; // not a skating-layout scores page
+  const target = normNum(coupleNumber);
+
+  // Map every table to the round (h2) + dance (h3/h4) heading that precedes it.
+  let curRound = "";
+  let curDance = "";
+  const meta = new Map<Element, { round: string; dance: string }>();
+  $("h2, h3, h4, h5, table").each((_, el) => {
+    if ($(el).is("table")) { meta.set(el as Element, { round: curRound, dance: curDance }); return; }
+    const t = $(el).text().trim();
+    if (!t) return;
+    if ($(el).is("h2")) { curRound = t; curDance = ""; }
+    const d = canonDanceName(t);
+    if (d) curDance = d;
+  });
+  const isFinalRound = (r: string) => /\bfinal\b/i.test(r) && !/semi|quarter|1\/[24]/i.test(r);
+
+  // ── Per-dance judge placements, from the Final round's js-skating tables ──
+  const dances: FinalDanceResult[] = [];
+  $("table.js-skating").each((_, table) => {
+    const m = meta.get(table as Element);
+    if (!m || !isFinalRound(m.round) || !m.dance) return;
+    const $t = $(table);
+
+    // Judge letters in header order. Each adjudicator owns two data cells (TQ&PS / MM&CP),
+    // both carrying the same per-dance placement, plus a trailing separator cell.
+    const judges: string[] = [];
+    $t.find("thead tr").first().find("th.ajud").each((_, th) => {
+      const letter = $(th).text().trim();
+      if (letter) judges.push(letter);
+    });
+    if (!judges.length) return;
+
+    $t.find("tbody tr").each((_, row) => {
+      const numCell = $(row).find("td.number").first();
+      if (!numCell.length || normNum(numCell.text()) !== target) return;
+
+      const infos = $(row).find("td[data-info]").map((_, td) => $(td).html() ?? "").get();
+      const judgeEntries: FinalJudgePlacement[] = [];
+      for (let j = 0; j < judges.length; j++) {
+        const cell = infos[j * 2]; // first of the judge's two columns
+        if (cell == null) continue;
+        const place = placeFromSkatingCell(cell);
+        if (place != null) judgeEntries.push({ judge: judges[j], place });
+      }
+
+      let dancePlace = 0;
+      const rt = parseInt($(row).find("td.rankTotal").last().text().trim(), 10);
+      if (!isNaN(rt)) dancePlace = rt;
+
+      if (!dances.find((d) => d.dance === m.dance)) {
+        dances.push({ dance: m.dance, judgeEntries, dancePlace });
+      }
+    });
+  });
+
+  // ── Overall place + per-dance places, from the standings summary table ──
+  let overallPlace = 0;
+  const $sum = $("table.list.skating").first();
+  if ($sum.length) {
+    const heads = $sum.find("thead th").map((_, th) => $(th).text().trim().toLowerCase()).get();
+    const placeIdx = heads.findIndex((h) => h === "place");
+    $sum.find("tbody tr").each((_, row) => {
+      const cells = $(row).find("td").toArray();
+      const numTd = cells.find((td) => $(td).hasClass("number"));
+      if (!numTd || normNum($(numTd).text()) !== target) return;
+      const texts = cells.map((td) => $(td).text().trim());
+      if (placeIdx >= 0 && placeIdx < texts.length) {
+        const p = parseInt(texts[placeIdx], 10);
+        if (!isNaN(p) && p >= 1) overallPlace = p;
+      }
+      heads.forEach((h, i) => {
+        const dance = canonDanceName(h);
+        if (!dance) return;
+        const p = parseInt(texts[i], 10);
+        if (isNaN(p)) return;
+        const existing = dances.find((d) => d.dance === dance);
+        if (existing) { if (!existing.dancePlace) existing.dancePlace = p; }
+        else dances.push({ dance, judgeEntries: [], dancePlace: p });
+      });
+    });
+  }
+
+  if (!dances.length && !overallPlace) return null;
+
+  const judgeMap: Record<string, number[]> = {};
+  for (const dr of dances) {
+    for (const je of dr.judgeEntries) {
+      if (!je.judge || !/[a-zA-Z]/.test(je.judge)) continue;
+      (judgeMap[je.judge] ??= []).push(je.place);
+    }
+  }
+  const judgeAvgPlaces = Object.entries(judgeMap)
+    .map(([judge, places]) => ({ judge, avgPlace: places.reduce((s, p) => s + p, 0) / places.length }))
+    .sort((a, b) => a.avgPlace - b.avgPlace);
+
+  return { dances, overallPlace, judgeAvgPlaces };
+}
+
 // ─── Main analytics scraper ───────────────────────────────────────────────────
 
 export async function scrapeCompetitionAnalytics(
@@ -1109,12 +1231,15 @@ export async function scrapeCompetitionAnalytics(
   const coupleName   = myEntry.coupleName;
 
   // Step 2: Marks + Final + Scores (3.0) + Officials (parallel)
-  const [rounds, final, { prelim: scores3, final3 }, judgeNames] = await Promise.all([
+  const [rounds, finalFromPage, { prelim: scores3, final3, skatingFinal }, judgeNames] = await Promise.all([
     scrapeMarksPage(urls.marks, coupleNumber, coupleName),
     scrapeFinalPage(urls.final, coupleNumber),
     scrapeScoresPage(urls.scores, coupleNumber),
     scrapeOfficialsPage(urls.officials),
   ]);
+
+  // Marquee events have no /Final/ page; fall back to the skating final on the Scores page.
+  const final = finalFromPage ?? skatingFinal;
 
   // Step 3: Compute dance stats
   const danceMap: Record<string, number[]> = {};
@@ -1201,12 +1326,12 @@ export async function scrapeCoupleScores(
   final3: Score3Round | null;
 }> {
   const urls = buildCompUrls(competitionUrl);
-  const [rounds, final, scores] = await Promise.all([
+  const [rounds, finalFromPage, scores] = await Promise.all([
     scrapeMarksPage(urls.marks, coupleNumber, ""),
     scrapeFinalPage(urls.final, coupleNumber),
     scrapeScoresPage(urls.scores, coupleNumber),
   ]);
-  return { rounds, final, scores3: scores.prelim, final3: scores.final3 };
+  return { rounds, final: finalFromPage ?? scores.skatingFinal, scores3: scores.prelim, final3: scores.final3 };
 }
 
 // ─── Main profile scraper ─────────────────────────────────────────────────────

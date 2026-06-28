@@ -126,6 +126,8 @@ export default function RatingScreen() {
       onSelect={setSelected}
       loading={loading}
       onRefresh={() => fetchCoupleRating(true)}
+      inactive={current.inactive}
+      lastDanced={current.lastDanced}
     />
   );
 }
@@ -156,10 +158,10 @@ function CategoryTabs({
           <PressableScale
             key={c.combinedType}
             onPress={() => onSelect(c.combinedType)}
-            style={[s.tab, active && { backgroundColor: `${color}1A`, borderColor: `${color}66` }]}
+            style={[s.tab, active && { backgroundColor: `${color}1A`, borderColor: `${color}66` }, c.inactive && { opacity: 0.55 }]}
           >
             <Text style={[s.tabText, active && { color }]} numberOfLines={1}>{c.label}</Text>
-            <Text style={[s.tabElo, active && { color }]}>{c.rating.elo}</Text>
+            <Text style={[s.tabElo, active && { color }]}>{c.inactive ? "Inactive" : c.rating.elo}</Text>
           </PressableScale>
         );
       })}
@@ -170,7 +172,7 @@ function CategoryTabs({
 // ─── Main view ─────────────────────────────────────────────────────────────────
 
 function RatingView({
-  rating, categories, selected, onSelect, loading, onRefresh,
+  rating, categories, selected, onSelect, loading, onRefresh, inactive, lastDanced,
 }: {
   rating: CoupleRating;
   categories: CategoryRating[];
@@ -178,6 +180,8 @@ function RatingView({
   onSelect: (combinedType: string) => void;
   loading: boolean;
   onRefresh: () => void;
+  inactive: boolean;
+  lastDanced: string | null;
 }) {
   const C = useC();
   const t = useT();
@@ -185,10 +189,29 @@ function RatingView({
   const color = tierColor(rating.tier, C);
   const st = rating.stats;
 
+  const lastDancedLabel = useMemo(() => {
+    if (!lastDanced) return null;
+    const d = new Date(lastDanced);
+    return isNaN(d.getTime()) ? null : d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }, [lastDanced]);
+
   return (
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
 
       <CategoryTabs categories={categories} selected={selected} onSelect={onSelect} />
+
+      {/* Inactive notice — couple hasn't competed in this category for over a year. */}
+      {inactive ? (
+        <Animated.View entering={FadeInDown.duration(420)} style={[s.inactiveBanner, { marginTop: 16 }]}>
+          <Text style={s.inactiveBadge}>INACTIVE</Text>
+          <Text style={s.inactiveTitle}>This category is inactive</Text>
+          <Text style={s.inactiveBody}>
+            You haven’t competed in {categories.find((c) => c.combinedType === selected)?.label ?? "this category"} for
+            over a year{lastDancedLabel ? ` (last danced ${lastDancedLabel})` : ""}. Your rating here is frozen and
+            hidden from the leaderboard until you dance this category again.
+          </Text>
+        </Animated.View>
+      ) : null}
 
       <Hint
         id="rating.intro"
@@ -591,6 +614,18 @@ function makeStyles(C: Palette) {
     compBarFill: { height: "100%", borderRadius: 4 },
     compDetail: { color: C.t3, fontSize: 11, marginTop: 6 },
     baseNote: { color: C.t3, fontSize: 11, marginTop: 8, paddingHorizontal: 4, lineHeight: 16 },
+
+    // Inactive-category notice
+    inactiveBanner: {
+      backgroundColor: C.goldFade, borderRadius: 18, borderWidth: 1, borderColor: C.goldBorder,
+      padding: 16, gap: 6,
+    },
+    inactiveBadge: {
+      alignSelf: "flex-start", color: C.gold, fontSize: 10, fontWeight: "800", letterSpacing: 1.2,
+      borderWidth: 1, borderColor: C.goldBorder, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+    },
+    inactiveTitle: { color: C.t1, fontSize: 15, fontWeight: "700", marginTop: 4 },
+    inactiveBody: { color: C.t2, fontSize: 12.5, lineHeight: 18 },
 
     // Penalties
     penaltyRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 13 },

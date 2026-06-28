@@ -35,6 +35,7 @@ import {
   combinedTypeForCompetition,
   categoriesForProfile,
   filterProfileToCategory,
+  isCategoryInactive,
   type DeepEventSignal,
   type CoupleRating,
 } from "../lib/wdsfCoupleRating";
@@ -377,6 +378,8 @@ interface CategoryRatingResult {
   ageGroup: string | null;
   discipline: string | null;
   rating: CoupleRating;
+  inactive: boolean;          // not danced in > 1 year → hidden from leaderboard
+  lastDanced: string | null;  // ISO date of the most recent competition in this category
 }
 
 // Synthetic category key for couples whose competitions don't map to any combined
@@ -440,16 +443,19 @@ async function persistCategoryRatings(userId: string, results: CategoryRatingRes
     const available = results.filter((r) => r.rating.available);
     for (const r of available) {
       const rt = r.rating;
+      const lastDanced = r.lastDanced ? new Date(r.lastDanced) : null;
       await prisma.wdsfCategoryRating.upsert({
         where: { userId_combinedType: { userId, combinedType: r.combinedType } },
         create: {
           userId, combinedType: r.combinedType, label: r.label,
           rating: rt.rating, tier: rt.tier, worldRank: rt.worldRank,
           regionalRank: rt.regionalRank, region: rt.region, deep: true,
+          lastDanced, inactive: r.inactive,
         },
         update: {
           label: r.label, rating: rt.rating, tier: rt.tier, worldRank: rt.worldRank,
           regionalRank: rt.regionalRank, region: rt.region, deep: true, fetchedAt: new Date(),
+          lastDanced, inactive: r.inactive,
         },
       });
     }
@@ -534,10 +540,19 @@ async function computeAllCategoryRatings(
   uuid: string,
   snapshotCache: Map<string, RankedCouple[]>,
 ): Promise<CategoryRatingResult[]> {
+  const now = new Date();
   const cats = categoriesForProfile(profile);
   if (!cats.length) {
     const rating = await computeCategoryRating(profile, uuid, OVERALL_KEY, snapshotCache);
-    return [{ combinedType: OVERALL_KEY, label: "Overall", ageGroup: null, discipline: null, rating }];
+    // Most-recent competition across the whole profile = the "Overall" category's freshness.
+    const lastMs = profile.competitions.reduce(
+      (mx, c) => Math.max(mx, parseWdsfDate(c.date)?.getTime() ?? 0), 0,
+    );
+    return [{
+      combinedType: OVERALL_KEY, label: "Overall", ageGroup: null, discipline: null, rating,
+      inactive: isCategoryInactive(lastMs, now),
+      lastDanced: lastMs ? new Date(lastMs).toISOString() : null,
+    }];
   }
   const out: CategoryRatingResult[] = [];
   for (const cat of cats) {
@@ -548,6 +563,8 @@ async function computeAllCategoryRatings(
       ageGroup: cat.ageLabel,
       discipline: cat.discLabel,
       rating,
+      inactive: isCategoryInactive(cat.lastDanced, now),
+      lastDanced: cat.lastDanced ? new Date(cat.lastDanced).toISOString() : null,
     });
   }
   return out;
@@ -643,7 +660,10 @@ router.get(
     // 2) Read all per-category snapshots for these users.
     const userIds = users.map((u) => u.id);
     const nameById = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()]));
-    const catRows = await prisma.wdsfCategoryRating.findMany({ where: { userId: { in: userIds } } });
+    // Inactive categories (not danced for > 1 year) are excluded from every board.
+    const catRows = await prisma.wdsfCategoryRating.findMany({
+      where: { userId: { in: userIds }, inactive: false },
+    });
 
     // 3) Available categories for the picker (sorted, with how many couples are in each).
     const catMap = new Map<string, { combinedType: string; label: string; ageGroup: string | null; discipline: string | null; count: number }>();

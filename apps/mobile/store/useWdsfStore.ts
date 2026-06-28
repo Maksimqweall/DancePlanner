@@ -252,6 +252,8 @@ export interface CategoryRating {
   ageGroup: string | null;  // e.g. "Adult"
   discipline: string | null; // "Latin" | "Standard"
   rating: CoupleRating;
+  inactive: boolean;          // not danced in > 1 year → excluded from the leaderboard
+  lastDanced: string | null;  // ISO date of the most recent competition in this category
 }
 
 // ─── Leaderboard (per-category ranking of WDSF-linked users) ───────────────────

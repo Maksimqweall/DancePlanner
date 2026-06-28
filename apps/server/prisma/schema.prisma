@@ -311,6 +311,8 @@ model WdsfCategoryRating {
   regionalRank Int?     // regional rank within this category
   region       String?  // Represents country
   deep         Boolean  @default(false) // computed with deep event analysis
+  lastDanced   DateTime? // most recent competition in THIS category (null = unknown)
+  inactive     Boolean  @default(false) // true when not danced for > 1 year → hidden from leaderboard
   fetchedAt    DateTime @default(now())
 
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

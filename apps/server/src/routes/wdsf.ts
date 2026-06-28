@@ -18,6 +18,8 @@ import {
 import {
   combinedTypeFor,
   combinedTypeFromText,
+  describeCombinedType,
+  categorySortKey,
   fetchWorldRanking,
   computeTournamentRating,
   RANKING_TOP_N,
@@ -30,6 +32,9 @@ import {
   analyzeEvent,
   parseWdsfDate,
   ratingToElo,
+  combinedTypeForCompetition,
+  categoriesForProfile,
+  filterProfileToCategory,
   type DeepEventSignal,
   type CoupleRating,
 } from "../lib/wdsfCoupleRating";
@@ -365,38 +370,28 @@ router.get(
 // each event costs several page fetches.
 const DEEP_EVENTS = 6;
 
-// Per-user couple-rating cache (whole computed result). Keyed by uuid|month.
-const coupleRatingCache = new Map<string, { rating: CoupleRating; at: number }>();
-
-/** Resolve the CombinedType for a competition (category/discipline → slug fallback). */
-function combinedTypeForComp(c: { category: string; discipline: string; competitionUrl: string | null }): string | null {
-  return (
-    combinedTypeFor(c.category || "", c.discipline || "") ??
-    (c.competitionUrl ? combinedTypeFromText(c.competitionUrl) : null)
-  );
+// One category's rating result (returned by the couple-rating endpoint).
+interface CategoryRatingResult {
+  combinedType: string;
+  label: string;
+  ageGroup: string | null;
+  discipline: string | null;
+  rating: CoupleRating;
 }
 
-/**
- * Pick the world-ranking list that best represents the couple right now: the most
- * recent competition whose category/discipline maps to a combined ranking.
- */
-function pickCombinedType(profile: WdsfProfile): string | null {
-  const sorted = [...profile.competitions].sort(
-    (a, b) => (parseWdsfDate(b.date)?.getTime() ?? 0) - (parseWdsfDate(a.date)?.getTime() ?? 0),
-  );
-  for (const c of sorted) {
-    const ct = combinedTypeForComp(c);
-    if (ct) return ct;
-  }
-  return null;
-}
+// Synthetic category key for couples whose competitions don't map to any combined
+// WDSF ranking (Ten Dance / single dances only) — they still get one "Overall" board.
+const OVERALL_KEY = "overall";
+
+// Per-user couple-rating cache (all categories). Keyed by uuid|month.
+const coupleRatingCache = new Map<string, { categories: CategoryRatingResult[]; at: number }>();
 
 /** Deep-analyse one competition: start list + ranking snapshot + the pair's marks. */
 async function analyzeCompetitionDeep(
   comp: WdsfProfile["competitions"][number],
   athleteUuid: string,
 ): Promise<DeepEventSignal | null> {
-  const combinedType = combinedTypeForComp(comp);
+  const combinedType = combinedTypeForCompetition(comp);
   if (!combinedType || !comp.competitionUrl) return null;
 
   const { snapshotMonth, dateISO } = parseTournamentMonth(comp.date);
@@ -433,46 +428,76 @@ async function analyzeCompetitionDeep(
   });
 }
 
-/** Persist a couple-rating snapshot on the user so the leaderboard can sort without re-scraping. */
-async function persistRatingSnapshot(userId: string, rating: CoupleRating, deep: boolean): Promise<void> {
+/**
+ * Persist a couple's per-category rating snapshots so the leaderboard can sort within
+ * a category without re-scraping. Upserts one row per available category, drops
+ * categories the couple no longer competes in, and mirrors the PRIMARY (most-recent)
+ * category onto the User.wdsfRating* columns (+ stamps `wdsfRatingAt` as the freshness
+ * marker for the whole set).
+ */
+async function persistCategoryRatings(userId: string, results: CategoryRatingResult[]): Promise<void> {
   try {
+    const available = results.filter((r) => r.rating.available);
+    for (const r of available) {
+      const rt = r.rating;
+      await prisma.wdsfCategoryRating.upsert({
+        where: { userId_combinedType: { userId, combinedType: r.combinedType } },
+        create: {
+          userId, combinedType: r.combinedType, label: r.label,
+          rating: rt.rating, tier: rt.tier, worldRank: rt.worldRank,
+          regionalRank: rt.regionalRank, region: rt.region, deep: true,
+        },
+        update: {
+          label: r.label, rating: rt.rating, tier: rt.tier, worldRank: rt.worldRank,
+          regionalRank: rt.regionalRank, region: rt.region, deep: true, fetchedAt: new Date(),
+        },
+      });
+    }
+    const keep = available.map((r) => r.combinedType);
+    await prisma.wdsfCategoryRating.deleteMany({
+      where: { userId, combinedType: { notIn: keep.length ? keep : ["__none__"] } },
+    });
+
+    const primary = available[0] ?? null;
     await prisma.user.update({
       where: { id: userId },
       data: {
-        wdsfRating: rating.available ? rating.rating : null,
-        wdsfRatingTier: rating.available ? rating.tier : null,
-        wdsfWorldRank: rating.worldRank,
-        wdsfRegion: rating.region,
-        wdsfRatingDeep: deep,
+        wdsfRating: primary?.rating.rating ?? null,
+        wdsfRatingTier: primary?.rating.tier ?? null,
+        wdsfWorldRank: primary?.rating.worldRank ?? null,
+        wdsfRegion: primary?.rating.region ?? null,
+        wdsfRatingDeep: true,
         wdsfRatingAt: new Date(),
       },
     });
   } catch (err) {
-    console.error("leaderboard: persist rating snapshot failed:", err);
+    console.error("leaderboard: persist category ratings failed:", err);
   }
 }
 
 /**
- * Full DEEP couple rating — current world standing + deep per-event analysis (real
- * tier, upset wins, bad losses, round-1 exits). This is the same computation the
- * Rating tab runs; the leaderboard uses it for every dancer so the board is a real
- * mini-competition rather than a profile-stats approximation.
- * `snapshotCache` de-duplicates ranking-snapshot fetches across users in one request.
+ * DEEP rating for ONE category — world standing from THAT category's ranking + deep
+ * per-event analysis of that category's recent events. Computing the standing against
+ * the correct category's list is what fixes couples wrongly shown as "not in ranking"
+ * (their world rank lives in a different category than their latest competition).
  */
-async function computeDeepRating(
+async function computeCategoryRating(
   profile: WdsfProfile,
   uuid: string,
+  combinedType: string,
   snapshotCache: Map<string, RankedCouple[]>,
 ): Promise<CoupleRating> {
-  // 1) Current world + regional standing (one snapshot for the couple's main list).
+  const catProfile =
+    combinedType === OVERALL_KEY ? profile : filterProfileToCategory(profile, combinedType);
+
+  // 1) Current world + regional standing, from THIS category's ranking list.
   let standing = null;
-  const mainType = pickCombinedType(profile);
-  if (mainType) {
+  if (combinedType !== OVERALL_KEY) {
     try {
-      let ranking = snapshotCache.get(mainType);
+      let ranking = snapshotCache.get(combinedType);
       if (!ranking) {
-        ranking = await getRankingSnapshot(mainType, currentMonthKey(), null);
-        snapshotCache.set(mainType, ranking);
+        ranking = await getRankingSnapshot(combinedType, currentMonthKey(), null);
+        snapshotCache.set(combinedType, ranking);
       }
       standing = deriveWorldStanding(ranking, uuid, profile.represents || null);
     } catch (err) {
@@ -480,9 +505,9 @@ async function computeDeepRating(
     }
   }
 
-  // 2) Deep per-event signals for the most recent mappable events.
-  const recentMappable = [...profile.competitions]
-    .filter((c) => c.competitionUrl && combinedTypeForComp(c))
+  // 2) Deep per-event signals for this category's most recent mappable events.
+  const recentMappable = [...catProfile.competitions]
+    .filter((c) => c.competitionUrl && combinedTypeForCompetition(c) === combinedType)
     .sort((a, b) => (parseWdsfDate(b.date)?.getTime() ?? 0) - (parseWdsfDate(a.date)?.getTime() ?? 0))
     .slice(0, DEEP_EVENTS);
 
@@ -495,7 +520,37 @@ async function computeDeepRating(
     else if (r.status === "rejected") console.error("rating: deep event failed:", r.reason);
   }
 
-  return computeCoupleRating(profile, { standing, deep });
+  return computeCoupleRating(catProfile, { standing, deep });
+}
+
+/**
+ * All category ratings for a couple (Adult Latin, Adult Standard, Rising Stars …),
+ * ordered primary (most-recently-danced) first. Couples whose history maps to no
+ * combined ranking get a single synthetic "Overall" category.
+ * `snapshotCache` de-duplicates ranking-snapshot fetches across users in one request.
+ */
+async function computeAllCategoryRatings(
+  profile: WdsfProfile,
+  uuid: string,
+  snapshotCache: Map<string, RankedCouple[]>,
+): Promise<CategoryRatingResult[]> {
+  const cats = categoriesForProfile(profile);
+  if (!cats.length) {
+    const rating = await computeCategoryRating(profile, uuid, OVERALL_KEY, snapshotCache);
+    return [{ combinedType: OVERALL_KEY, label: "Overall", ageGroup: null, discipline: null, rating }];
+  }
+  const out: CategoryRatingResult[] = [];
+  for (const cat of cats) {
+    const rating = await computeCategoryRating(profile, uuid, cat.combinedType, snapshotCache);
+    out.push({
+      combinedType: cat.combinedType,
+      label: cat.label,
+      ageGroup: cat.ageLabel,
+      discipline: cat.discLabel,
+      rating,
+    });
+  }
+  return out;
 }
 
 // GET /api/wdsf/couple-rating — overall 1–10 couple rating (TEST) + world/regional rank
@@ -517,102 +572,133 @@ router.get(
     const cacheKey = `${uuid}|${currentMonthKey()}`;
     const cached = coupleRatingCache.get(cacheKey);
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-      res.json({ rating: cached.rating });
+      res.json({ categories: cached.categories });
       return;
     }
 
-    const rating = await computeDeepRating(profile, uuid, new Map());
-    coupleRatingCache.set(cacheKey, { rating, at: Date.now() });
-    await persistRatingSnapshot(req.userId!, rating, true);
-    res.json({ rating });
+    const categories = await computeAllCategoryRatings(profile, uuid, new Map());
+    coupleRatingCache.set(cacheKey, { categories, at: Date.now() });
+    await persistCategoryRatings(req.userId!, categories);
+    res.json({ categories });
   })
 );
 
-// GET /api/wdsf/leaderboard — global ranking of all WDSF-linked registered users by
-// their overall couple rating (highest first). It's a real mini-competition: every
-// dancer is scored with the same DEEP rating the Rating tab uses. Snapshots are
-// cached on the user row (24h) so the board doesn't re-scrape everyone on each load;
-// `?refresh=1` forces a full deep recompute (used when the coefficients change).
+// GET /api/wdsf/leaderboard — per-category ranking of all WDSF-linked registered
+// users. A couple can dance several categories (Adult Latin, Adult Standard, Rising
+// Stars …), each with its own World Ranking, so the board ranks WITHIN one category.
+// Query `?category=<combinedType>` selects the board (defaults to the viewer's primary
+// category, else the first available). It's a real mini-competition: every dancer is
+// scored with the same DEEP rating the Rating tab uses. Per-category snapshots are
+// cached (24h, keyed by `User.wdsfRatingAt`) so the board doesn't re-scrape everyone on
+// each load; `?refresh=1` forces a full deep recompute (used when coefficients change).
 const LEADERBOARD_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 router.get(
   "/leaderboard",
   asyncHandler(async (req, res) => {
-    // `?refresh=1` forces a full recompute of every user's rating, ignoring the
-    // 24h snapshot cache — used when the rating coefficients change.
     const force = req.query.refresh === "1" || req.query.refresh === "true";
+    const requestedCategory = typeof req.query.category === "string" ? req.query.category : null;
 
     const users = await prisma.user.findMany({
       where: { wdsfProfileUrl: { not: null } },
       select: {
         id: true, firstName: true, lastName: true,
-        wdsfProfileUrl: true, wdsfData: true,
-        wdsfRating: true, wdsfRatingTier: true, wdsfWorldRank: true,
-        wdsfRegion: true, wdsfRatingDeep: true, wdsfRatingAt: true,
+        wdsfProfileUrl: true, wdsfData: true, wdsfRatingAt: true,
       },
     });
 
     const snapshotCache = new Map<string, RankedCouple[]>();
 
-    interface Row {
-      userId: string; name: string; rating: number; elo: number; tier: string;
-      region: string | null; worldRank: number | null; deep: boolean; isMe: boolean;
-    }
-    const rows: Row[] = [];
+    // Users that already have per-category snapshots — a fresh `wdsfRatingAt` alone
+    // isn't enough (it may predate the per-category table), so a user with no category
+    // rows is always recomputed.
+    const haveCategoryRows = new Set(
+      (await prisma.wdsfCategoryRating.findMany({
+        where: { userId: { in: users.map((u) => u.id) } },
+        select: { userId: true },
+      })).map((r) => r.userId),
+    );
 
+    // 1) Ensure every user's per-category snapshots are fresh (compute the whole set
+    //    in one pass per user; persisted to WdsfCategoryRating).
     for (const u of users) {
       if (!u.wdsfData || !u.wdsfProfileUrl) continue;
       const uuid = extractUuid(u.wdsfProfileUrl);
       if (!uuid) continue;
 
-      let rating = u.wdsfRating;
-      let tier = u.wdsfRatingTier;
-      let worldRank = u.wdsfWorldRank;
-      let region = u.wdsfRegion;
-      let deep = u.wdsfRatingDeep;
-
       const fresh =
-        !force &&
-        rating != null && u.wdsfRatingAt != null &&
+        !force && haveCategoryRows.has(u.id) && u.wdsfRatingAt != null &&
         Date.now() - u.wdsfRatingAt.getTime() < LEADERBOARD_TTL_MS;
+      if (fresh) continue;
 
-      if (!fresh) {
-        try {
-          const profile = u.wdsfData as unknown as WdsfProfile;
-          const computed = await computeDeepRating(profile, uuid, snapshotCache);
-          await persistRatingSnapshot(u.id, computed, true);
-          rating = computed.available ? computed.rating : null;
-          tier = computed.available ? computed.tier : null;
-          worldRank = computed.worldRank;
-          region = computed.region;
-          deep = true;
-        } catch (err) {
-          console.error("leaderboard: deep rating failed for", u.id, err);
-        }
+      try {
+        const profile = u.wdsfData as unknown as WdsfProfile;
+        const results = await computeAllCategoryRatings(profile, uuid, snapshotCache);
+        await persistCategoryRatings(u.id, results);
+      } catch (err) {
+        console.error("leaderboard: deep rating failed for", u.id, err);
       }
-
-      if (rating == null) continue;
-      rows.push({
-        userId: u.id,
-        name: `${u.firstName} ${u.lastName}`.trim(),
-        rating,
-        elo: ratingToElo(rating),
-        tier: tier ?? "Unrated",
-        region: region ?? null,
-        worldRank: worldRank ?? null,
-        deep,
-        isMe: u.id === req.userId,
-      });
     }
 
-    rows.sort((a, b) =>
-      b.elo - a.elo ||
-      (a.worldRank ?? 1e9) - (b.worldRank ?? 1e9) ||
-      a.name.localeCompare(b.name),
+    // 2) Read all per-category snapshots for these users.
+    const userIds = users.map((u) => u.id);
+    const nameById = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()]));
+    const catRows = await prisma.wdsfCategoryRating.findMany({ where: { userId: { in: userIds } } });
+
+    // 3) Available categories for the picker (sorted, with how many couples are in each).
+    const catMap = new Map<string, { combinedType: string; label: string; ageGroup: string | null; discipline: string | null; count: number }>();
+    for (const r of catRows) {
+      const ex = catMap.get(r.combinedType);
+      if (ex) { ex.count++; continue; }
+      const info = describeCombinedType(r.combinedType);
+      catMap.set(r.combinedType, {
+        combinedType: r.combinedType, label: r.label,
+        ageGroup: info?.ageLabel ?? null, discipline: info?.discLabel ?? null, count: 1,
+      });
+    }
+    const availableCategories = [...catMap.values()].sort(
+      (a, b) => categorySortKey(a.combinedType) - categorySortKey(b.combinedType) || b.count - a.count,
     );
 
+    // 4) Resolve the target category: explicit request → viewer's primary → first available.
+    let target = requestedCategory && catMap.has(requestedCategory) ? requestedCategory : null;
+    if (!target) {
+      const mine = new Set(catRows.filter((r) => r.userId === req.userId).map((r) => r.combinedType));
+      target =
+        availableCategories.find((c) => mine.has(c.combinedType))?.combinedType ??
+        availableCategories[0]?.combinedType ?? null;
+    }
+
+    // 5) Build the board for the target category.
+    const rows = catRows
+      .filter((r) => r.combinedType === target)
+      .map((r) => ({
+        userId: r.userId,
+        name: nameById.get(r.userId) ?? "",
+        rating: r.rating,
+        elo: ratingToElo(r.rating),
+        tier: r.tier,
+        region: r.region,
+        worldRank: r.worldRank,
+        deep: r.deep,
+        isMe: r.userId === req.userId,
+      }))
+      .sort((a, b) =>
+        b.elo - a.elo ||
+        (a.worldRank ?? 1e9) - (b.worldRank ?? 1e9) ||
+        a.name.localeCompare(b.name),
+      );
+
     const leaderboard = rows.map((r, i) => ({ position: i + 1, ...r }));
-    res.json({ leaderboard, generatedAt: new Date().toISOString() });
+    res.json({
+      category: target,
+      categoryLabel: target
+        ? describeCombinedType(target)?.label ?? catMap.get(target)?.label ?? "Overall"
+        : null,
+      availableCategories: availableCategories.map(({ count: _count, ...c }) => c),
+      leaderboard,
+      generatedAt: new Date().toISOString(),
+    });
   })
 );
 

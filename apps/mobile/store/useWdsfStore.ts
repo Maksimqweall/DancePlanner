@@ -243,7 +243,26 @@ export interface CoupleRating {
   events: DeepEventSignal[];
 }
 
-// ─── Leaderboard (global ranking of WDSF-linked users) ─────────────────────────
+// One category's rating (a couple can dance several: Adult Latin, Adult Standard,
+// Rising Stars …). `rating` is the full per-category CoupleRating; `combinedType` is
+// the WDSF CombinedType ("1_180_55_0_0"), or "overall" when no combined ranking applies.
+export interface CategoryRating {
+  combinedType: string;
+  label: string;            // e.g. "Adult Latin"
+  ageGroup: string | null;  // e.g. "Adult"
+  discipline: string | null; // "Latin" | "Standard"
+  rating: CoupleRating;
+}
+
+// ─── Leaderboard (per-category ranking of WDSF-linked users) ───────────────────
+
+// A selectable category for the leaderboard picker.
+export interface LeaderboardCategory {
+  combinedType: string;
+  label: string;
+  ageGroup: string | null;
+  discipline: string | null;
+}
 
 export interface LeaderboardRow {
   position: number;
@@ -258,6 +277,13 @@ export interface LeaderboardRow {
   isMe: boolean;
 }
 
+interface LeaderboardResponse {
+  category: string | null;
+  categoryLabel: string | null;
+  availableCategories: LeaderboardCategory[];
+  leaderboard: LeaderboardRow[];
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 interface WdsfState {
@@ -270,10 +296,12 @@ interface WdsfState {
   coupleScoresLoading: Record<string, boolean>;
   ratingCache: Record<string, TournamentRating | null>;
   ratingLoading: Record<string, boolean>;
-  coupleRating: CoupleRating | null;
+  coupleCategories: CategoryRating[] | null;
   coupleRatingLoading: boolean;
   coupleRatingError: string | null;
   leaderboard: LeaderboardRow[] | null;
+  leaderboardCategories: LeaderboardCategory[] | null;
+  leaderboardCategory: string | null; // selected combinedType
   leaderboardLoading: boolean;
   leaderboardError: string | null;
 
@@ -291,8 +319,8 @@ interface WdsfState {
     discipline: string,
     date?: string,
   ) => Promise<TournamentRating | null>;
-  fetchCoupleRating: (force?: boolean) => Promise<CoupleRating | null>;
-  fetchLeaderboard: (force?: boolean) => Promise<LeaderboardRow[] | null>;
+  fetchCoupleRating: (force?: boolean) => Promise<CategoryRating[] | null>;
+  fetchLeaderboard: (opts?: { category?: string; force?: boolean }) => Promise<LeaderboardRow[] | null>;
 }
 
 export const useWdsfStore = create<WdsfState>((set, get) => ({
@@ -305,10 +333,12 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
   coupleScoresLoading: {},
   ratingCache: {},
   ratingLoading: {},
-  coupleRating: null,
+  coupleCategories: null,
   coupleRatingLoading: false,
   coupleRatingError: null,
   leaderboard: null,
+  leaderboardCategories: null,
+  leaderboardCategory: null,
   leaderboardLoading: false,
   leaderboardError: null,
 
@@ -354,7 +384,7 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { profile } = await api.post<{ profile: WdsfProfile }>("/wdsf/refresh");
-      set({ profile, analyticsCache: {}, ratingCache: {}, coupleRating: null }); // clear caches on refresh
+      set({ profile, analyticsCache: {}, ratingCache: {}, coupleCategories: null }); // clear caches on refresh
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Refresh failed" });
     } finally {
@@ -366,7 +396,7 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await api.del("/wdsf/unlink");
-      set({ profile: null, analyticsCache: {}, analyticsLoading: {}, ratingCache: {}, ratingLoading: {}, coupleRating: null, coupleRatingError: null });
+      set({ profile: null, analyticsCache: {}, analyticsLoading: {}, ratingCache: {}, ratingLoading: {}, coupleCategories: null, coupleRatingError: null });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Failed to unlink" });
     } finally {
@@ -458,14 +488,14 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
   },
 
   fetchCoupleRating: async (force = false) => {
-    const existing = get().coupleRating;
+    const existing = get().coupleCategories;
     if (existing && !force) return existing;
 
     set({ coupleRatingLoading: true, coupleRatingError: null });
     try {
-      const { rating } = await api.get<{ rating: CoupleRating }>("/wdsf/couple-rating");
-      set({ coupleRating: rating, coupleRatingLoading: false });
-      return rating;
+      const { categories } = await api.get<{ categories: CategoryRating[] }>("/wdsf/couple-rating");
+      set({ coupleCategories: categories, coupleRatingLoading: false });
+      return categories;
     } catch (e) {
       set({
         coupleRatingError: e instanceof Error ? e.message : "Failed to compute rating",
@@ -475,17 +505,28 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
     }
   },
 
-  fetchLeaderboard: async (force = false) => {
-    const existing = get().leaderboard;
-    if (existing && !force) return existing;
+  fetchLeaderboard: async (opts = {}) => {
+    const { category, force = false } = opts;
+    // Serve from cache only when not forcing and the requested category already loaded.
+    const { leaderboard, leaderboardCategory } = get();
+    if (leaderboard && !force && (category === undefined || category === leaderboardCategory)) {
+      return leaderboard;
+    }
 
     set({ leaderboardLoading: true, leaderboardError: null });
     try {
-      const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>(
-        force ? "/wdsf/leaderboard?refresh=1" : "/wdsf/leaderboard",
-      );
-      set({ leaderboard, leaderboardLoading: false });
-      return leaderboard;
+      const params = new URLSearchParams();
+      if (category) params.set("category", category);
+      if (force) params.set("refresh", "1");
+      const qs = params.toString();
+      const res = await api.get<LeaderboardResponse>(`/wdsf/leaderboard${qs ? `?${qs}` : ""}`);
+      set({
+        leaderboard: res.leaderboard,
+        leaderboardCategories: res.availableCategories,
+        leaderboardCategory: res.category,
+        leaderboardLoading: false,
+      });
+      return res.leaderboard;
     } catch (e) {
       set({
         leaderboardError: e instanceof Error ? e.message : "Failed to load leaderboard",

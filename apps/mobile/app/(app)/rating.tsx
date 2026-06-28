@@ -14,6 +14,7 @@ import {
   useWdsfStore,
   ELO_PER_POINT,
   type CoupleRating,
+  type CategoryRating,
   type CoupleRatingComponent,
   type DeepEventSignal,
   type TournamentTier,
@@ -53,11 +54,13 @@ export default function RatingScreen() {
   const s = useMemo(() => makeStyles(C), [C]);
   const router = useRouter();
   const profile = useWdsfStore((st) => st.profile);
-  const rating = useWdsfStore((st) => st.coupleRating);
+  const categories = useWdsfStore((st) => st.coupleCategories);
   const loading = useWdsfStore((st) => st.coupleRatingLoading);
   const error = useWdsfStore((st) => st.coupleRatingError);
   const fetchProfile = useWdsfStore((st) => st.fetchProfile);
   const fetchCoupleRating = useWdsfStore((st) => st.fetchCoupleRating);
+
+  const [selected, setSelected] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,6 +71,12 @@ export default function RatingScreen() {
       })();
     }, [fetchProfile, fetchCoupleRating]),
   );
+
+  // Resolve the selected category (default to the primary / first one).
+  const current = useMemo(() => {
+    if (!categories || categories.length === 0) return null;
+    return categories.find((c) => c.combinedType === selected) ?? categories[0];
+  }, [categories, selected]);
 
   // Not linked → invite to connect WDSF first.
   if (!profile && !loading) {
@@ -86,7 +95,7 @@ export default function RatingScreen() {
     );
   }
 
-  if (loading && !rating) {
+  if (loading && !current) {
     return (
       <View style={s.center}>
         <ActivityIndicator color={C.accent} size="large" />
@@ -95,7 +104,7 @@ export default function RatingScreen() {
     );
   }
 
-  if (error && !rating) {
+  if (error && !current) {
     return (
       <View style={s.center}>
         <Text style={s.errorTitle}>Couldn’t compute your rating</Text>
@@ -107,17 +116,66 @@ export default function RatingScreen() {
     );
   }
 
-  if (!rating) return <View style={s.center}><ActivityIndicator color={C.accent} /></View>;
+  if (!current || !categories) return <View style={s.center}><ActivityIndicator color={C.accent} /></View>;
 
-  return <RatingView rating={rating} loading={loading} onRefresh={() => fetchCoupleRating(true)} />;
+  return (
+    <RatingView
+      rating={current.rating}
+      categories={categories}
+      selected={current.combinedType}
+      onSelect={setSelected}
+      loading={loading}
+      onRefresh={() => fetchCoupleRating(true)}
+    />
+  );
+}
+
+// ─── Category tabs ──────────────────────────────────────────────────────────────
+
+function CategoryTabs({
+  categories, selected, onSelect,
+}: {
+  categories: CategoryRating[];
+  selected: string;
+  onSelect: (combinedType: string) => void;
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  if (categories.length < 2) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.tabsRow}
+      style={s.tabsScroll}
+    >
+      {categories.map((c) => {
+        const active = c.combinedType === selected;
+        const color = tierColor(c.rating.tier, C);
+        return (
+          <PressableScale
+            key={c.combinedType}
+            onPress={() => onSelect(c.combinedType)}
+            style={[s.tab, active && { backgroundColor: `${color}1A`, borderColor: `${color}66` }]}
+          >
+            <Text style={[s.tabText, active && { color }]} numberOfLines={1}>{c.label}</Text>
+            <Text style={[s.tabElo, active && { color }]}>{c.rating.elo}</Text>
+          </PressableScale>
+        );
+      })}
+    </ScrollView>
+  );
 }
 
 // ─── Main view ─────────────────────────────────────────────────────────────────
 
 function RatingView({
-  rating, loading, onRefresh,
+  rating, categories, selected, onSelect, loading, onRefresh,
 }: {
   rating: CoupleRating;
+  categories: CategoryRating[];
+  selected: string;
+  onSelect: (combinedType: string) => void;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -129,6 +187,8 @@ function RatingView({
 
   return (
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
+
+      <CategoryTabs categories={categories} selected={selected} onSelect={onSelect} />
 
       <Hint
         id="rating.intro"
@@ -430,6 +490,17 @@ function makeStyles(C: Palette) {
     screen: { flex: 1, backgroundColor: C.bg },
     center: { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 32 },
     loadingText: { color: C.t2, fontSize: 14, textAlign: "center", lineHeight: 20 },
+
+    // Category tabs
+    tabsScroll: { maxHeight: 60, marginTop: 12 },
+    tabsRow: { paddingHorizontal: 20, gap: 8, alignItems: "center" },
+    tab: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+      borderRadius: 14, paddingHorizontal: 14, paddingVertical: 9,
+    },
+    tabText: { color: C.t2, fontSize: 13, fontWeight: "700" },
+    tabElo: { color: C.t3, fontSize: 12, fontWeight: "800", letterSpacing: -0.3 },
 
     // Empty / error
     emptyIcon: {

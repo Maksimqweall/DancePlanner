@@ -113,6 +113,48 @@ export function combinedTypeFromText(text: string): string | null {
   return null;
 }
 
+// ─── CombinedType → human-readable category ────────────────────────────────────
+
+// Reverse of AGE_GROUP_CODE / DISCIPLINE_CODE: WDSF code → display label.
+const AGE_LABEL: Record<string, string> = {
+  "180": "Adult", "179": "Youth", "178": "Junior II", "190": "Under 21",
+  "181": "Senior I", "182": "Senior II", "183": "Senior III", "196": "Senior IV", "220": "Senior V",
+  "186": "Rising Stars",
+};
+const DISC_LABEL: Record<string, string> = { "56": "Standard", "55": "Latin" };
+
+// Display order for category pickers: Adult first, then Rising Stars, then youngest→oldest.
+const AGE_ORDER = ["180", "186", "190", "179", "178", "181", "182", "183", "196", "220"];
+
+export interface CategoryInfo {
+  combinedType: string;
+  ageCode: string;
+  discCode: string;
+  ageLabel: string;
+  discLabel: string;
+  label: string; // e.g. "Adult Latin", "Rising Stars Standard"
+}
+
+/** Describe a `CombinedType` (e.g. "1_180_55_0_0") as a labelled category, or null. */
+export function describeCombinedType(combinedType: string): CategoryInfo | null {
+  const parts = combinedType.split("_");
+  if (parts.length < 3) return null;
+  const [, ageCode, discCode] = parts;
+  const ageLabel = AGE_LABEL[ageCode];
+  const discLabel = DISC_LABEL[discCode];
+  if (!ageLabel || !discLabel) return null;
+  return { combinedType, ageCode, discCode, ageLabel, discLabel, label: `${ageLabel} ${discLabel}` };
+}
+
+/** Sort key so category lists read Adult Latin · Adult Standard · Rising Stars … */
+export function categorySortKey(combinedType: string): number {
+  const info = describeCombinedType(combinedType);
+  if (!info) return 9999;
+  const ai = AGE_ORDER.indexOf(info.ageCode);
+  const di = info.discCode === "55" ? 0 : 1; // Latin before Standard
+  return (ai < 0 ? 99 : ai) * 2 + di;
+}
+
 // ─── Ranking fetch ─────────────────────────────────────────────────────────────
 
 export interface RankedCouple {

@@ -57,6 +57,7 @@ model User {
   messages        Message[]      @relation("MessageAuthor") // Chat/activity messages authored
   messageReads    MessageRead[]  // Per-couple read state
   pushTokens      PushToken[]    // Expo push notification tokens
+  categoryRatings WdsfCategoryRating[] // Per-category couple-rating snapshots (leaderboard)
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -292,6 +293,30 @@ model WdsfRankingSnapshot {
   fetchedAt     DateTime @default(now())
 
   @@unique([combinedType, snapshotMonth])
+}
+
+// Per-category couple-rating snapshot. A couple can dance several WDSF categories
+// (age-group × discipline → Adult Latin, Adult Standard, Rising Stars …); each has
+// its own World Ranking and therefore its own rating/world-rank. The leaderboard
+// ranks within a single category, so it reads one row per (user, category) here.
+// The User.wdsfRating* columns mirror the couple's PRIMARY (most-recent) category.
+model WdsfCategoryRating {
+  id           String   @id @default(uuid())
+  userId       String
+  combinedType String   // e.g. "1_180_55_0_0" (Adult Latin); "overall" when no combined ranking applies
+  label        String   // display label, e.g. "Adult Latin"
+  rating       Float    // 0–10 internal strength score (Elo derived on the fly)
+  tier         String   // S/A/B/C/D band
+  worldRank    Int?     // WDSF World Ranking position in THIS category (null = unranked)
+  regionalRank Int?     // regional rank within this category
+  region       String?  // Represents country
+  deep         Boolean  @default(false) // computed with deep event analysis
+  fetchedAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, combinedType])
+  @@index([combinedType])
 }
 
 // --- Энумераторы (Enums) ---

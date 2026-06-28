@@ -10,8 +10,12 @@ import {
 } from "./wdsfScraper";
 import {
   computeTournamentRating,
+  combinedTypeFor,
+  combinedTypeFromText,
+  describeCombinedType,
   type Tier,
   type RankedCouple,
+  type CategoryInfo,
 } from "./wdsfRanking";
 
 // ─── Couple Rating (1–10) — TEST version ───────────────────────────────────────
@@ -330,6 +334,60 @@ export function analyzeEvent(params: {
   return {
     event, date, tier: tr.tier, eventRating: tr.rating,
     myPlace, fieldSize, myWorldRank, upsetWins, badLosses, roundOneExit, reachedFinal,
+  };
+}
+
+// ── Per-category resolution ─────────────────────────────────────────────────────
+//
+// A couple can dance several WDSF categories (age-group × discipline), e.g. Adult
+// Latin, Adult Standard, Rising Stars Latin. Each maps to its own World Ranking list,
+// so its rating — and crucially its world rank — must be computed against THAT list.
+// These helpers split a profile's competition history by category.
+
+/** Resolve a single competition to its CombinedType (category/discipline → slug fallback). */
+export function combinedTypeForCompetition(
+  c: { category: string; discipline: string; competitionUrl: string | null },
+): string | null {
+  return (
+    combinedTypeFor(c.category || "", c.discipline || "") ??
+    (c.competitionUrl ? combinedTypeFromText(c.competitionUrl) : null)
+  );
+}
+
+export interface ProfileCategory extends CategoryInfo {
+  competitionCount: number;
+  lastDanced: number; // ms timestamp of the most recent competition in this category
+}
+
+/**
+ * The distinct WDSF categories a couple competes in, derived from their competition
+ * history, ordered most-recently-danced first (so [0] is the couple's primary list).
+ */
+export function categoriesForProfile(profile: WdsfProfile): ProfileCategory[] {
+  const map = new Map<string, { count: number; last: number }>();
+  for (const c of profile.competitions) {
+    const ct = combinedTypeForCompetition(c);
+    if (!ct) continue;
+    const ts = parseWdsfDate(c.date)?.getTime() ?? 0;
+    const ex = map.get(ct);
+    if (ex) { ex.count++; ex.last = Math.max(ex.last, ts); }
+    else map.set(ct, { count: 1, last: ts });
+  }
+  const out: ProfileCategory[] = [];
+  for (const [ct, { count, last }] of map) {
+    const info = describeCombinedType(ct);
+    if (!info) continue;
+    out.push({ ...info, competitionCount: count, lastDanced: last });
+  }
+  out.sort((a, b) => b.lastDanced - a.lastDanced);
+  return out;
+}
+
+/** A shallow copy of the profile whose competitions are limited to one category. */
+export function filterProfileToCategory(profile: WdsfProfile, combinedType: string): WdsfProfile {
+  return {
+    ...profile,
+    competitions: profile.competitions.filter((c) => combinedTypeForCompetition(c) === combinedType),
   };
 }
 

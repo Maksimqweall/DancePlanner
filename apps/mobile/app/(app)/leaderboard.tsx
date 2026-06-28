@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   useWdsfStore,
   type LeaderboardRow,
+  type LeaderboardCategory,
   type TournamentTier,
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
@@ -56,6 +57,8 @@ export default function LeaderboardScreen() {
   const t = useT();
   const profile = useWdsfStore((st) => st.profile);
   const board = useWdsfStore((st) => st.leaderboard);
+  const categories = useWdsfStore((st) => st.leaderboardCategories);
+  const category = useWdsfStore((st) => st.leaderboardCategory);
   const loading = useWdsfStore((st) => st.leaderboardLoading);
   const error = useWdsfStore((st) => st.leaderboardError);
   const fetchProfile = useWdsfStore((st) => st.fetchProfile);
@@ -66,6 +69,15 @@ export default function LeaderboardScreen() {
       fetchProfile();
       fetchLeaderboard();
     }, [fetchProfile, fetchLeaderboard]),
+  );
+
+  const onRefresh = useCallback(
+    () => fetchLeaderboard({ category: category ?? undefined, force: true }),
+    [fetchLeaderboard, category],
+  );
+  const onSelectCategory = useCallback(
+    (ct: string) => fetchLeaderboard({ category: ct }),
+    [fetchLeaderboard],
   );
 
   if (loading && !board) {
@@ -82,14 +94,15 @@ export default function LeaderboardScreen() {
       <View style={s.center}>
         <Text style={s.errorTitle}>{t.leaderboard.errorTitle}</Text>
         <Text style={s.emptySub}>{error}</Text>
-        <PressableScale style={s.retryBtn} onPress={() => fetchLeaderboard(true)}>
+        <PressableScale style={s.retryBtn} onPress={onRefresh}>
           <Text style={s.retryBtnText}>↺ {t.leaderboard.retry}</Text>
         </PressableScale>
       </View>
     );
   }
 
-  if (board && board.length === 0) {
+  // No categories at all → nobody is ranked yet (or no one linked).
+  if (board && board.length === 0 && (!categories || categories.length === 0)) {
     return (
       <View style={s.center}>
         <View style={s.emptyIcon}><Text style={s.emptyIconText}>🏆</Text></View>
@@ -106,15 +119,62 @@ export default function LeaderboardScreen() {
 
   if (!board) return <View style={s.center}><ActivityIndicator color={C.accent} /></View>;
 
-  return <LeaderboardView rows={board} loading={loading} onRefresh={() => fetchLeaderboard(true)} />;
+  return (
+    <LeaderboardView
+      rows={board}
+      categories={categories ?? []}
+      selected={category}
+      onSelectCategory={onSelectCategory}
+      loading={loading}
+      onRefresh={onRefresh}
+    />
+  );
+}
+
+// ─── Category selector ──────────────────────────────────────────────────────────
+
+function CategorySelector({
+  categories, selected, onSelect,
+}: {
+  categories: LeaderboardCategory[];
+  selected: string | null;
+  onSelect: (combinedType: string) => void;
+}) {
+  const C = useC();
+  const s = useMemo(() => makeStyles(C), [C]);
+  if (categories.length < 2) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={s.catRow}
+      style={s.catScroll}
+    >
+      {categories.map((c) => {
+        const active = c.combinedType === selected;
+        return (
+          <PressableScale
+            key={c.combinedType}
+            onPress={() => onSelect(c.combinedType)}
+            style={[s.catChip, active && s.catChipActive]}
+          >
+            <Text style={[s.catChipText, active && s.catChipTextActive]} numberOfLines={1}>{c.label}</Text>
+          </PressableScale>
+        );
+      })}
+    </ScrollView>
+  );
 }
 
 // ─── Main view ─────────────────────────────────────────────────────────────────
 
 function LeaderboardView({
-  rows, loading, onRefresh,
+  rows, categories, selected, onSelectCategory, loading, onRefresh,
 }: {
   rows: LeaderboardRow[];
+  categories: LeaderboardCategory[];
+  selected: string | null;
+  onSelectCategory: (combinedType: string) => void;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -124,6 +184,7 @@ function LeaderboardView({
 
   const podium = rows.length >= 3 ? rows.slice(0, 3) : [];
   const rest = podium.length ? rows.slice(3) : rows;
+  const currentLabel = categories.find((c) => c.combinedType === selected)?.label ?? null;
 
   return (
     <ScrollView
@@ -140,8 +201,15 @@ function LeaderboardView({
         />
         <Text style={s.heroTitle}>{t.leaderboard.title}</Text>
         <Text style={s.heroSub}>{t.leaderboard.subtitle}</Text>
-        <View style={s.heroCountPill}>
-          <Text style={s.heroCountText}>{rows.length} {t.leaderboard.dancers}</Text>
+        <View style={s.heroPills}>
+          {currentLabel ? (
+            <View style={[s.heroCountPill, s.heroCatPill]}>
+              <Text style={s.heroCatText}>{currentLabel}</Text>
+            </View>
+          ) : null}
+          <View style={s.heroCountPill}>
+            <Text style={s.heroCountText}>{rows.length} {t.leaderboard.dancers}</Text>
+          </View>
         </View>
         <PressableScale style={s.recomputeBtn} onPress={onRefresh} disabled={loading}>
           {loading ? (
@@ -152,6 +220,9 @@ function LeaderboardView({
         </PressableScale>
       </Animated.View>
 
+      {/* Category selector */}
+      <CategorySelector categories={categories} selected={selected} onSelect={onSelectCategory} />
+
       <Hint
         id="leaderboard.intro"
         title={t.hints.leaderboardTitle}
@@ -159,6 +230,12 @@ function LeaderboardView({
         gradient="gold"
         icon="spark"
       />
+
+      {rows.length === 0 ? (
+        <View style={s.emptyCatNote}>
+          <Text style={s.emptyCatText}>No dancers ranked in this category yet.</Text>
+        </View>
+      ) : null}
 
       {/* Podium — top 3 */}
       {podium.length === 3 ? (
@@ -170,11 +247,13 @@ function LeaderboardView({
       ) : null}
 
       {/* The rest (or the whole list when < 3 entries) */}
-      <Animated.View entering={FadeInDown.delay(100).duration(420)} style={s.listCard}>
-        {rest.map((r, i) => (
-          <Row key={r.userId} row={r} isLast={i === rest.length - 1} />
-        ))}
-      </Animated.View>
+      {rest.length > 0 ? (
+        <Animated.View entering={FadeInDown.delay(100).duration(420)} style={s.listCard}>
+          {rest.map((r, i) => (
+            <Row key={r.userId} row={r} isLast={i === rest.length - 1} />
+          ))}
+        </Animated.View>
+      ) : null}
 
       <Text style={s.disclaimer}>{t.leaderboard.disclaimer}</Text>
       <View style={{ height: 40 }} />
@@ -286,11 +365,29 @@ function makeStyles(C: Palette) {
     },
     heroTitle: { color: C.t1, fontSize: 24, fontWeight: "900", letterSpacing: -0.6 },
     heroSub: { color: C.t2, fontSize: 13, textAlign: "center", marginTop: 6, lineHeight: 18 },
+    heroPills: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, flexWrap: "wrap", justifyContent: "center" },
     heroCountPill: {
-      marginTop: 14, backgroundColor: C.accentFade, borderWidth: 1, borderColor: C.accentBorder,
+      backgroundColor: C.accentFade, borderWidth: 1, borderColor: C.accentBorder,
       borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5,
     },
     heroCountText: { color: C.accent, fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
+    heroCatPill: { backgroundColor: C.elevated, borderColor: C.border },
+    heroCatText: { color: C.t1, fontSize: 12, fontWeight: "800", letterSpacing: 0.3 },
+
+    // Category selector
+    catScroll: { maxHeight: 52, marginBottom: 4 },
+    catRow: { paddingHorizontal: 20, gap: 8, alignItems: "center" },
+    catChip: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+      borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+    },
+    catChipActive: { backgroundColor: C.accentFade, borderColor: C.accentBorder },
+    catChipText: { color: C.t2, fontSize: 13, fontWeight: "700" },
+    catChipTextActive: { color: C.accent },
+
+    // Empty category note
+    emptyCatNote: { paddingHorizontal: 20, paddingVertical: 24, alignItems: "center" },
+    emptyCatText: { color: C.t3, fontSize: 13, textAlign: "center" },
     recomputeBtn: {
       marginTop: 12, minHeight: 34, justifyContent: "center", alignItems: "center",
       backgroundColor: C.elevated, borderWidth: 1, borderColor: C.border,

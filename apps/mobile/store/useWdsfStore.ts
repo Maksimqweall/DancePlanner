@@ -495,7 +495,8 @@ export const useWdsfStore = create<WdsfState>((set, get) => ({
 
     set({ coupleRatingLoading: true, coupleRatingError: null });
     try {
-      const { categories } = await api.get<{ categories: CategoryRating[] }>("/wdsf/couple-rating");
+      const qs = force ? "?refresh=1" : "";
+      const { categories } = await api.get<{ categories: CategoryRating[] }>(`/wdsf/couple-rating${qs}`);
       set({ coupleCategories: categories, coupleRatingLoading: false });
       return categories;
     } catch (e) {

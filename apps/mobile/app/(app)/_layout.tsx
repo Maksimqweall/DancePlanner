@@ -47,6 +47,7 @@ export default function AppLayout() {
         <Stack.Screen name="wdsf-profile" options={{ title: "WDSF Profile" }} />
         <Stack.Screen name="rating" options={{ title: "Rating" }} />
         <Stack.Screen name="leaderboard" options={{ title: "Leaderboard" }} />
+        <Stack.Screen name="manual-analysis" options={{ title: "Manual Analysis" }} />
         <Stack.Screen name="about-app" options={{ title: "About Dance Planner" }} />
         <Stack.Screen name="chat" options={{ title: "Chat" }} />
       </Stack>

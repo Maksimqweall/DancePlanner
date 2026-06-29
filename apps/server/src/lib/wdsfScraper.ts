@@ -1211,6 +1211,64 @@ export function parseSkatingFinalHtml(html: string, coupleNumber: string): Final
 
 // ─── Main analytics scraper ───────────────────────────────────────────────────
 
+/**
+ * Aggregate prelim rounds into per-dance and per-judge cross stats. Shared by the
+ * WDSF analytics scraper and the manual (TopTurnier) scraper so both produce an
+ * identical `CompetitionAnalytics` shape.
+ */
+export function computeAnalyticsStats(rounds: PrelimRound[]): {
+  danceStats: { dance: string; totalCrosses: number; avgPerRound: number }[];
+  judgeStats: { judge: string; totalCrosses: number; pct: number }[];
+  totalPossibleCrosses: number;
+} {
+  // Per-dance crosses (summed across rounds).
+  const danceMap: Record<string, number[]> = {};
+  for (const round of rounds) {
+    for (const d of round.dances) {
+      if (!danceMap[d.dance]) danceMap[d.dance] = [];
+      danceMap[d.dance].push(d.totalCrosses);
+    }
+  }
+  const danceStats = Object.entries(danceMap).map(([dance, vals]) => ({
+    dance,
+    totalCrosses: vals.reduce((s, v) => s + v, 0),
+    avgPerRound: vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0,
+  })).sort((a, b) => b.totalCrosses - a.totalCrosses);
+
+  // Per-judge crosses (prelim rounds).
+  const judgeMap: Record<string, { total: number; possible: number }> = {};
+  for (const round of rounds) {
+    for (const d of round.dances) {
+      for (const c of d.crosses) {
+        if (!judgeMap[c.judge]) judgeMap[c.judge] = { total: 0, possible: 0 };
+        judgeMap[c.judge].possible++;
+        if (c.marked) judgeMap[c.judge].total++;
+      }
+    }
+  }
+  const totalRounds = rounds.length;
+  const judgeStats = Object.entries(judgeMap)
+    .filter(([judge, { possible }]) => {
+      // Drop empty-string judge keys (parsing artifact)
+      if (!judge) return false;
+      // Drop purely non-alphabetic identifiers: "1.", "2." etc. are positional
+      // column markers, not real judge codes. Real judge codes always contain letters.
+      if (!/[a-zA-Z]/.test(judge)) return false;
+      // Drop judges that appear in far fewer dances than expected —
+      // typically these are phantom entries from a misidentified column.
+      const minExpected = Math.max(1, totalRounds * 0.3);
+      return possible >= minExpected;
+    })
+    .map(([judge, { total, possible }]) => ({
+      judge,
+      totalCrosses: total,
+      pct: possible > 0 ? Math.round((total / possible) * 100) : 0,
+    })).sort((a, b) => b.totalCrosses - a.totalCrosses);
+
+  const totalPossibleCrosses = judgeStats.reduce((s, j) => s + j.totalCrosses, 0);
+  return { danceStats, judgeStats, totalPossibleCrosses };
+}
+
 export async function scrapeCompetitionAnalytics(
   competitionUrl: string,
   athleteUuid: string,
@@ -1241,51 +1299,8 @@ export async function scrapeCompetitionAnalytics(
   // Marquee events have no /Final/ page; fall back to the skating final on the Scores page.
   const final = finalFromPage ?? skatingFinal;
 
-  // Step 3: Compute dance stats
-  const danceMap: Record<string, number[]> = {};
-  for (const round of rounds) {
-    for (const d of round.dances) {
-      if (!danceMap[d.dance]) danceMap[d.dance] = [];
-      danceMap[d.dance].push(d.totalCrosses);
-    }
-  }
-  const danceStats = Object.entries(danceMap).map(([dance, vals]) => ({
-    dance,
-    totalCrosses: vals.reduce((s, v) => s + v, 0),
-    avgPerRound: vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0,
-  })).sort((a, b) => b.totalCrosses - a.totalCrosses);
-
-  // Step 4: Compute judge stats (prelim rounds)
-  const judgeMap: Record<string, { total: number; possible: number }> = {};
-  for (const round of rounds) {
-    for (const d of round.dances) {
-      for (const c of d.crosses) {
-        if (!judgeMap[c.judge]) judgeMap[c.judge] = { total: 0, possible: 0 };
-        judgeMap[c.judge].possible++;
-        if (c.marked) judgeMap[c.judge].total++;
-      }
-    }
-  }
-  const totalRounds = rounds.length;
-  const judgeStats = Object.entries(judgeMap)
-    .filter(([judge, { possible }]) => {
-      // Drop empty-string judge keys (parsing artifact)
-      if (!judge) return false;
-      // Drop purely non-alphabetic identifiers: "1.", "2." etc. are positional
-      // column markers, not real judge codes. Real WDSF codes always contain letters.
-      if (!/[a-zA-Z]/.test(judge)) return false;
-      // Drop judges that appear in far fewer dances than expected —
-      // typically these are phantom entries from a misidentified column.
-      const minExpected = Math.max(1, totalRounds * 0.3);
-      return possible >= minExpected;
-    })
-    .map(([judge, { total, possible }]) => ({
-      judge,
-      totalCrosses: total,
-      pct: possible > 0 ? Math.round((total / possible) * 100) : 0,
-    })).sort((a, b) => b.totalCrosses - a.totalCrosses);
-
-  const totalPossible = judgeStats.reduce((s, j) => s + j.totalCrosses, 0);
+  // Steps 3 & 4: dance + judge stats from the prelim rounds.
+  const { danceStats, judgeStats, totalPossibleCrosses: totalPossible } = computeAnalyticsStats(rounds);
 
   return {
     competitionSlug: urls.slug,
@@ -1588,7 +1603,7 @@ function normalizeName(s: string): string {
 }
 
 /** Tokenise a normalised name into a set of word tokens. */
-function nameTokens(s: string): Set<string> {
+export function nameTokens(s: string): Set<string> {
   return new Set(normalizeName(s).split(" ").filter(Boolean));
 }
 

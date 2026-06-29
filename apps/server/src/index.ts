@@ -20,6 +20,7 @@ import messageRoutes from "./routes/messages";
 import pushRoutes    from "./routes/push";
 import contactRoutes  from "./routes/contact";
 import wdsfRoutes     from "./routes/wdsf";
+import manualRoutes   from "./routes/manual";
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/push",     pushRoutes);
 app.use("/api/contact",  contactRoutes);
 app.use("/api/wdsf",    wdsfRoutes);
+app.use("/api/manual",  manualRoutes);
 
 // 404 for unknown API routes
 app.use((_req, res) => {

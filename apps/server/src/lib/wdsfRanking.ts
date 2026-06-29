@@ -3,6 +3,7 @@ import {
   WDSF_BASE,
   FETCH_HEADERS,
   extractUuid,
+  nameTokens,
   type RankingEntry,
 } from "./wdsfScraper";
 
@@ -452,3 +453,99 @@ export function computeTournamentRating(
 }
 
 export const RANKING_TOP_N = TOP_N;
+
+// ─── Name-based tournament rating (for manual / TopTurnier analysis) ────────────
+//
+// TopTurnier results have no WDSF athlete UUIDs, so we match couples to the World
+// Ranking by NAME. Because that match is partial by nature (only some of a national
+// field is WDSF-ranked), the field strength is additionally scaled by how MANY of
+// the participants we could place in the ranking: a tournament where only 5 of 20
+// couples are world-ranked is a weak field a-priori, even if those 5 rank highly.
+
+/** Strength reaches full weight when ≥ this fraction of the field is world-ranked. */
+const FULL_DENSITY_AT = 0.5;
+
+/** Do two people (token sets) plausibly refer to the same person? */
+function personMatch(a: Set<string>, b: Set<string>): boolean {
+  let shared = 0;
+  for (const t of a) if (t.length >= 2 && b.has(t)) shared++;
+  return shared >= 1;
+}
+
+/** Find the world couple a TopTurnier entry name refers to (both partners must match). */
+function matchEntryToRanking(coupleName: string, ranking: RankedCouple[]): RankedCouple | null {
+  const partners = coupleName.split("/").map((p) => nameTokens(p)).filter((s) => s.size);
+  if (partners.length < 2) return null;
+  const [a, b] = partners;
+  let best: RankedCouple | null = null;
+  for (const rc of ranking) {
+    const man = nameTokens(rc.man);
+    const woman = nameTokens(rc.woman);
+    const matched =
+      (personMatch(a, man) && personMatch(b, woman)) ||
+      (personMatch(a, woman) && personMatch(b, man));
+    if (matched && (best === null || rc.rank < best.rank)) best = rc;
+  }
+  return best;
+}
+
+/**
+ * Grade a competition's field by matching its couples to the World Ranking by NAME,
+ * then scaling the result down when only a small share of the field is world-ranked.
+ * Returns the same `TournamentRating` shape the WDSF path produces.
+ */
+export function computeTournamentRatingByName(
+  allCouples: RankingEntry[],
+  ranking: RankedCouple[],
+  combinedType: string,
+  snapshotMonth: string | null,
+): TournamentRating {
+  const matched: { coupleName: string; worldRank: number; points: number }[] = [];
+  const seenCoupleIds = new Set<number>();
+  for (const couple of allCouples) {
+    const rc = matchEntryToRanking(couple.coupleName, ranking);
+    if (!rc || seenCoupleIds.has(rc.coupleId)) continue; // one world couple counted once
+    seenCoupleIds.add(rc.coupleId);
+    matched.push({ coupleName: couple.coupleName, worldRank: rc.rank, points: rc.points });
+  }
+  matched.sort((a, b) => a.worldRank - b.worldRank);
+
+  const counts: Counts = {
+    n30: matched.filter((m) => m.worldRank <= 30).length,
+    n50: matched.filter((m) => m.worldRank <= 50).length,
+    n100: matched.filter((m) => m.worldRank <= 100).length,
+    n200: matched.filter((m) => m.worldRank <= 200).length,
+  };
+  const bestRank = matched.length ? matched[0].worldRank : null;
+  const participants = allCouples.length;
+
+  const rule = TIER_RULES.find((r) => r.cond(counts));
+  if (!rule) {
+    return {
+      available: true, tier: "Unrated", rating: 0, participants,
+      ...counts, bestRank, matched, combinedType, snapshotMonth,
+    };
+  }
+
+  // Base rating within the tier band (same model as the UUID path)…
+  const score =
+    matched.reduce((s, m) => s + coupleWeight(m.worldRank), 0) +
+    (bestRank !== null && bestRank <= 3 ? 1.5 : bestRank !== null && bestRank <= 10 ? 0.7 : 0);
+  const [lo, hi] = rule.band;
+  const intensity = Math.min(1, score / SATURATION_SCORE);
+  let rating = lo + (hi - lo) * intensity;
+
+  // …then scale by ranked-density so a sparse field rates low a-priori.
+  const density = participants > 0 ? matched.length / participants : 0;
+  const densityFactor = Math.min(1, density / FULL_DENSITY_AT);
+  rating = Math.round(rating * densityFactor * 10) / 10;
+
+  let tier: Tier = tierForRating(rating);
+  const cap = ratingCapFor(combinedType);
+  if (cap !== null && rating > cap) { rating = cap; tier = tierForRating(rating); }
+
+  return {
+    available: true, tier, rating, participants,
+    ...counts, bestRank, matched, combinedType, snapshotMonth,
+  };
+}

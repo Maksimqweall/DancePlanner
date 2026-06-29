@@ -31,6 +31,7 @@ import {
   type RankingEntry,
   type CoupleScores,
   type TournamentTier,
+  type TournamentRating,
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
@@ -401,30 +402,44 @@ function ProfileView({
 
 // ─── Competition Analytics Modal ──────────────────────────────────────────────
 
-function CompetitionAnalyticsModal({
+// Reused by both the WDSF profile screen (store-backed) and the Manual Analysis
+// screen. In manual mode the caller passes `analyticsOverride` (already-parsed data,
+// no store fetch), a precomputed `tournamentRating`, and a `fetchRival` that pulls a
+// rival couple's breakdown from the manual endpoint instead of the WDSF one.
+export function CompetitionAnalyticsModal({
   comp,
   onClose,
+  analyticsOverride,
+  tournamentRating,
+  fetchRival: fetchRivalProp,
 }: {
   comp: WdsfCompetition;
   onClose: () => void;
+  analyticsOverride?: CompetitionAnalytics;
+  tournamentRating?: TournamentRating | null;
+  fetchRival?: (coupleNumber: string) => Promise<CoupleScores | null>;
 }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
-  const { fetchAnalytics, analyticsCache, analyticsLoading, clearAnalyticsCache } = useWdsfStore();
+  const { fetchAnalytics, analyticsCache, analyticsLoading, clearAnalyticsCache, fetchCoupleScores } = useWdsfStore();
 
-  const url = comp.competitionUrl!;
-  const isLoading  = analyticsLoading[url] ?? false;
-  const analytics  = analyticsCache[url];
+  const manual = analyticsOverride !== undefined;
+  const url = comp.competitionUrl ?? comp.event ?? "manual";
+  const isLoading  = manual ? false : (analyticsLoading[url] ?? false);
+  const analytics  = manual ? analyticsOverride : analyticsCache[url];
   const [tab, setTab] = useState<"overview" | "marks" | "scores3" | "final" | "compare">("overview");
   const [loadedOnce, setLoadedOnce] = useState(false);
 
-  // Auto-load on open
+  // Default rival fetcher (WDSF) pulls from the store keyed by the competition URL.
+  const fetchRival = fetchRivalProp ?? ((coupleNumber: string) => fetchCoupleScores(url, coupleNumber));
+
+  // Auto-load on open (store-backed mode only).
   useEffect(() => {
-    if (!loadedOnce && url) {
+    if (!manual && !loadedOnce && comp.competitionUrl) {
       setLoadedOnce(true);
-      fetchAnalytics(url);
+      fetchAnalytics(comp.competitionUrl);
     }
-  }, [url, loadedOnce, fetchAnalytics]);
+  }, [comp.competitionUrl, loadedOnce, fetchAnalytics, manual]);
 
   const maxCrosses = useMemo(() => {
     if (!analytics) return 1;
@@ -483,25 +498,29 @@ function CompetitionAnalyticsModal({
         ) : analytics === null ? (
           <View style={s.analyticsCenter}>
             <Text style={s.errorText}>Could not load analytics for this competition.</Text>
-            <PressableScale style={[s.primaryBtn, { marginTop: 16, paddingHorizontal: 28 }]} onPress={() => { clearAnalyticsCache(url); setLoadedOnce(false); }}>
-              <Text style={s.primaryBtnText}>Retry</Text>
-            </PressableScale>
+            {!manual && (
+              <PressableScale style={[s.primaryBtn, { marginTop: 16, paddingHorizontal: 28 }]} onPress={() => { clearAnalyticsCache(url); setLoadedOnce(false); }}>
+                <Text style={s.primaryBtnText}>Retry</Text>
+              </PressableScale>
+            )}
           </View>
         ) : analytics ? (
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-            {tab === "overview" && <OverviewTab analytics={analytics} comp={comp} />}
+            {tab === "overview" && <OverviewTab analytics={analytics} comp={comp} tournamentRating={tournamentRating} />}
             {tab === "marks"    && <CrossesTab analytics={analytics} maxCrosses={maxCrosses} maxJudge={maxJudgeCrosses} />}
             {tab === "scores3"  && <Scores3Tab scores3={analytics.scores3!} judgeNames={analytics.judgeNames} />}
             {tab === "final"    && <FinalTab final={analytics.final} final3={analytics.final3} judgeNames={analytics.judgeNames} />}
-            {tab === "compare"  && <CompareTab analytics={analytics} />}
+            {tab === "compare"  && <CompareTab analytics={analytics} fetchRival={fetchRival} />}
             <View style={{ height: 40 }} />
           </ScrollView>
         ) : (
           <View style={s.analyticsCenter}>
             <Text style={s.loadingText}>Tap to load analytics</Text>
-            <PressableScale style={[s.primaryBtn, { marginTop: 16, paddingHorizontal: 28 }]} onPress={() => fetchAnalytics(url)}>
-              <Text style={s.primaryBtnText}>Load Analytics</Text>
-            </PressableScale>
+            {!manual && comp.competitionUrl && (
+              <PressableScale style={[s.primaryBtn, { marginTop: 16, paddingHorizontal: 28 }]} onPress={() => fetchAnalytics(comp.competitionUrl!)}>
+                <Text style={s.primaryBtnText}>Load Analytics</Text>
+              </PressableScale>
+            )}
           </View>
         )}
       </View>
@@ -1136,7 +1155,7 @@ function JudgeRankingView({ competitions }: { competitions: WdsfCompetition[] })
 const CARD_RESET = { marginHorizontal: 0 };
 const HDR_RESET  = { marginHorizontal: 0 };
 
-function OverviewTab({ analytics, comp }: { analytics: CompetitionAnalytics; comp: WdsfCompetition }) {
+function OverviewTab({ analytics, comp, tournamentRating }: { analytics: CompetitionAnalytics; comp: WdsfCompetition; tournamentRating?: TournamentRating | null }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
 
@@ -1155,7 +1174,7 @@ function OverviewTab({ analytics, comp }: { analytics: CompetitionAnalytics; com
       </View>
 
       {/* Tournament rating (field strength vs WDSF World Ranking) */}
-      <TournamentRatingCard comp={comp} />
+      <TournamentRatingCard comp={comp} overrideRating={tournamentRating} />
 
       {/* Big stats */}
       <View style={s.overviewGrid}>
@@ -2273,25 +2292,30 @@ function Score3CompareView({ myRound, rivalRound, myLabel, rivalLabel, judgeName
   );
 }
 
-function CompareTab({ analytics }: { analytics: CompetitionAnalytics }) {
+function CompareTab({ analytics, fetchRival }: {
+  analytics: CompetitionAnalytics;
+  fetchRival: (coupleNumber: string) => Promise<CoupleScores | null>;
+}) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
-  const fetchCoupleScores   = useWdsfStore(st => st.fetchCoupleScores);
-  const coupleScoresCache   = useWdsfStore(st => st.coupleScoresCache);
-  const coupleScoresLoading = useWdsfStore(st => st.coupleScoresLoading);
 
   const myCouple = analytics.coupleNumber;
   const myNameL  = analytics.coupleName.toLowerCase();
 
   const [selected, setSelected] = useState<RankingEntry | null>(null);
-
-  const key = selected ? `${analytics.rankingUrl}|${selected.coupleNumber}` : "";
-  const rival: CoupleScores | null | undefined = selected ? coupleScoresCache[key] : undefined;
-  const rivalLoading = selected ? (coupleScoresLoading[key] ?? false) : false;
+  const [rival, setRival] = useState<CoupleScores | null | undefined>(undefined);
+  const [rivalLoading, setRivalLoading] = useState(false);
 
   useEffect(() => {
-    if (selected) fetchCoupleScores(analytics.rankingUrl, selected.coupleNumber);
-  }, [selected, analytics.rankingUrl, fetchCoupleScores]);
+    if (!selected) { setRival(undefined); return; }
+    let alive = true;
+    setRivalLoading(true);
+    setRival(undefined);
+    fetchRival(selected.coupleNumber)
+      .then((r) => { if (alive) { setRival(r ?? null); setRivalLoading(false); } })
+      .catch(() => { if (alive) { setRival(null); setRivalLoading(false); } });
+    return () => { alive = false; };
+  }, [selected, fetchRival]);
 
   if (selected) {
     return (
@@ -2431,23 +2455,27 @@ function ratingKey(comp: WdsfCompetition): string {
 }
 
 // Prominent S/A/B/C/D card shown at the top of a competition's Overview tab.
-function TournamentRatingCard({ comp }: { comp: WdsfCompetition }) {
+function TournamentRatingCard({ comp, overrideRating }: { comp: WdsfCompetition; overrideRating?: TournamentRating | null }) {
   const C = useC();
   const s = useMemo(() => makeStyles(C), [C]);
   const fetchTournamentRating = useWdsfStore(st => st.fetchTournamentRating);
   const key = ratingKey(comp);
-  const rating  = useWdsfStore(st => st.ratingCache[key]);
+  const storeRating = useWdsfStore(st => st.ratingCache[key]);
   const loading = useWdsfStore(st => st.ratingLoading[key] ?? false);
 
-  const canRate = !!comp.competitionUrl && !!comp.category && !!comp.discipline;
+  // Manual mode: the rating is precomputed and passed in (could be null = not
+  // applicable). WDSF mode: fetch it from the store keyed by the competition.
+  const manual = overrideRating !== undefined;
+  const rating = manual ? overrideRating : storeRating;
+  const canRate = manual ? true : (!!comp.competitionUrl && !!comp.category && !!comp.discipline);
 
   useEffect(() => {
-    if (canRate) fetchTournamentRating(comp.competitionUrl!, comp.category, comp.discipline, comp.date);
-  }, [key, canRate, fetchTournamentRating]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!manual && canRate) fetchTournamentRating(comp.competitionUrl!, comp.category, comp.discipline, comp.date);
+  }, [key, canRate, fetchTournamentRating, manual]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!canRate) return null;
 
-  if (loading && rating === undefined) {
+  if (!manual && loading && rating === undefined) {
     return (
       <View style={s.ratingCardLoading}>
         <ActivityIndicator color={C.accent} />

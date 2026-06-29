@@ -15,6 +15,7 @@ export const uk: Translations = {
     wdsfProfile: "Профіль WDSF",
     rating: "Рейтинг",
     leaderboard: "Таблиця лідерів",
+    manualAnalysis: "Ручний аналіз",
     signOut: "Вийти",
   },
   leaderboard: {

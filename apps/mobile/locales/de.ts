@@ -15,6 +15,7 @@ export const de: Translations = {
     wdsfProfile: "WDSF-Profil",
     rating: "Bewertung",
     leaderboard: "Bestenliste",
+    manualAnalysis: "Manuelle Analyse",
     signOut: "Abmelden",
   },
   leaderboard: {

@@ -15,6 +15,7 @@ export const ru: Translations = {
     wdsfProfile: "Профиль WDSF",
     rating: "Рейтинг",
     leaderboard: "Таблица лидеров",
+    manualAnalysis: "Ручной анализ",
     signOut: "Выйти",
   },
   leaderboard: {

@@ -58,6 +58,7 @@ model User {
   messageReads    MessageRead[]  // Per-couple read state
   pushTokens      PushToken[]    // Expo push notification tokens
   categoryRatings WdsfCategoryRating[] // Per-category couple-rating snapshots (leaderboard)
+  manualCompetitions ManualCompetition[] // Saved manual (TopTurnier) competition analyses
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -319,6 +320,32 @@ model WdsfCategoryRating {
 
   @@unique([userId, combinedType])
   @@index([combinedType])
+}
+
+// A saved manual competition analysis. The user pastes a TopTurnier results URL;
+// we find their couple by name and store the full parsed CompetitionAnalytics so it
+// can be reopened later without re-scraping. `rating` is the name-matched field
+// strength (TournamentRating), null when no WDSF ranking applies.
+model ManualCompetition {
+  id              String   @id @default(uuid())
+  userId          String
+  sourceUrl       String
+  competitionName String
+  date            String?
+  discipline      String?
+  category        String?
+  coupleName      String
+  coupleNumber    String
+  place           String?
+  analytics       Json     // full CompetitionAnalytics
+  rating          Json?    // field-strength TournamentRating (null = not applicable)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceUrl])
+  @@index([userId])
 }
 
 // --- Энумераторы (Enums) ---

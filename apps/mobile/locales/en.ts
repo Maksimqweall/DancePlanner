@@ -13,6 +13,7 @@ export const en = {
     wdsfProfile: "WDSF Profile",
     rating: "Rating",
     leaderboard: "Leaderboard",
+    manualAnalysis: "Manual Analysis",
     signOut: "Sign out",
   },
   leaderboard: {

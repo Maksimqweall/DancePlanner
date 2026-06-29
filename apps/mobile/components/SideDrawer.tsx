@@ -99,6 +99,15 @@ function LeaderboardIcon({ color, size = 20 }: { color: string; size?: number })
     </Svg>
   );
 }
+function AnalyzeIcon({ color, size = 20 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="4" y="3" width="16" height="18" rx="2.5" stroke={color} strokeWidth="1.75" />
+      <Path d="M8 8H16M8 12H13" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
+      <Path d="M14.5 15.5L16 17L19 14" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
 function LogoutIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -145,6 +154,7 @@ export default function SideDrawer() {
     "about-app": lang.nav.aboutUs,
     rating:    lang.nav.rating,
     leaderboard: lang.nav.leaderboard,
+    "manual-analysis": lang.nav.manualAnalysis,
   };
 
   const translateX     = useSharedValue(-DRAWER_W - 24);
@@ -267,6 +277,14 @@ export default function SideDrawer() {
             badge={0}
             icon={<LeaderboardIcon color={activeKey === "leaderboard" ? "#fff" : T.t2} size={20} />}
             onPress={() => navigate("/leaderboard")}
+          />
+          <NavItem
+            label={lang.nav.manualAnalysis}
+            active={activeKey === "manual-analysis"}
+            accent={C.gold}
+            badge={0}
+            icon={<AnalyzeIcon color={activeKey === "manual-analysis" ? "#fff" : T.t2} size={20} />}
+            onPress={() => navigate("/manual-analysis")}
           />
           {NAV_SECONDARY.map(({ key, href, icon: Icon, accent }) => {
             const active = key === activeKey;

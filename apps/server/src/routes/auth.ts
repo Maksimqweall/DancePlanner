@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { signToken } from "../lib/jwt";
 import { asyncHandler, HttpError } from "../lib/http";
@@ -48,14 +49,25 @@ router.post(
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        passwordHash,
-        firstName: data.firstName,
-        lastName: data.lastName,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: data.email,
+          passwordHash,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        },
+      });
+    } catch (err) {
+      // Two signups for the same email can both pass the findUnique check above
+      // before either commits; the DB's unique constraint is the real guard, so
+      // translate its violation into the same 409 instead of a raw 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw new HttpError(409, "An account with this email already exists");
+      }
+      throw err;
+    }
 
     const token = signToken({ userId: user.id });
     res.status(201).json({ token, user: publicUser(user) });

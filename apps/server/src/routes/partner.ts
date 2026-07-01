@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler, HttpError } from "../lib/http";
@@ -60,15 +61,36 @@ router.post(
     if (!partner) throw new HttpError(404, "No account found with this email");
     if (partner.id === req.userId) throw new HttpError(400, "You cannot link to yourself");
 
-    const alreadyInCouple = await findCoupleForUser(req.userId!);
-    if (alreadyInCouple) throw new HttpError(409, "You are already in a couple. Disconnect first.");
+    // The "already in a couple" checks + create must be race-safe: two concurrent
+    // /link calls (e.g. the same user double-tapping, or two people linking the
+    // same partner at once) could otherwise both pass the checks before either
+    // commits and create two active couples for the same user. Serializable
+    // isolation makes Postgres detect that conflict and abort the loser with a
+    // P2034, which we translate into the same 409 the non-racing path returns.
+    let created;
+    try {
+      created = await prisma.$transaction(
+        async (tx) => {
+          const alreadyInCouple = await tx.couple.findFirst({
+            where: { isActive: true, OR: [{ leadId: req.userId }, { followId: req.userId }, { coachId: req.userId }] },
+          });
+          if (alreadyInCouple) throw new HttpError(409, "You are already in a couple. Disconnect first.");
 
-    const partnerInCouple = await findCoupleForUser(partner.id);
-    if (partnerInCouple) throw new HttpError(409, "This user is already in a couple");
+          const partnerInCouple = await tx.couple.findFirst({
+            where: { isActive: true, OR: [{ leadId: partner.id }, { followId: partner.id }, { coachId: partner.id }] },
+          });
+          if (partnerInCouple) throw new HttpError(409, "This user is already in a couple");
 
-    const created = await prisma.couple.create({
-      data: { leadId: req.userId!, followId: partner.id },
-    });
+          return tx.couple.create({ data: { leadId: req.userId!, followId: partner.id } });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2034") {
+        throw new HttpError(409, "You are already in a couple. Disconnect first.");
+      }
+      throw err;
+    }
     const couple = await findCoupleForUser(req.userId!);
 
     res.status(201).json({ couple: couple ? buildCoupleResponse(couple, req.userId!) : created });

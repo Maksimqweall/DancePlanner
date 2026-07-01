@@ -134,10 +134,25 @@ router.patch(
       throw new HttpError(409, "This proposal has already been responded to");
     }
 
+    // Atomically claim the PENDING → (DECLINED|APPROVED) transition. Two concurrent
+    // responders (e.g. partner + coach both tapping Accept at once) would otherwise
+    // both pass the status check above before either write commits, and both go on
+    // to create the approval side effects (expense + schedule entries) below. This
+    // conditional update lets Postgres's row lock decide a single winner: only the
+    // request that actually flips PENDING → x affects a row; the rest get count=0
+    // and a clean 409, instead of every racer creating duplicate side effects.
+    const claimedStatus = action === "DECLINE" ? "DECLINED" : "APPROVED";
+    const claim = await prisma.proposal.updateMany({
+      where: { id: proposalId, status: "PENDING" },
+      data: { status: claimedStatus },
+    });
+    if (claim.count === 0) {
+      throw new HttpError(409, "This proposal has already been responded to");
+    }
+
     if (action === "DECLINE") {
-      const updated = await prisma.proposal.update({
+      const updated = await prisma.proposal.findUniqueOrThrow({
         where: { id: proposalId },
-        data: { status: "DECLINED" },
         include: { sender: { select: SENDER_SELECT } },
       });
       res.json({ proposal: updated });
@@ -198,7 +213,6 @@ router.patch(
     const updated = await prisma.proposal.update({
       where: { id: proposalId },
       data: {
-        status: "APPROVED",
         details: { ...details, ...createdIds } as object,
       },
       include: { sender: { select: SENDER_SELECT } },

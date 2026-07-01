@@ -14,12 +14,13 @@ import {
 import type { Project, ScheduleEntry } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
 import { AnimatedBar } from "../../../components/ui/AnimatedProgress";
-import { C, SHADOWS } from "../../../lib/theme";
+import { C, SHADOWS, stagger } from "../../../lib/theme";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
 import { useLanguageStore } from "../../../store/useLanguageStore";
 import Hint from "../../../components/ui/Hint";
+import AppBackground from "../../../components/ui/AppBackground";
 
 const PROJECT_COLOR = C.purple;
 
@@ -186,6 +187,7 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.screen}>
+      <AppBackground />
       <ScrollView style={styles.scroll}>
         <View style={styles.topPad}>
 
@@ -199,7 +201,7 @@ export default function CalendarScreen() {
           />
 
           {/* ── Header ───────────────────────────────────────────────────── */}
-          <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.calHeader}>
+          <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={styles.calHeader}>
             <Text style={styles.monthTitle} numberOfLines={1}>{monthLabel(viewMonth, locale)}</Text>
             <View style={styles.zoomRow}>
               <ZoomBtn label="−" disabled={zoom === 0} onPress={() => setZoom(z => Math.max(0, z - 1))} />
@@ -208,7 +210,7 @@ export default function CalendarScreen() {
           </Animated.View>
 
           {/* ── Month stat chips ─────────────────────────────────────────── */}
-          <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
             <View style={styles.statsCard}>
               <StatChip label="Sessions" value={String(totals.trainings)} color={C.accent} icon="🏋️" />
               <View style={styles.statDivider} />
@@ -223,7 +225,7 @@ export default function CalendarScreen() {
           </Animated.View>
 
           {/* ── Week training load strip ──────────────────────────────────── */}
-          <Animated.View entering={FadeInDown.delay(80).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)}>
             <View style={styles.weekCard}>
               <Text style={styles.weekLabel}>THIS WEEK · TRAINING LOAD</Text>
               <View style={styles.weekBars}>
@@ -315,7 +317,7 @@ export default function CalendarScreen() {
           {dayProjects.map((p, i) => {
             const meta = EVENT_TYPE_META[p.type] ?? EVENT_TYPE_META.TOURNAMENT;
             return (
-              <Animated.View key={p.id} entering={i < 4 ? FadeInDown.delay(i * 60).duration(350) : undefined}>
+              <Animated.View key={p.id} entering={i < 4 ? FadeInDown.delay(stagger(i, 90)).springify().damping(16).stiffness(140) : undefined}>
                 <PressableScale onPress={() => router.push(`/project/${p.id}`)} style={styles.projectRow}>
                   <Text style={styles.projectRowIcon}>{meta.icon}</Text>
                   <View style={{ flex: 1 }}>
@@ -329,7 +331,7 @@ export default function CalendarScreen() {
           })}
 
           {dayEntries.map((e, i) => (
-            <Animated.View key={e.id} entering={i < 6 ? FadeInDown.delay(i * 55).duration(350) : undefined}>
+            <Animated.View key={e.id} entering={i < 6 ? FadeInDown.delay(stagger(i, 90)).springify().damping(16).stiffness(140) : undefined}>
               <SessionRow entry={e} onPress={() => openEdit(e)} myId={myId} partnerName={couple?.partner.firstName} />
             </Animated.View>
           ))}
@@ -550,7 +552,7 @@ function makeStyles(C: Palette) {
   sessionMeta: { color: C.t2, fontSize: 13, marginTop: 2 },
   paidByLabel: { color: C.t3, fontSize: 11, marginTop: 2 },
   expenseRow: {
-    flexDirection: "row", alignItems: "center", backgroundColor: `${C.card}99`,
+    flexDirection: "row", alignItems: "center", backgroundColor: C.card,
     borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.border, gap: 10,
   },
   expenseIcon: { fontSize: 18 },

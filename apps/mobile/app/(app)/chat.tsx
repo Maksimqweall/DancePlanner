@@ -8,6 +8,7 @@ import { useChatStore } from "../../store/useChatStore";
 import { usePartnerStore } from "../../store/usePartnerStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import PressableScale from "../../components/ui/PressableScale";
+import AppBackground from "../../components/ui/AppBackground";
 import { formatMoney } from "../../lib/display";
 import { ApiError } from "../../lib/api";
 import type { Palette } from "../../lib/theme";
@@ -148,8 +149,10 @@ export default function ChatScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={s.screen}
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <KeyboardAvoidingView
+      style={[s.screen, { backgroundColor: "transparent" }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={90}
     >
@@ -190,7 +193,8 @@ export default function ChatScreen() {
       </View>
 
       <NewProposalModal visible={proposalOpen} onClose={() => setProposalOpen(false)} />
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 

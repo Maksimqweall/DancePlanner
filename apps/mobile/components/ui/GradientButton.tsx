@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   glow: {
-    shadowColor: "#6366F1",
+    shadowColor: "#FF3D68",
     shadowOpacity: 0.45,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },

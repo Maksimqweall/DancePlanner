@@ -188,6 +188,10 @@ export const en = {
     seeAll: "See all →",
     noUpcoming: "No upcoming planned spend. Create a tournament or camp to forecast costs.",
     noExpensesIn: "No expenses in",
+    nextEvent: "Next event",
+    noNextEvent: "No upcoming events yet",
+    daysToGo: "days to go",
+    today: "Today",
   },
   calendar: {
     title: "Calendar",

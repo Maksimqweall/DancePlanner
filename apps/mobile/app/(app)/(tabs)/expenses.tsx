@@ -28,6 +28,7 @@ import { SHADOWS, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
 import Hint from "../../../components/ui/Hint";
+import AppBackground from "../../../components/ui/AppBackground";
 
 type Period = "3M" | "6M" | "1Y";
 
@@ -38,7 +39,7 @@ interface MonthGroup {
   planned: number;
 }
 
-const CAT_COLORS = ["#6366F1", "#A855F7", "#F59E0B", "#EF4444", "#10B981", "#3B82F6", "#EC4899"];
+const CAT_COLORS = ["#FF5B2E", "#FF2D95", "#FFB020", "#EF4444", "#10B981", "#3B82F6", "#EC4899"];
 
 function periodCutoff(period: Period): Date {
   const now = new Date();
@@ -176,10 +177,11 @@ export default function ExpensesScreen() {
 
   return (
     <View style={styles.screen}>
+      <AppBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
         {/* ── Title ────────────────────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.titleRow}>
+        <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={styles.titleRow}>
           <Text style={styles.pageTitle}>{T.finance.title}</Text>
           <PressableScale style={styles.addBtn} onPress={() => setModalOpen(true)}>
             <Text style={styles.addBtnText}>+ {T.common.add}</Text>
@@ -196,7 +198,7 @@ export default function ExpensesScreen() {
         />
 
         {/* ── Hero Budget Card ─────────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(40).duration(500)}>
+        <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
           <LinearGradient
             colors={heroColors}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -238,7 +240,7 @@ export default function ExpensesScreen() {
         </Animated.View>
 
         {/* ── Period selector ──────────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(80).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)}>
           <View style={styles.periodRow}>
             {(["3M", "6M", "1Y"] as const).map(p => (
               <PressableScale
@@ -254,7 +256,7 @@ export default function ExpensesScreen() {
 
         {/* ── Category Breakdown ───────────────────────────────────────────── */}
         {categoryBreakdown.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(110).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(165).springify().damping(16).stiffness(140)}>
             <View style={styles.breakdownCard}>
               <Text style={styles.sectionLabel}>{T.finance.categoryBreakdown}</Text>
               {categoryBreakdown.map((item, i) => {
@@ -288,7 +290,7 @@ export default function ExpensesScreen() {
 
         {/* ── Category filter chips ────────────────────────────────────────── */}
         {presentCategories.length > 1 && (
-          <Animated.View entering={FadeInDown.delay(130).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(195).springify().damping(16).stiffness(140)}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={catChipStyles.scroll} contentContainerStyle={catChipStyles.row}>
               <PressableScale onPress={() => setFilterCat(null)} style={[catChipStyles.chip, !filterCat && catChipStyles.chipActive]}>
                 <Text style={[catChipStyles.chipText, !filterCat && catChipStyles.chipTextActive]}>{T.finance.allCategories}</Text>
@@ -312,7 +314,7 @@ export default function ExpensesScreen() {
 
         {/* ── Period totals + chart ────────────────────────────────────────── */}
         {filteredExpenses.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(225).springify().damping(16).stiffness(140)}>
             <View style={styles.totalsRow}>
               <View style={styles.totalItem}>
                 <Text style={styles.totalLabel}>{T.finance.paid.toUpperCase()}</Text>
@@ -342,7 +344,7 @@ export default function ExpensesScreen() {
 
         {/* ── Month accordion ──────────────────────────────────────────────── */}
         {groups.length === 0 ? (
-          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.emptyCard}>
+          <Animated.View entering={FadeInDown.delay(300).springify().damping(16).stiffness(140)} style={styles.emptyCard}>
             <Text style={styles.emptyEmoji}>💳</Text>
             <Text style={styles.emptyTitle}>{T.finance.noExpensesInPeriod}</Text>
             <Text style={styles.emptyText}>{T.finance.tapToRecord}</Text>

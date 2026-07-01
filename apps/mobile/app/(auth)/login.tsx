@@ -13,6 +13,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import GradientButton from "../../components/ui/GradientButton";
+import AppBackground from "../../components/ui/AppBackground";
 import type { Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 import Svg, { Path, Circle, Defs, RadialGradient, Stop, Ellipse } from "react-native-svg";
@@ -58,9 +59,10 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.root}
     >
+      <AppBackground />
       <View style={styles.inner}>
         {/* Logo / hero */}
-        <Animated.View entering={FadeInDown.delay(50).duration(500)} style={styles.hero}>
+        <Animated.View entering={FadeInDown.delay(75).springify().damping(16).stiffness(140)} style={styles.hero}>
           <LogoMark />
           <Text style={styles.appName}>DancePlanner</Text>
           <Text style={styles.tagline}>Manage your dancesport finances</Text>
@@ -138,14 +140,15 @@ function makeStyles(C: Palette) {
   },
   appName: {
     color: C.t1,
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '900',
     marginTop: 16,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   tagline: {
     color: C.t2,
     fontSize: 15,
+    fontWeight: '300',
     marginTop: 6,
     textAlign: 'center',
   },

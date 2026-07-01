@@ -17,8 +17,11 @@ import {
 } from "../../../store/useFinanceStore";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
+import { useProjectStore } from "../../../store/useProjectStore";
 import TransactionCard from "../../../components/TransactionCard";
 import PressableScale from "../../../components/ui/PressableScale";
+import GlassCard from "../../../components/ui/GlassCard";
+import AppBackground from "../../../components/ui/AppBackground";
 import { AnimatedProgress, AnimatedBar } from "../../../components/ui/AnimatedProgress";
 import {
   EVENT_TYPE_META,
@@ -31,7 +34,7 @@ import {
   monthKeyFromIso,
 } from "../../../lib/display";
 import type { ForecastMonth } from "../../../lib/types";
-import { SHADOWS, type Palette } from "../../../lib/theme";
+import { SHADOWS, GRADIENTS, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
 import Hint from "../../../components/ui/Hint";
@@ -40,6 +43,11 @@ import { useLanguageStore } from "../../../store/useLanguageStore";
 const LANG_LOCALE: Record<string, string> = { en: "en-US", ru: "ru-RU", uk: "uk-UA", de: "de-DE" };
 
 const DEFAULT_BUDGET = 1000;
+
+function daysUntilDate(dateStr: string): number {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / 86400000));
+}
 
 export default function Dashboard() {
   const router = useRouter();
@@ -50,6 +58,7 @@ export default function Dashboard() {
   const { forecast, expenses, budgets, refresh, setBudget } = useFinanceStore();
   const user = useAuthStore((st) => st.user);
   const { couple, split, fetchPartner, fetchSplit } = usePartnerStore();
+  const { projects, refreshProjects } = useProjectStore();
   const { language } = useLanguageStore();
   const locale = LANG_LOCALE[language] ?? "en-US";
 
@@ -61,8 +70,16 @@ export default function Dashboard() {
     useCallback(() => {
       refresh();
       fetchPartner();
-    }, [refresh, fetchPartner])
+      refreshProjects();
+    }, [refresh, fetchPartner, refreshProjects])
   );
+
+  const nextEvent = useMemo(() => {
+    const now = Date.now();
+    return projects
+      .filter((p) => new Date(p.endDate ?? p.date).getTime() >= now)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+  }, [projects]);
 
   useEffect(() => {
     if (couple) fetchSplit();
@@ -119,12 +136,14 @@ export default function Dashboard() {
   const initials = (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
 
   return (
-    <ScrollView
-      style={s.screen}
-      contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
-    >
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView
+        style={[s.screen, { backgroundColor: "transparent" }]}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
+      >
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(420)} style={s.header}>
         <View style={{ flex: 1 }}>
@@ -152,7 +171,7 @@ export default function Dashboard() {
       />
 
       {/* Month selector */}
-      <Animated.View entering={FadeInDown.delay(50).duration(420)} style={s.monthRow}>
+      <Animated.View entering={FadeInDown.delay(75).springify().damping(16).stiffness(140)} style={s.monthRow}>
         <PressableScale onPress={() => setSelectedMonth((m) => shiftMonth(m, -1))} style={s.monthArrow}>
           <Text style={s.arrowText}>‹</Text>
         </PressableScale>
@@ -166,9 +185,9 @@ export default function Dashboard() {
       </Animated.View>
 
       {/* Hero — spend vs budget */}
-      <Animated.View entering={FadeInDown.delay(100).duration(450)}>
+      <Animated.View entering={FadeInDown.delay(150).springify().damping(16).stiffness(140)}>
         <LinearGradient
-          colors={["#6366F1", "#8B5CF6", "#A855F7"]}
+          colors={GRADIENTS.brand}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={s.hero}
@@ -199,20 +218,52 @@ export default function Dashboard() {
 
       {/* Partner balance */}
       {couple && split ? (
-        <Animated.View entering={FadeInDown.delay(150).duration(420)}>
+        <Animated.View entering={FadeInDown.delay(225).springify().damping(16).stiffness(140)}>
           <BalanceCard split={split} partnerName={couple.partner.firstName} />
         </Animated.View>
       ) : null}
 
       {/* Stat chips */}
-      <Animated.View entering={FadeInDown.delay(180).duration(420)} style={s.statsRow}>
+      <Animated.View entering={FadeInDown.delay(270).springify().damping(16).stiffness(140)} style={s.statsRow}>
         <StatChip label={T.budget.spent} value={formatMoney(summary.paid)} tint={C.accent} icon="wallet" />
         <StatChip label={T.finance.planned} value={formatMoney(summary.planned)} tint={C.gold} icon="clock" />
         <StatChip label={T.budget.left} value={formatMoney(left)} tint="#10B981" icon="leaf" />
       </Animated.View>
 
+      {/* Next event widget */}
+      <Animated.View entering={FadeInDown.delay(300).springify().damping(16).stiffness(140)}>
+        <PressableScale
+          onPress={() => nextEvent && router.push(`/project/${nextEvent.id}`)}
+          disabled={!nextEvent}
+        >
+          <GlassCard radius={22} glowColor={C.gold} style={{ marginTop: 14 }} contentStyle={s.nextEventContent}>
+            {nextEvent ? (
+              <>
+                <View style={[s.nextEventIcon, { backgroundColor: `${C.gold}22` }]}>
+                  <Text style={{ fontSize: 22 }}>{EVENT_TYPE_META[nextEvent.type]?.icon ?? "🏆"}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.nextEventLabel}>{T.dashboard.nextEvent}</Text>
+                  <Text style={s.nextEventTitle} numberOfLines={1}>{nextEvent.title}</Text>
+                </View>
+                <View style={s.nextEventDaysWrap}>
+                  <Text style={[s.nextEventDays, { color: C.gold }]}>
+                    {daysUntilDate(nextEvent.date)}
+                  </Text>
+                  <Text style={s.nextEventDaysLabel}>
+                    {daysUntilDate(nextEvent.date) === 0 ? T.dashboard.today : T.dashboard.daysToGo}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <Text style={s.nextEventEmpty}>{T.dashboard.noNextEvent}</Text>
+            )}
+          </GlassCard>
+        </PressableScale>
+      </Animated.View>
+
       {/* Weekly spend chart */}
-      <Animated.View entering={FadeInDown.delay(220).duration(420)}>
+      <Animated.View entering={FadeInDown.delay(330).springify().damping(16).stiffness(140)}>
         <View style={s.card}>
           <View style={s.cardHeadRow}>
             <Text style={s.cardTitle}>{T.dashboard.weeklySpend}</Text>
@@ -238,7 +289,7 @@ export default function Dashboard() {
       </Animated.View>
 
       {/* Upcoming forecast */}
-      <Animated.View entering={FadeInDown.delay(260).duration(420)}>
+      <Animated.View entering={FadeInDown.delay(390).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionTitle}>{T.dashboard.upcoming}</Text>
         {forecast.length === 0 ? (
           <View style={s.emptyCard}>
@@ -253,7 +304,7 @@ export default function Dashboard() {
 
       {/* Category breakdown */}
       {categories.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(300).duration(420)}>
+        <Animated.View entering={FadeInDown.delay(450).springify().damping(16).stiffness(140)}>
           <Text style={s.sectionTitle}>{T.dashboard.spendingByCategory}</Text>
           <View style={s.card}>
             {categories.map((row, i) => {
@@ -286,7 +337,7 @@ export default function Dashboard() {
       ) : null}
 
       {/* Recent expenses */}
-      <Animated.View entering={FadeInDown.delay(340).duration(420)}>
+      <Animated.View entering={FadeInDown.delay(510).springify().damping(16).stiffness(140)}>
         <View style={s.sectionRow}>
           <Text style={s.sectionTitle}>{T.dashboard.expensesHeader}</Text>
           <PressableScale onPress={() => router.push("/expenses")}>
@@ -309,7 +360,8 @@ export default function Dashboard() {
         onClose={() => setBudgetModal(false)}
         onSave={(value) => setBudget(selectedMonth, value)}
       />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -470,7 +522,7 @@ function makeStyles(C: Palette) {
     monthText: { color: C.t1, fontWeight: "700", fontSize: 16 },
     monthHint: { color: C.t3, fontSize: 11, marginTop: 2 },
 
-    hero: { borderRadius: 24, padding: 20, shadowColor: "#6366F1", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8 },
+    hero: { borderRadius: 24, padding: 20, shadowColor: "#FF3D68", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8 },
     heroTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     heroLabel: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: "600" },
     heroBudgetBtn: { backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
@@ -486,6 +538,15 @@ function makeStyles(C: Palette) {
     statValue: { color: C.t1, fontSize: 17, fontWeight: "800", letterSpacing: -0.4 },
     statLabel: { color: C.t3, fontSize: 11, fontWeight: "600", marginTop: 1 },
     spark: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: 16, marginTop: 8 },
+
+    nextEventContent: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
+    nextEventIcon: { width: 46, height: 46, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+    nextEventLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+    nextEventTitle: { color: C.t1, fontSize: 16, fontWeight: "800", letterSpacing: -0.3, marginTop: 2 },
+    nextEventDaysWrap: { alignItems: "center" },
+    nextEventDays: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+    nextEventDaysLabel: { color: C.t3, fontSize: 10, fontWeight: "600", marginTop: 1 },
+    nextEventEmpty: { color: C.t3, fontSize: 13, fontWeight: "500", textAlign: "center", flex: 1 },
 
     card: { backgroundColor: C.card, borderRadius: 22, padding: 16, marginTop: 16, borderWidth: 1, borderColor: C.border, ...SHADOWS.md },
     cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },

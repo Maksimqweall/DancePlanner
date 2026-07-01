@@ -1,12 +1,14 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { View, Text, StyleSheet, Platform, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import PressableScale from "./PressableScale";
 import { GRADIENTS, SHADOWS, glow, type Palette, type GradientName } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 import { useHintsStore } from "../../store/useHintsStore";
+
 
 interface Props {
   /** Stable id — once dismissed, this hint never shows again for the user. */
@@ -46,6 +48,11 @@ export default function Hint({ id, title, text, gradient = "brand", icon = "bulb
       exiting={FadeOut.duration(220)}
       style={[s.card, glow(colors[0], 16, 0.28), style]}
     >
+      <BlurView
+        intensity={Platform.OS === "web" ? 0 : 35}
+        tint="dark"
+        style={StyleSheet.absoluteFill}
+      />
       <LinearGradient
         colors={[`${colors[0]}1F`, "transparent"]}
         start={{ x: 0, y: 0 }}
@@ -81,9 +88,9 @@ function makeStyles(C: Palette) {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 12,
-      backgroundColor: C.card,
+      backgroundColor: "rgba(20,14,16,0.32)",
       borderWidth: 1,
-      borderColor: C.border,
+      borderColor: "rgba(255,255,255,0.22)",
       borderRadius: 18,
       paddingVertical: 14,
       paddingLeft: 18,

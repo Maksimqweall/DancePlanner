@@ -17,21 +17,15 @@ import { useFinanceStore } from "../../../store/useFinanceStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
 import { formatMoney, CURRENCIES, CURRENCY_ORDER } from "../../../lib/display";
 import PressableScale from "../../../components/ui/PressableScale";
+import AppBackground from "../../../components/ui/AppBackground";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
-import { useThemeStore, type ThemeMode } from "../../../store/useThemeStore";
 import { useLanguageStore, type Language } from "../../../store/useLanguageStore";
 import { api } from "../../../lib/api";
 import { useWdsfStore } from "../../../store/useWdsfStore";
 import { useHintsStore } from "../../../store/useHintsStore";
 import { useToastStore } from "../../../store/useToastStore";
-
-const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string }[] = [
-  { key: "light",  label: "Light",  icon: "☀" },
-  { key: "dark",   label: "Dark",   icon: "☾" },
-  { key: "system", label: "System", icon: "⚙" },
-];
 
 const LANG_OPTIONS: { key: Language; flag: string }[] = [
   { key: "en", flag: "🇬🇧" },
@@ -48,8 +42,6 @@ export default function SettingsScreen() {
   const user   = useAuthStore((st) => st.user);
   const logout = useAuthStore((st) => st.logout);
   const setCurrency = useAuthStore((st) => st.setCurrency);
-  const mode = useThemeStore((st) => st.mode);
-  const setMode = useThemeStore((st) => st.setMode);
   const { language, setLanguage } = useLanguageStore();
   const { budgets, refresh, setBudget } = useFinanceStore();
   const { couple } = usePartnerStore();
@@ -85,10 +77,12 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView style={[s.screen, { backgroundColor: "transparent" }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
       {/* Profile card */}
-      <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.profileCard}>
+      <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.profileCard}>
         <View style={s.profileCardTopBand} />
         <View style={s.avatarWrap}>
           <View style={s.avatarGlow} />
@@ -104,7 +98,7 @@ export default function SettingsScreen() {
       </Animated.View>
 
       {/* WDSF Profile */}
-      <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.wdsfSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={() => router.push("/wdsf-profile")} style={s.settingsRow}>
@@ -131,7 +125,7 @@ export default function SettingsScreen() {
       </Animated.View>
 
       {/* Finance */}
-      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(90).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.financeSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={() => setBudgetModal(true)} style={s.settingsRow}>
@@ -160,35 +154,8 @@ export default function SettingsScreen() {
         </View>
       </Animated.View>
 
-      {/* Appearance */}
-      <Animated.View entering={FadeInDown.delay(80).duration(400)}>
-        <Text style={s.sectionLabel}>{T.settings.appearanceSection}</Text>
-        <View style={s.settingsCard}>
-          <View style={s.appearanceRow}>
-            {THEME_OPTIONS.map((opt) => {
-              const active = mode === opt.key;
-              const themeLabel = opt.key === "light"
-                ? T.settings.themeLight
-                : opt.key === "dark"
-                  ? T.settings.themeDark
-                  : T.settings.themeSystem;
-              return (
-                <PressableScale
-                  key={opt.key}
-                  onPress={() => setMode(opt.key)}
-                  style={[s.themeBtn, active && s.themeBtnActive]}
-                >
-                  <Text style={[s.themeIcon, active && s.themeIconActive]}>{opt.icon}</Text>
-                  <Text style={[s.themeLabel, active && s.themeLabelActive]}>{themeLabel}</Text>
-                </PressableScale>
-              );
-            })}
-          </View>
-        </View>
-      </Animated.View>
-
       {/* Language */}
-      <Animated.View entering={FadeInDown.delay(90).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(135).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.languageSection}</Text>
         <View style={s.settingsCard}>
           <View style={s.settingsRow}>
@@ -219,7 +186,7 @@ export default function SettingsScreen() {
       </Animated.View>
 
       {/* Partner */}
-      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(150).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.partnerSection}</Text>
         <View style={s.settingsCard}>
           <View style={s.settingsRow}>
@@ -237,7 +204,7 @@ export default function SettingsScreen() {
       </Animated.View>
 
       {/* Support */}
-      <Animated.View entering={FadeInDown.delay(140).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(210).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.supportSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={() => setContactModal(true)} style={s.settingsRow}>
@@ -271,7 +238,7 @@ export default function SettingsScreen() {
       </Animated.View>
 
       {/* Account */}
-      <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(270).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.accountSection}</Text>
         <View style={s.settingsCard}>
           <PressableScale onPress={handleLogout} style={s.settingsRow}>
@@ -298,7 +265,8 @@ export default function SettingsScreen() {
       />
 
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Circle, Rect, Line } from "react-native-svg";
 import type { Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
+import AppBackground from "../../components/ui/AppBackground";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 function WalletIcon({ color, size = 22 }: { color: string; size?: number }) {
@@ -54,29 +55,29 @@ function StarIcon({ color, size = 22 }: { color: string; size?: number }) {
 const FEATURES = [
   {
     Icon: WalletIcon,
-    color: "#6366F1",
-    fade: "#6366F115",
+    color: "#FF5B2E",
+    fade: "#FF5B2E15",
     title: "Smart Finance Tracking",
     desc: "Log every expense, set monthly budgets, and see where your money goes — by category, by month, at a glance.",
   },
   {
     Icon: CalendarIcon,
-    color: "#A855F7",
-    fade: "#A855F715",
+    color: "#FF2D95",
+    fade: "#FF2D9515",
     title: "Training Calendar",
     desc: "Schedule sessions and competitions, visualize your weekly training load, and never miss an important date.",
   },
   {
     Icon: UsersIcon,
-    color: "#6366F1",
-    fade: "#6366F115",
+    color: "#FF5B2E",
+    fade: "#FF5B2E15",
     title: "Real-Time Partner Sync",
     desc: "Your partner sees your schedule and expenses the moment you add them — live, bidirectional, always in sync.",
   },
   {
     Icon: TrophyIcon,
-    color: "#F59E0B",
-    fade: "#F59E0B15",
+    color: "#FFB020",
+    fade: "#FFB02015",
     title: "Event Management",
     desc: "Plan competitions and workshops end-to-end: timeline, countdown, budget, travel — all in one place.",
   },
@@ -90,9 +91,9 @@ const FEATURES = [
 ] as const;
 
 const WHY_ROWS = [
-  { accent: "#6366F1", label: "Built by competitive dancers", sub: "Every feature comes from real training-hall needs, not guesswork." },
-  { accent: "#A855F7", label: "One app, two athletes", sub: "Designed for couples — partner sync is a first-class feature, not an afterthought." },
-  { accent: "#F59E0B", label: "Premium without the bloat", sub: "Fast, focused, and beautiful — no upsell traps or dark patterns." },
+  { accent: "#FF5B2E", label: "Built by competitive dancers", sub: "Every feature comes from real training-hall needs, not guesswork." },
+  { accent: "#FF2D95", label: "One app, two athletes", sub: "Designed for couples — partner sync is a first-class feature, not an afterthought." },
+  { accent: "#FFB020", label: "Premium without the bloat", sub: "Fast, focused, and beautiful — no upsell traps or dark patterns." },
   { accent: "#10B981", label: "Private by design", sub: "Your data is encrypted and never shared or sold." },
 ] as const;
 
@@ -109,8 +110,10 @@ export default function AboutAppScreen() {
   const s = useMemo(() => makeStyles(C), [C]);
 
   return (
-    <ScrollView
-      style={s.screen}
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView
+      style={[s.screen, { backgroundColor: "transparent" }]}
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}
     >
@@ -149,7 +152,7 @@ export default function AboutAppScreen() {
       </Animated.View>
 
       {/* ── Features ── */}
-      <Animated.View entering={FadeInDown.delay(120).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(180).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>FEATURES</Text>
       </Animated.View>
 
@@ -170,7 +173,7 @@ export default function AboutAppScreen() {
       ))}
 
       {/* ── Why Dance Planner ── */}
-      <Animated.View entering={FadeInDown.delay(560).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(840).springify().damping(16).stiffness(140)}>
         <Text style={[s.sectionLabel, { marginTop: 8 }]}>WHY DANCE PLANNER</Text>
         <View style={s.whyCard}>
           {WHY_ROWS.map((row, i) => (
@@ -189,7 +192,7 @@ export default function AboutAppScreen() {
       </Animated.View>
 
       {/* ── Build info ── */}
-      <Animated.View entering={FadeInDown.delay(640).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(960).springify().damping(16).stiffness(140)}>
         <Text style={[s.sectionLabel, { marginTop: 8 }]}>ABOUT THIS APP</Text>
         <View style={s.infoCard}>
           {INFO_ROWS.map((row, i) => (
@@ -205,7 +208,7 @@ export default function AboutAppScreen() {
       </Animated.View>
 
       {/* ── Footer ── */}
-      <Animated.View entering={FadeInDown.delay(720).duration(400)} style={s.footer}>
+      <Animated.View entering={FadeInDown.delay(1080).springify().damping(16).stiffness(140)} style={s.footer}>
         <View style={s.footerLogo}>
           <Text style={s.footerLogoText}>DP</Text>
         </View>
@@ -214,7 +217,8 @@ export default function AboutAppScreen() {
       </Animated.View>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

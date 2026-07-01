@@ -35,6 +35,7 @@ import {
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
+import AppBackground from "../../components/ui/AppBackground";
 import { LinearGradient } from "expo-linear-gradient";
 import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
 import Hint from "../../components/ui/Hint";
@@ -106,8 +107,10 @@ function SetupScreen({
   };
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.setupContent} showsVerticalScrollIndicator={false}>
-      <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.setupHero}>
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView style={[s.screen, { backgroundColor: "transparent" }]} contentContainerStyle={s.setupContent} showsVerticalScrollIndicator={false}>
+      <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.setupHero}>
         <LinearGradient colors={GRADIENTS.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.wdsfLogoBox}>
           <Text style={[s.wdsfLogoText, { color: "#fff" }]}>WDSF</Text>
         </LinearGradient>
@@ -127,7 +130,7 @@ function SetupScreen({
         style={{ marginHorizontal: 0, marginBottom: 14 }}
       />
 
-      <Animated.View entering={FadeInDown.delay(80).duration(400)} style={s.setupCard}>
+      <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)} style={s.setupCard}>
         <Text style={s.inputLabel}>Member ID Number (MIN)</Text>
         <TextInput
           style={s.input}
@@ -152,7 +155,7 @@ function SetupScreen({
         </GradientButton>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(140).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(210).springify().damping(16).stiffness(140)}>
         <PressableScale onPress={() => setShowUrl(v => !v)} style={s.toggleRow}>
           <Text style={s.toggleText}>{showUrl ? "▾" : "▸"} Paste profile URL manually</Text>
         </PressableScale>
@@ -180,7 +183,8 @@ function SetupScreen({
       </Animated.View>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -244,10 +248,12 @@ function ProfileView({
 
   return (
     <>
-      <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView style={[s.screen, { backgroundColor: "transparent" }]} showsVerticalScrollIndicator={false}>
 
         {/* Hero card */}
-        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.heroCard}>
+        <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.heroCard}>
           <LinearGradient
             colors={["rgba(99,102,241,0.20)", "rgba(168,85,247,0.10)", "transparent"]}
             start={{ x: 0, y: 0 }}
@@ -283,7 +289,7 @@ function ProfileView({
         </Animated.View>
 
         {/* Summary stats strip */}
-        <Animated.View entering={FadeInDown.delay(40).duration(400)} style={s.statsRow}>
+        <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)} style={s.statsRow}>
           <StatBox label="Tournaments" value={profile.competitions.length > 0 ? String(profile.competitions.length) : "—"} />
           <View style={s.statsDivider} />
           <StatBox label="Avg Place"   value={avgPlace} />
@@ -294,7 +300,7 @@ function ProfileView({
         </Animated.View>
 
         {/* General info */}
-        <Animated.View entering={FadeInDown.delay(80).duration(400)} style={s.profileSection}>
+        <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)} style={s.profileSection}>
           <SectionHeader title="General Information" />
           <View style={s.sectionCard}>
             <InfoRow label="Name"        value={profile.firstName || profile.name.split(" ")[0]} />
@@ -320,7 +326,7 @@ function ProfileView({
 
         {/* Partners */}
         {profile.partners.length > 0 ? (
-          <Animated.View entering={FadeInDown.delay(110).duration(400)} style={s.profileSection}>
+          <Animated.View entering={FadeInDown.delay(165).springify().damping(16).stiffness(140)} style={s.profileSection}>
             <SectionHeader
               title="Partners"
               subtitle={`${profile.partners.length} total · ${currentPartners.length} active`}
@@ -337,7 +343,7 @@ function ProfileView({
         ) : null}
 
         {/* Competition results */}
-        <Animated.View entering={FadeInDown.delay(140).duration(400)} style={s.profileSection}>
+        <Animated.View entering={FadeInDown.delay(210).springify().damping(16).stiffness(140)} style={s.profileSection}>
           <SectionHeader
             title="Competition Results"
             subtitle={profile.competitions.length > 0 ? `${profile.competitions.length} entries · tap for analytics` : undefined}
@@ -368,7 +374,7 @@ function ProfileView({
         </Animated.View>
 
         {/* Actions */}
-        <Animated.View entering={FadeInDown.delay(170).duration(400)} style={[s.actions, s.profileSection]}>
+        <Animated.View entering={FadeInDown.delay(255).springify().damping(16).stiffness(140)} style={[s.actions, s.profileSection]}>
           {updatedAgo ? <Text style={s.updatedText}>Last updated {updatedAgo}</Text> : null}
           <PressableScale style={s.refreshBtn} onPress={onRefresh} disabled={loading}>
             {loading ? <ActivityIndicator color={C.accent} size="small" /> : <Text style={s.refreshBtnText}>↺ Refresh from WDSF</Text>}
@@ -380,6 +386,7 @@ function ProfileView({
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      </View>
 
       {/* Analytics modal */}
       {selectedComp ? (

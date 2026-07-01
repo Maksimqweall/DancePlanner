@@ -18,6 +18,7 @@ import {
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
+import AppBackground from "../../components/ui/AppBackground";
 import Hint from "../../components/ui/Hint";
 import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
@@ -187,8 +188,10 @@ function LeaderboardView({
   const currentLabel = categories.find((c) => c.combinedType === selected)?.label ?? null;
 
   return (
-    <ScrollView
-      style={s.screen}
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView
+      style={[s.screen, { backgroundColor: "transparent" }]}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.accent} />}
     >
@@ -239,7 +242,7 @@ function LeaderboardView({
 
       {/* Podium — top 3 */}
       {podium.length === 3 ? (
-        <Animated.View entering={FadeInDown.delay(60).duration(420)} style={s.podiumRow}>
+        <Animated.View entering={FadeInDown.delay(90).springify().damping(16).stiffness(140)} style={s.podiumRow}>
           <PodiumPillar row={podium[1]} place={2} />
           <PodiumPillar row={podium[0]} place={1} />
           <PodiumPillar row={podium[2]} place={3} />
@@ -248,7 +251,7 @@ function LeaderboardView({
 
       {/* The rest (or the whole list when < 3 entries) */}
       {rest.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(100).duration(420)} style={s.listCard}>
+        <Animated.View entering={FadeInDown.delay(150).springify().damping(16).stiffness(140)} style={s.listCard}>
           {rest.map((r, i) => (
             <Row key={r.userId} row={r} isLast={i === rest.length - 1} />
           ))}
@@ -257,7 +260,8 @@ function LeaderboardView({
 
       <Text style={s.disclaimer}>{t.leaderboard.disclaimer}</Text>
       <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

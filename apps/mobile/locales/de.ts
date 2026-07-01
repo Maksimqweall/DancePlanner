@@ -190,6 +190,10 @@ export const de: Translations = {
     seeAll: "Alle anzeigen →",
     noUpcoming: "Keine geplanten Ausgaben. Erstelle ein Turnier oder Lager um Kosten zu prognostizieren.",
     noExpensesIn: "Keine Ausgaben im",
+    nextEvent: "Nächstes Event",
+    noNextEvent: "Noch keine bevorstehenden Events",
+    daysToGo: "Tage verbleibend",
+    today: "Heute",
   },
   calendar: {
     title: "Kalender",

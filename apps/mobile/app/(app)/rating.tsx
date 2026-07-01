@@ -21,6 +21,7 @@ import {
 } from "../../store/useWdsfStore";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
+import AppBackground from "../../components/ui/AppBackground";
 import Hint from "../../components/ui/Hint";
 import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
@@ -196,7 +197,9 @@ function RatingView({
   }, [lastDanced]);
 
   return (
-    <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView style={[s.screen, { backgroundColor: "transparent" }]} showsVerticalScrollIndicator={false}>
 
       <CategoryTabs categories={categories} selected={selected} onSelect={onSelect} />
 
@@ -223,7 +226,7 @@ function RatingView({
       />
 
       {/* Hero — circular rating gauge */}
-      <Animated.View entering={FadeInDown.delay(0).duration(420)} style={s.heroCard}>
+      <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.heroCard}>
         <LinearGradient
           colors={[`${color}28`, `${color}10`, "transparent"]}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -238,7 +241,7 @@ function RatingView({
       </Animated.View>
 
       {/* Rank cards — world & regional */}
-      <Animated.View entering={FadeInDown.delay(60).duration(420)} style={s.rankRow}>
+      <Animated.View entering={FadeInDown.delay(90).springify().damping(16).stiffness(140)} style={s.rankRow}>
         <RankCard
           label="World Rank"
           value={rating.worldRank ? `#${rating.worldRank}` : "—"}
@@ -254,7 +257,7 @@ function RatingView({
       </Animated.View>
 
       {/* Quick stats strip */}
-      <Animated.View entering={FadeInDown.delay(100).duration(420)} style={s.statsRow}>
+      <Animated.View entering={FadeInDown.delay(150).springify().damping(16).stiffness(140)} style={s.statsRow}>
         <StatBox label="Avg Place" value={st.avgPlace != null ? st.avgPlace.toFixed(1) : "—"} />
         <View style={s.statsDivider} />
         <StatBox label="Finals" value={String(st.finals)} />
@@ -265,7 +268,7 @@ function RatingView({
       </Animated.View>
 
       {/* Upset / form highlight strip */}
-      <Animated.View entering={FadeInDown.delay(130).duration(420)} style={s.highlightRow}>
+      <Animated.View entering={FadeInDown.delay(195).springify().damping(16).stiffness(140)} style={s.highlightRow}>
         <HighlightCard icon="▲" tint={C.accent} label="Upset wins" value={String(st.upsetWins)} hint="beat higher-ranked" />
         <HighlightCard icon="▼" tint={C.red} label="Bad losses" value={String(st.badLosses)} hint="lost to lower-ranked" />
         <HighlightCard
@@ -278,7 +281,7 @@ function RatingView({
       </Animated.View>
 
       {/* Components breakdown */}
-      <Animated.View entering={FadeInDown.delay(160).duration(420)} style={s.section}>
+      <Animated.View entering={FadeInDown.delay(240).springify().damping(16).stiffness(140)} style={s.section}>
         <SectionHeader title="Rating breakdown" subtitle="What lifts your score" />
         <View style={s.sectionCard}>
           {rating.components.map((c, i) => (
@@ -293,7 +296,7 @@ function RatingView({
 
       {/* Bonuses — prestige-tournament boosts */}
       {rating.bonuses.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(185).duration(420)} style={s.section}>
+        <Animated.View entering={FadeInDown.delay(278).springify().damping(16).stiffness(140)} style={s.section}>
           <SectionHeader title="Bonuses" subtitle="Marquee tournament boosts" />
           <View style={s.sectionCard}>
             {rating.bonuses.map((b, i) => (
@@ -312,7 +315,7 @@ function RatingView({
 
       {/* Penalties */}
       {rating.penalties.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(190).duration(420)} style={s.section}>
+        <Animated.View entering={FadeInDown.delay(285).springify().damping(16).stiffness(140)} style={s.section}>
           <SectionHeader title="Penalties" subtitle="What pulls your score down" />
           <View style={s.sectionCard}>
             {rating.penalties.map((p, i) => (
@@ -331,7 +334,7 @@ function RatingView({
 
       {/* Deep per-event analysis */}
       {rating.events.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(220).duration(420)} style={s.section}>
+        <Animated.View entering={FadeInDown.delay(330).springify().damping(16).stiffness(140)} style={s.section}>
           <SectionHeader
             title="Recent tournaments"
             subtitle={`${rating.events.length} analysed in depth`}
@@ -345,7 +348,7 @@ function RatingView({
       ) : null}
 
       {/* Refresh */}
-      <Animated.View entering={FadeInDown.delay(250).duration(420)} style={s.section}>
+      <Animated.View entering={FadeInDown.delay(375).springify().damping(16).stiffness(140)} style={s.section}>
         <PressableScale style={s.refreshBtn} onPress={onRefresh} disabled={loading}>
           {loading ? <ActivityIndicator color={C.accent} size="small" /> : <Text style={s.refreshBtnText}>↺ Recalculate rating</Text>}
         </PressableScale>
@@ -357,7 +360,8 @@ function RatingView({
       </Animated.View>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

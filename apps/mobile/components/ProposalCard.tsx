@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Proposal } from "../lib/types";
 import { formatMoney, formatShortDate } from "../lib/display";
 import PressableScale from "./ui/PressableScale";
-import type { Palette } from "../lib/theme";
+import { stagger, type Palette } from "../lib/theme";
 import { useC } from "../lib/useTheme";
 
 const PROPOSAL_META: Record<string, { icon: string; label: string }> = {
@@ -48,7 +48,7 @@ export default function ProposalCard({
     : null;
 
   return (
-    <Animated.View entering={index < 8 ? FadeInDown.delay(index * 55).duration(350) : undefined}>
+    <Animated.View entering={index < 8 ? FadeInDown.delay(stagger(index, 90)).springify().damping(16).stiffness(140) : undefined}>
       <View style={styles.card}>
         {/* Icon + title row */}
         <View style={styles.topRow}>

@@ -49,7 +49,7 @@ export default function ForgotPassword() {
     >
       <View style={styles.inner}>
 
-        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.header}>
+        <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={styles.header}>
           <PressableScale onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </PressableScale>

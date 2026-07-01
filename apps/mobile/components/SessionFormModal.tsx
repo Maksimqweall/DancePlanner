@@ -8,7 +8,9 @@ import {
   Switch,
   StyleSheet,
   ActivityIndicator,
+  Platform,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { SESSION_META, SESSION_ORDER, currencySymbol } from "../lib/display";
 import type { ScheduleEntry, SessionType } from "../lib/types";
 import type { CreateScheduleInput } from "../store/useScheduleStore";
@@ -165,7 +167,17 @@ export default function SessionFormModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={s.overlay}>
+        <BlurView
+          intensity={Platform.OS === "web" ? 0 : 25}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
         <View style={s.sheet}>
+          <BlurView
+            intensity={Platform.OS === "web" ? 0 : 45}
+            tint="dark"
+            style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}
+          />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={s.handle} />
 
@@ -435,16 +447,17 @@ export default function SessionFormModal({
 
 function makeStyles(C: Palette) {
   return StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" },
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" },
   sheet: {
-    backgroundColor: C.card,
+    backgroundColor: "rgba(20,14,16,0.40)",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
     maxHeight: "92%",
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: "rgba(255,255,255,0.22)",
     borderBottomWidth: 0,
+    overflow: "hidden",
   },
   handle: {
     width: 36, height: 4,

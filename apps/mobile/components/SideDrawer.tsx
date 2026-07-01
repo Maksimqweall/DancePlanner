@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { BlurView } from "expo-blur";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -201,6 +202,11 @@ export default function SideDrawer() {
         panelStyle,
         { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
       ]}>
+        <BlurView
+          intensity={Platform.OS === "web" ? 0 : 50}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
 
         {/* ── User card ── */}
         <View style={s.userCard}>
@@ -372,7 +378,8 @@ function makeStyles(C: Palette) {
     position: "absolute",
     top: 0, left: 0, bottom: 0,
     width: DRAWER_W,
-    backgroundColor: C.card,
+    backgroundColor: "rgba(20,14,16,0.38)",
+    overflow: "hidden",
     borderRightWidth: 1,
     borderRightColor: C.borderStrong,
     paddingHorizontal: 16,

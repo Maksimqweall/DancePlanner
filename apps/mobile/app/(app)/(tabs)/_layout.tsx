@@ -1,7 +1,8 @@
-import { Pressable, View, Text, StyleSheet } from "react-native";
+import { Pressable, View, Text, StyleSheet, Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import Svg, { Path, Rect, Circle } from "react-native-svg";
 import type { BottomTabBarProps } from "expo-router/build/react-navigation/bottom-tabs";
 import { DrawerProvider, useDrawer } from "../../../lib/DrawerContext";
@@ -99,7 +100,13 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View style={[tb.bar, { backgroundColor: T.card, borderTopColor: T.border, paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[tb.bar, { borderTopColor: "rgba(255,255,255,0.18)", paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <BlurView
+        intensity={Platform.OS === "web" ? 0 : 55}
+        tint="dark"
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(20,14,16,0.30)" }]} />
       <View style={tb.inner}>
         {state.routes.map((route: { key: string; name: string; params?: object }, index: number) => {
           const isFocused = state.index === index;
@@ -225,10 +232,10 @@ const s = StyleSheet.create({
 
 const tb = StyleSheet.create({
   bar: {
-    backgroundColor: C.card,
     borderTopWidth: 1,
     borderTopColor: C.border,
     paddingTop: 6,
+    overflow: "hidden",
   },
   inner: { flexDirection: "row" },
   tab: {

@@ -11,11 +11,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import PressableScale from "../components/ui/PressableScale";
+import AppBackground from "../components/ui/AppBackground";
 import { useC } from "../lib/useTheme";
 import { useT } from "../lib/i18n";
 import { useOnboardingStore } from "../store/useOnboardingStore";
-import type { Palette } from "../lib/theme";
+import { GRADIENTS, type Palette } from "../lib/theme";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 
@@ -163,6 +165,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={s.root}>
+      <AppBackground />
       {/* Slide pager */}
       <ScrollView
         ref={scrollRef}
@@ -205,13 +208,17 @@ export default function OnboardingScreen() {
             </PressableScale>
           ) : <View style={s.skipBtn} />}
 
-          <PressableScale
-            style={[s.nextBtn, { backgroundColor: accent }]}
-            onPress={handleNext}
-          >
-            <Text style={s.nextBtnText}>
-              {isLast ? T.onboarding.getStarted : T.onboarding.next}
-            </Text>
+          <PressableScale style={s.nextBtn} onPress={handleNext}>
+            <LinearGradient
+              colors={GRADIENTS.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={s.nextBtnFill}
+            >
+              <Text style={s.nextBtnText}>
+                {isLast ? T.onboarding.getStarted : T.onboarding.next}
+              </Text>
+            </LinearGradient>
           </PressableScale>
         </View>
 
@@ -257,7 +264,7 @@ function SlideView({
     <View style={[s.slide, { width: SW }]}>
       {/* Icon bubble */}
       <Animated.View
-        entering={FadeInDown.delay(100).duration(500)}
+        entering={FadeInDown.delay(150).springify().damping(16).stiffness(140)}
         style={[s.iconBubble, { backgroundColor: `${accent}18`, borderColor: `${accent}30` }]}
       >
         <Text style={s.icon}>{slide.icon}</Text>
@@ -265,7 +272,7 @@ function SlideView({
 
       {/* Title */}
       <Animated.Text
-        entering={FadeInDown.delay(180).duration(500)}
+        entering={FadeInDown.delay(270).springify().damping(16).stiffness(140)}
         style={[s.title, { color: C.t1 }]}
       >
         {title}
@@ -273,7 +280,7 @@ function SlideView({
 
       {/* Description */}
       <Animated.Text
-        entering={FadeInDown.delay(240).duration(500)}
+        entering={FadeInDown.delay(360).springify().damping(16).stiffness(140)}
         style={[s.desc, { color: C.t2 }]}
       >
         {desc}
@@ -356,14 +363,15 @@ function makeStyles(C: Palette) {
       fontSize: 56,
     },
     title: {
-      fontSize: 26,
-      fontWeight: "800",
-      letterSpacing: -0.5,
+      fontSize: 28,
+      fontWeight: "900",
+      letterSpacing: -0.6,
       textAlign: "center",
-      lineHeight: 34,
+      lineHeight: 36,
     },
     desc: {
       fontSize: 15,
+      fontWeight: "300",
       textAlign: "center",
       lineHeight: 23,
       maxWidth: 320,
@@ -454,6 +462,14 @@ function makeStyles(C: Palette) {
     nextBtn: {
       flex: 1,
       borderRadius: 16,
+      overflow: "hidden",
+      shadowColor: "#FF3D68",
+      shadowOpacity: 0.4,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+    },
+    nextBtnFill: {
       paddingVertical: 16,
       alignItems: "center",
     },

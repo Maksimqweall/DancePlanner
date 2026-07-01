@@ -13,9 +13,10 @@ import { ApiError } from "../../../lib/api";
 import { DateField } from "../../../components/DateTimeField";
 import PressableScale from "../../../components/ui/PressableScale";
 import { AnimatedProgress } from "../../../components/ui/AnimatedProgress";
-import type { Palette } from "../../../lib/theme";
+import { stagger, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
+import AppBackground from "../../../components/ui/AppBackground";
 
 function todayISO(): string { return new Date().toISOString().slice(0, 10); }
 
@@ -55,10 +56,11 @@ export default function ProjectsScreen() {
 
   return (
     <View style={styles.screen}>
+      <AppBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
         {/* ── Title ────────────────────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.titleRow}>
+        <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={styles.titleRow}>
           <Text style={styles.pageTitle}>{T.events.title}</Text>
           <PressableScale style={styles.addBtn} onPress={() => setModalOpen(true)}>
             <Text style={styles.addBtnText}>{T.events.addNew}</Text>
@@ -67,7 +69,7 @@ export default function ProjectsScreen() {
 
         {/* ── Summary strip ────────────────────────────────────────────────── */}
         {projects.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(40).duration(450)}>
+          <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
             <View style={styles.summaryCard}>
               <SummaryChip label={T.events.total} value={String(stats.total)} color={C.t1} icon="🏆" />
               <View style={styles.summaryDivider} />
@@ -90,7 +92,7 @@ export default function ProjectsScreen() {
 
         {/* ── Project list ──────────────────────────────────────────────────── */}
         {projects.length === 0 ? (
-          <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.emptyCard}>
+          <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)} style={styles.emptyCard}>
             <Text style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🏆</Text>
             <Text style={styles.emptyTitle}>{T.events.noEvents}</Text>
             <Text style={styles.emptyText}>{T.events.noEventsDesc}</Text>
@@ -148,7 +150,7 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
 
   return (
     <Animated.View
-      entering={index < 8 ? FadeInDown.delay(index * 60 + 80).duration(380) : undefined}
+      entering={index < 8 ? FadeInDown.delay(stagger(index, 90) + 80).springify().damping(16).stiffness(140) : undefined}
       style={{ opacity: status === "past" ? 0.6 : 1 }}
     >
       <PressableScale onPress={onPress} style={[styles.projectCard, status === "active" && styles.projectCardActive]}>

@@ -17,8 +17,9 @@ import { CompetitionAnalyticsModal } from "./wdsf-profile";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
 import Hint from "../../components/ui/Hint";
+import AppBackground from "../../components/ui/AppBackground";
 import { useC } from "../../lib/useTheme";
-import type { Palette } from "../../lib/theme";
+import { stagger, type Palette } from "../../lib/theme";
 
 // Build the synthetic `comp` the shared modal expects from a saved record's meta.
 function toComp(meta: { competitionName: string; date: string | null; discipline: string | null; category: string | null; place: string | null }): WdsfCompetition {
@@ -74,7 +75,9 @@ export default function ManualAnalysisScreen() {
 
   return (
     <>
-      <ScrollView style={s.root} contentContainerStyle={{ padding: 16, gap: 14 }} showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView style={[s.root, { backgroundColor: "transparent" }]} contentContainerStyle={{ padding: 16, gap: 14 }} showsVerticalScrollIndicator={false}>
         <Text style={s.title}>Manual Analysis</Text>
         <Text style={s.subtitle}>
           Paste a competition results link (TopTurnier). We find your couple by your account
@@ -118,7 +121,7 @@ export default function ManualAnalysisScreen() {
         ) : null}
 
         {list.map((c, i) => (
-          <Animated.View key={c.id} entering={FadeInDown.delay(i * 40).springify()}>
+          <Animated.View key={c.id} entering={FadeInDown.delay(stagger(i, 90)).springify().damping(16).stiffness(140)}>
             <PressableScale style={s.card} onPress={() => onOpen(c)}>
               <View style={{ flex: 1 }}>
                 <Text style={s.cardTitle} numberOfLines={2}>{c.competitionName}</Text>
@@ -146,6 +149,7 @@ export default function ManualAnalysisScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      </View>
 
       {open ? (
         <CompetitionAnalyticsModal

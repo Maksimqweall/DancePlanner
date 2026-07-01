@@ -190,6 +190,10 @@ export const uk: Translations = {
     seeAll: "Всі →",
     noUpcoming: "Немає запланованих витрат. Створіть турнір або табір для прогнозу.",
     noExpensesIn: "Витрат немає в",
+    nextEvent: "Найближча подія",
+    noNextEvent: "Поки немає майбутніх подій",
+    daysToGo: "днів залишилось",
+    today: "Сьогодні",
   },
   calendar: {
     title: "Розклад",

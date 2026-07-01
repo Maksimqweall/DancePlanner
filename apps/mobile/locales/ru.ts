@@ -190,6 +190,10 @@ export const ru: Translations = {
     seeAll: "Все →",
     noUpcoming: "Нет запланированных расходов. Создайте турнир или лагерь для прогноза.",
     noExpensesIn: "Нет расходов в",
+    nextEvent: "Ближайшее событие",
+    noNextEvent: "Пока нет предстоящих событий",
+    daysToGo: "дней осталось",
+    today: "Сегодня",
   },
   calendar: {
     title: "Расписание",

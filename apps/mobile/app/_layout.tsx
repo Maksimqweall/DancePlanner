@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { useAuthStore } from "../store/useAuthStore";
 import { useOnboardingStore } from "../store/useOnboardingStore";
-import { useC, useScheme } from "../lib/useTheme";
+import { useC } from "../lib/useTheme";
 import { FONT_ASSETS, installTypography } from "../lib/typography";
 import SplashScreen from "../components/SplashScreen";
 
@@ -23,8 +23,7 @@ export default function RootLayout() {
   const router   = useRouter();
   const segments = useSegments();
   const C        = useC();
-  const scheme   = useScheme();
-  const statusBarStyle = scheme === "light" ? "dark" : "light";
+  const statusBarStyle = "light" as const;
 
   const [splashDone, setSplashDone] = useState(false);
 

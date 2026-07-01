@@ -22,6 +22,7 @@ import { useT } from "../../../lib/i18n";
 import Hint from "../../../components/ui/Hint";
 import { DateField } from "../../../components/DateTimeField";
 import type { ProposalType } from "../../../lib/types";
+import AppBackground from "../../../components/ui/AppBackground";
 
 const PROPOSAL_TYPES: { type: ProposalType; icon: string; label: string }[] = [
   { type: "TRAINING", icon: "💃", label: "Training" },
@@ -274,6 +275,7 @@ export default function PartnerScreen() {
 
   return (
     <View style={styles.screen}>
+      <AppBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
         <Hint
@@ -287,7 +289,7 @@ export default function PartnerScreen() {
 
         {/* ── No partner ───────────────────────────────────────────────────── */}
         {!couple ? (
-          <Animated.View entering={FadeInDown.delay(0).duration(450)}>
+          <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
             <View style={styles.heroCard}>
               <Text style={styles.heroEmoji}>👥</Text>
               <Text style={styles.heroTitle}>{T.partner.connectTitle}</Text>
@@ -316,7 +318,7 @@ export default function PartnerScreen() {
         ) : (
           <>
             {/* ── Partner card ──────────────────────────────────────────── */}
-            <Animated.View entering={FadeInDown.delay(0).duration(400)}>
+            <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
               <View style={styles.partnerCard}>
                 <View style={styles.partnerAvatar}>
                   <Text style={styles.partnerAvatarText}>
@@ -338,7 +340,7 @@ export default function PartnerScreen() {
             </Animated.View>
 
             {/* ── Team chat ─────────────────────────────────────────────── */}
-            <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+            <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
               <PressableScale onPress={() => router.push("/chat")} style={styles.chatBtn}>
                 <Text style={styles.chatBtnIcon}>💬</Text>
                 <View style={{ flex: 1 }}>
@@ -352,7 +354,7 @@ export default function PartnerScreen() {
             </Animated.View>
 
             {/* ── Coach ─────────────────────────────────────────────────── */}
-            <Animated.View entering={FadeInDown.delay(70).duration(400)}>
+            <Animated.View entering={FadeInDown.delay(105).springify().damping(16).stiffness(140)}>
               {couple.coach ? (
                 <View style={styles.coachCard}>
                   <View style={styles.coachAvatar}>
@@ -393,7 +395,7 @@ export default function PartnerScreen() {
 
             {/* ── Split section ─────────────────────────────────────────── */}
             {split && filteredSplit ? (
-              <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+              <Animated.View entering={FadeInDown.delay(90).springify().damping(16).stiffness(140)}>
                 {/* Header + period */}
                 <View style={styles.splitHeader}>
                   <Text style={styles.sectionLabel}>{T.partner.expenseSplit}</Text>
@@ -430,7 +432,7 @@ export default function PartnerScreen() {
             ) : null}
 
             {/* ── Proposals ─────────────────────────────────────────────── */}
-            <Animated.View entering={FadeInDown.delay(110).duration(400)}>
+            <Animated.View entering={FadeInDown.delay(165).springify().damping(16).stiffness(140)}>
               <View style={styles.tabRow}>
                 <PressableScale
                   onPress={() => setTab("inbox")}
@@ -450,7 +452,7 @@ export default function PartnerScreen() {
             </Animated.View>
 
             {displayed.length === 0 ? (
-              <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+              <Animated.View entering={FadeInDown.delay(225).springify().damping(16).stiffness(140)}>
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>
                     {tab === "inbox" ? T.partner.noInbox : T.partner.noSent}

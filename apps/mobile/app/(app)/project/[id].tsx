@@ -32,6 +32,7 @@ import { DateField } from "../../../components/DateTimeField";
 import ExpenseFormModal from "../../../components/ExpenseFormModal";
 import CategoryDonut, { type DonutSlice } from "../../../components/CategoryDonut";
 import PressableScale from "../../../components/ui/PressableScale";
+import AppBackground from "../../../components/ui/AppBackground";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 
@@ -126,7 +127,9 @@ export default function ProjectDetail() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={{ flex: 1 }}>
+      <AppBackground />
+      <ScrollView style={[styles.screen, { backgroundColor: "transparent" }]} contentContainerStyle={styles.content}>
       <Stack.Screen
         options={{
           title: project.title,
@@ -139,7 +142,7 @@ export default function ProjectDetail() {
       />
 
       {/* Hero header */}
-      <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.hero}>
+      <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={styles.hero}>
         <View style={styles.heroIconWrapper}>
           <Text style={styles.heroIcon}>{meta.icon}</Text>
         </View>
@@ -156,7 +159,7 @@ export default function ProjectDetail() {
       </Animated.View>
 
       {/* Budget summary */}
-      <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.budgetRow}>
+      <Animated.View entering={FadeInDown.delay(90).springify().damping(16).stiffness(140)} style={styles.budgetRow}>
         <BudgetStat label="Budget" value={project.budget != null ? formatMoney(project.budget) : "—"} />
         <View style={styles.budgetDivider} />
         <BudgetStat label="Planned" value={formatMoney(planned)} gold />
@@ -234,7 +237,7 @@ export default function ProjectDetail() {
       </Section>
 
       {/* Add expense */}
-      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(300).springify().damping(16).stiffness(140)}>
         <PressableScale onPress={() => setExpenseModal(true)} style={styles.addExpenseBtn}>
           <Text style={styles.addExpenseBtnText}>+ Add expense to this event</Text>
         </PressableScale>
@@ -303,7 +306,7 @@ export default function ProjectDetail() {
         )}
       </Section>
 
-      <Animated.View entering={FadeInDown.delay(280).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(420).springify().damping(16).stiffness(140)}>
         <PressableScale onPress={onDeleteProject} style={styles.deleteBtn}>
           <Text style={styles.deleteBtnText}>Delete event</Text>
         </PressableScale>
@@ -340,7 +343,8 @@ export default function ProjectDetail() {
         onClose={() => setEditModal(false)}
         onSave={async (input) => { await updateProject(project.id, input); setEditModal(false); }}
       />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

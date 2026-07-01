@@ -1,22 +1,12 @@
-import { useColorScheme } from "react-native";
-import { useThemeStore } from "../store/useThemeStore";
-import { LIGHT, DARK, type Palette } from "./theme";
+import { DARK, type Palette } from "./theme";
 
-// Returns the active palette, reacting to the user's theme preference
-// (and the OS scheme when set to "system"). Components build their styles
-// from this so they re-render on theme change.
+// The app is dark-only — the warm neon palette doesn't translate to a light
+// surface, so there's no theme toggle. These hooks stay in place so screens
+// don't need call-site changes if that ever changes again.
 export function useC(): Palette {
-  const mode = useThemeStore((s) => s.mode);
-  const system = useColorScheme();
-  const resolved = mode === "system" ? (system ?? "dark") : mode;
-  return resolved === "light" ? LIGHT : DARK;
+  return DARK;
 }
 
-// Convenience for components that need to know the resolved scheme
-// (e.g. status bar style, gradient stops).
-export function useScheme(): "light" | "dark" {
-  const mode = useThemeStore((s) => s.mode);
-  const system = useColorScheme();
-  const resolved = mode === "system" ? (system ?? "dark") : mode;
-  return resolved === "light" ? "light" : "dark";
+export function useScheme(): "dark" {
+  return "dark";
 }

@@ -6,7 +6,7 @@ import type { Expense } from "../lib/types";
 import { CATEGORY_META, formatMoney, formatShortDate } from "../lib/display";
 import PressableScale from "./ui/PressableScale";
 import { useC } from "../lib/useTheme";
-import type { Palette } from "../lib/theme";
+import { stagger, type Palette } from "../lib/theme";
 
 interface Props {
   expense: Expense;
@@ -22,7 +22,7 @@ export default function TransactionCard({ expense, onDelete, index = 0 }: Props)
   const title = expense.title || meta.label;
 
   return (
-    <Animated.View entering={index < 8 ? FadeInDown.delay(index * 55).duration(380) : undefined}>
+    <Animated.View entering={index < 8 ? FadeInDown.delay(stagger(index, 90)).springify().damping(16).stiffness(140) : undefined}>
       <View style={styles.card}>
         <View style={styles.iconWrapper}>
           <View style={[styles.iconCircle, { backgroundColor: meta.hex + '22' }]}>

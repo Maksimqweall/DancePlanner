@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import GradientButton from "../../components/ui/GradientButton";
+import AppBackground from "../../components/ui/AppBackground";
 import { GRADIENTS, type Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 
@@ -78,9 +79,10 @@ export default function Signup() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.root}
     >
+      <AppBackground />
       <NameNoticeModal visible={showNameNotice} onClose={() => setShowNameNotice(false)} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Animated.View entering={FadeInDown.delay(50).duration(500)} style={styles.header}>
+        <Animated.View entering={FadeInDown.delay(75).springify().damping(16).stiffness(140)} style={styles.header}>
           <Text style={styles.title}>Create account</Text>
           <Text style={styles.subtitle}>Start tracking your dancesport budget</Text>
         </Animated.View>
@@ -197,8 +199,8 @@ function makeStyles(C: Palette) {
   root: { flex: 1, backgroundColor: C.bg },
   scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 },
   header: { marginBottom: 36 },
-  title: { color: C.t1, fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { color: C.t2, fontSize: 15, marginTop: 6 },
+  title: { color: C.t1, fontSize: 32, fontWeight: '900', letterSpacing: -0.6 },
+  subtitle: { color: C.t2, fontSize: 15, fontWeight: '300', marginTop: 6 },
   form: { gap: 0 },
   errorBox: {
     backgroundColor: C.redFade,

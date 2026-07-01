@@ -163,7 +163,7 @@ function makeStyles(C: Palette) {
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 14,
-      shadowColor: "#6366F1",
+      shadowColor: C.accent,
       shadowOpacity: 0.45,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 8 },

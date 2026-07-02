@@ -10,13 +10,15 @@ interface AuthState {
   status: Status;
   user: User | null;
   hydrate: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   signup: (input: {
     email: string;
     password: string;
     firstName: string;
     lastName: string;
-  }) => Promise<void>;
+  }) => Promise<{ email: string }>;
+  verifyEmail: (email: string, code: string, rememberMe?: boolean) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   acceptPrivacy: () => Promise<void>;
   setMonthlyBudget: (budget: number) => Promise<void>;
@@ -28,6 +30,11 @@ interface AuthState {
 interface AuthResponse {
   token: string;
   user: User;
+}
+
+interface SignupResponse {
+  requiresVerification: true;
+  email: string;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -53,10 +60,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  login: async (email, password) => {
+  login: async (email, password, rememberMe) => {
     const { token, user } = await api.post<AuthResponse>("/auth/login", {
       email,
       password,
+      rememberMe,
     });
     await tokenStorage.set(token);
     setAuthToken(token);
@@ -65,14 +73,28 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signup: async (input) => {
-    const { token, user } = await api.post<AuthResponse>("/auth/signup", input);
+    const data = await api.post<SignupResponse>("/auth/signup", input);
+    return { email: data.email };
+  },
+
+  verifyEmail: async (email, code, rememberMe) => {
+    const { token, user } = await api.post<AuthResponse>("/auth/verify-email", {
+      email,
+      code,
+      rememberMe,
+    });
     await tokenStorage.set(token);
     setAuthToken(token);
     setDisplayCurrency(user.currency);
     set({ status: "authenticated", user });
   },
 
+  resendVerification: async (email) => {
+    await api.post("/auth/resend-verification", { email });
+  },
+
   logout: async () => {
+    await api.post("/auth/logout", {}).catch(() => {});
     await tokenStorage.clear();
     setAuthToken(null);
     set({ status: "unauthenticated", user: null });

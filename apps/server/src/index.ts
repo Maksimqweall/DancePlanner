@@ -60,10 +60,12 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/api/auth/login",            authLimiter);
-app.use("/api/auth/signup",           authLimiter);
-app.use("/api/auth/forgot-password",  authLimiter);
-app.use("/api/auth/reset-password",   authLimiter);
+app.use("/api/auth/login",                authLimiter);
+app.use("/api/auth/signup",               authLimiter);
+app.use("/api/auth/forgot-password",      authLimiter);
+app.use("/api/auth/reset-password",       authLimiter);
+app.use("/api/auth/verify-email",         authLimiter);
+app.use("/api/auth/resend-verification",  authLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/events", eventRoutes);
@@ -93,7 +95,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: err.message });
+    res.status(err.status).json({ error: err.message, code: err.code });
     return;
   }
   if (err instanceof Error && err.message === "Only PDF and image files are allowed") {

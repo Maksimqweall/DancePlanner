@@ -185,7 +185,9 @@ export default function PartnerScreen() {
   const myId = useAuthStore(st => st.user?.id);
   const {
     couple, pendingCount, proposals, split,
-    loading, fetchPartner, linkPartner, unlinkPartner, addCoach, removeCoach,
+    loading, fetchPartner, unlinkPartner, removeCoach,
+    invitesReceived, invitesSent, fetchInvites, sendPartnerInvite, sendCoachInvite,
+    respondInvite, cancelInvite,
     fetchProposals, fetchSplit, respondProposal, cancelProposal,
   } = usePartnerStore();
   const chatUnread = useChatStore(st => st.unread);
@@ -199,16 +201,43 @@ export default function PartnerScreen() {
   const [coachEmail, setCoachEmail] = useState("");
   const [coachError, setCoachError] = useState<string | null>(null);
   const [coachBusy, setCoachBusy] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const pendingSentPartnerInvite = invitesSent.find(i => i.type === "PARTNER");
+  const pendingSentCoachInvite = invitesSent.find(i => i.type === "COACH");
 
   const onAddCoach = async () => {
     if (!coachEmail.trim()) return;
     setCoachError(null); setCoachBusy(true);
     try {
-      await addCoach(coachEmail.trim());
+      await sendCoachInvite(coachEmail.trim());
       setCoachEmail("");
     } catch (e) {
-      setCoachError(e instanceof ApiError ? e.message : "Could not add coach");
+      setCoachError(e instanceof ApiError ? e.message : "Could not invite coach");
     } finally { setCoachBusy(false); }
+  };
+
+  const onAcceptInvite = async (id: string) => {
+    setRespondingId(id);
+    try { await respondInvite(id, "accept"); }
+    catch (e) { Alert.alert(T.common.error, e instanceof ApiError ? e.message : "Could not accept invite"); }
+    finally { setRespondingId(null); }
+  };
+
+  const onDeclineInvite = async (id: string) => {
+    setRespondingId(id);
+    try { await respondInvite(id, "decline"); }
+    catch (e) { Alert.alert(T.common.error, e instanceof ApiError ? e.message : "Could not decline invite"); }
+    finally { setRespondingId(null); }
+  };
+
+  const onCancelInvite = (id: string) => {
+    const doCancel = () => cancelInvite(id).catch(() => {});
+    if (Platform.OS === "web") { doCancel(); return; }
+    Alert.alert("Cancel invite", "Cancel this pending invite?", [
+      { text: T.common.cancel, style: "cancel" },
+      { text: "Cancel invite", style: "destructive", onPress: doCancel },
+    ]);
   };
 
   const onRemoveCoach = () => {
@@ -236,7 +265,7 @@ export default function PartnerScreen() {
   }, [split, splitPeriod]);
 
   useFocusEffect(useCallback(() => {
-    fetchPartner(); fetchProposals();
+    fetchPartner(); fetchProposals(); fetchInvites();
     if (couple) fetchSplit();
   }, [couple?.id]));
 
@@ -248,8 +277,8 @@ export default function PartnerScreen() {
     if (!connectEmail.trim()) return;
     setConnectError(null); setConnecting(true);
     try {
-      await linkPartner(connectEmail.trim());
-      setConnectEmail(""); await fetchProposals();
+      await sendPartnerInvite(connectEmail.trim());
+      setConnectEmail("");
     } catch (e) {
       setConnectError(e instanceof ApiError ? e.message : T.partner.errorConnect);
     } finally { setConnecting(false); }
@@ -289,32 +318,85 @@ export default function PartnerScreen() {
 
         {/* ── No partner ───────────────────────────────────────────────────── */}
         {!couple ? (
-          <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroEmoji}>👥</Text>
-              <Text style={styles.heroTitle}>{T.partner.connectTitle}</Text>
-              <Text style={styles.heroSubtitle}>{T.partner.connectSub}</Text>
-              {connectError ? <View style={styles.errorBox}><Text style={styles.errorText}>{connectError}</Text></View> : null}
-              <TextInput
-                style={styles.emailInput}
-                placeholder={T.partner.emailPlaceholder}
-                placeholderTextColor={C.t3}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                value={connectEmail}
-                onChangeText={setConnectEmail}
-              />
-              <PressableScale
-                onPress={onConnect}
-                disabled={connecting || !connectEmail.trim()}
-                style={[styles.connectBtn, !connectEmail.trim() && styles.connectBtnDisabled]}
-              >
-                {connecting
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.connectBtnText}>{T.partner.connectBtn}</Text>}
-              </PressableScale>
-            </View>
-          </Animated.View>
+          <>
+            {invitesReceived.length > 0 ? (
+              <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
+                {invitesReceived.map(inv => (
+                  <View key={inv.id} style={styles.inviteCard}>
+                    <Text style={styles.inviteTitle}>
+                      {inv.type === "COACH"
+                        ? `🎓 ${inv.sender?.firstName} ${inv.sender?.lastName} invited you to be their coach`
+                        : `👥 ${inv.sender?.firstName} ${inv.sender?.lastName} wants to sync as your dance partner`}
+                    </Text>
+                    <Text style={styles.inviteSub}>{inv.sender?.email}</Text>
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                      <PressableScale
+                        onPress={() => onAcceptInvite(inv.id)}
+                        disabled={respondingId === inv.id}
+                        style={[styles.connectBtn, { flex: 1 }]}
+                      >
+                        {respondingId === inv.id
+                          ? <ActivityIndicator color="#fff" />
+                          : <Text style={styles.connectBtnText}>Accept</Text>}
+                      </PressableScale>
+                      <PressableScale
+                        onPress={() => onDeclineInvite(inv.id)}
+                        disabled={respondingId === inv.id}
+                        style={[styles.disconnectBtn, { flex: 1, alignItems: "center", justifyContent: "center" }]}
+                      >
+                        <Text style={styles.disconnectText}>Decline</Text>
+                      </PressableScale>
+                    </View>
+                  </View>
+                ))}
+              </Animated.View>
+            ) : null}
+
+            <Animated.View entering={FadeInDown.delay(30).springify().damping(16).stiffness(140)}>
+              <View style={styles.heroCard}>
+                {pendingSentPartnerInvite ? (
+                  <>
+                    <Text style={styles.heroEmoji}>⏳</Text>
+                    <Text style={styles.heroTitle}>Invite sent</Text>
+                    <Text style={styles.heroSubtitle}>
+                      Waiting for {pendingSentPartnerInvite.receiver?.firstName} {pendingSentPartnerInvite.receiver?.lastName} to accept.
+                    </Text>
+                    <PressableScale
+                      onPress={() => onCancelInvite(pendingSentPartnerInvite.id)}
+                      style={[styles.disconnectBtn, { width: "100%", alignItems: "center", paddingVertical: 12 }]}
+                    >
+                      <Text style={styles.disconnectText}>Cancel invite</Text>
+                    </PressableScale>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.heroEmoji}>👥</Text>
+                    <Text style={styles.heroTitle}>{T.partner.connectTitle}</Text>
+                    <Text style={styles.heroSubtitle}>{T.partner.connectSub}</Text>
+                    {connectError ? <View style={styles.errorBox}><Text style={styles.errorText}>{connectError}</Text></View> : null}
+                    <TextInput
+                      style={styles.emailInput}
+                      placeholder={T.partner.emailPlaceholder}
+                      placeholderTextColor={C.t3}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      value={connectEmail}
+                      onChangeText={setConnectEmail}
+                    />
+                    <PressableScale
+                      onPress={onConnect}
+                      disabled={connecting || !connectEmail.trim()}
+                      style={[styles.connectBtn, !connectEmail.trim() && styles.connectBtnDisabled]}
+                    >
+                      {connecting
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={styles.connectBtnText}>{T.partner.connectBtn}</Text>}
+                    </PressableScale>
+                  </>
+                )}
+              </View>
+            </Animated.View>
+          </>
         ) : (
           <>
             {/* ── Partner card ──────────────────────────────────────────── */}
@@ -370,6 +452,19 @@ export default function PartnerScreen() {
                     </PressableScale>
                   ) : null}
                 </View>
+              ) : couple.role !== "coach" && pendingSentCoachInvite ? (
+                <View style={styles.coachAddCard}>
+                  <Text style={styles.coachAddTitle}>⏳ Coach invite sent</Text>
+                  <Text style={styles.coachAddSub}>
+                    Waiting for {pendingSentCoachInvite.receiver?.firstName} {pendingSentCoachInvite.receiver?.lastName} to accept.
+                  </Text>
+                  <PressableScale
+                    onPress={() => onCancelInvite(pendingSentCoachInvite.id)}
+                    style={[styles.disconnectBtn, { alignItems: "center", paddingVertical: 12 }]}
+                  >
+                    <Text style={styles.disconnectText}>Cancel invite</Text>
+                  </PressableScale>
+                </View>
               ) : couple.role !== "coach" ? (
                 <View style={styles.coachAddCard}>
                   <Text style={styles.coachAddTitle}>🎓 Add a coach</Text>
@@ -386,7 +481,7 @@ export default function PartnerScreen() {
                       onChangeText={setCoachEmail}
                     />
                     <PressableScale onPress={onAddCoach} disabled={coachBusy || !coachEmail.trim()} style={[styles.coachAddBtn, !coachEmail.trim() && { opacity: 0.5 }]}>
-                      {coachBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.coachAddBtnText}>Add</Text>}
+                      {coachBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.coachAddBtnText}>Invite</Text>}
                     </PressableScale>
                   </View>
                 </View>
@@ -615,6 +710,14 @@ function makeStyles(C: Palette) {
     ...SHADOWS.md,
   },
   heroEmoji: { fontSize: 48, marginBottom: 16 },
+  // Received invite card
+  inviteCard: {
+    backgroundColor: C.card, borderRadius: 20, padding: 18,
+    borderWidth: 1, borderColor: C.accentBorder, marginBottom: 16,
+    ...SHADOWS.sm,
+  },
+  inviteTitle: { color: C.t1, fontSize: 15, fontWeight: "700", lineHeight: 21 },
+  inviteSub: { color: C.t3, fontSize: 12, marginTop: 4 },
   heroTitle: { color: C.t1, fontSize: 22, fontWeight: "800", marginBottom: 10, textAlign: "center" },
   heroSubtitle: { color: C.t2, fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 24 },
   emailInput: {

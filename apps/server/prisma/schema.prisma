@@ -36,6 +36,12 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  // Email verification: accounts start unverified; login is blocked until the
+  // 6-character code sent at signup (or resend) is confirmed.
+  emailVerified          Boolean   @default(false)
+  verificationCode       String?
+  verificationCodeExpiry DateTime?
+
   // Module 1: target monthly spending budget
   monthlyBudget Float?
   // Preferred display currency (ISO 4217 code, e.g. EUR, USD, GBP)
@@ -59,9 +65,28 @@ model User {
   pushTokens      PushToken[]    // Expo push notification tokens
   categoryRatings WdsfCategoryRating[] // Per-category couple-rating snapshots (leaderboard)
   manualCompetitions ManualCompetition[] // Saved manual (TopTurnier) competition analyses
+  sessions        Session[]      // Active login sessions (idle-expiry tracking)
+  syncInvitesSent     SyncInvite[] @relation("SyncInviteSender")
+  syncInvitesReceived SyncInvite[] @relation("SyncInviteReceiver")
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+}
+
+// Login session, looked up on every authenticated request so an idle account
+// gets logged out instead of the JWT alone deciding session length. expiresAt
+// slides forward on activity: 7 days by default, 30 if "Remember me" was set.
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  rememberMe Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Couple {
@@ -79,8 +104,42 @@ model Couple {
   events      Event[]
   messages    Message[]
   reads       MessageRead[]
+  syncInvites SyncInvite[]
 
   createdAt   DateTime   @default(now())
+}
+
+// Partner/coach sync invites: the receiver must Accept before a Couple is
+// created (PARTNER) or a coach is attached to one (COACH) — no more auto-link.
+enum SyncInviteType {
+  PARTNER
+  COACH
+}
+
+enum SyncInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model SyncInvite {
+  id          String           @id @default(uuid())
+  type        SyncInviteType
+  senderId    String
+  receiverId  String
+  coupleId    String?          // set for COACH invites: which couple the coach would join
+  status      SyncInviteStatus @default(PENDING)
+
+  sender      User             @relation("SyncInviteSender", fields: [senderId], references: [id])
+  receiver    User             @relation("SyncInviteReceiver", fields: [receiverId], references: [id])
+  couple      Couple?          @relation(fields: [coupleId], references: [id])
+
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+
+  @@index([receiverId, status])
+  @@index([senderId, status])
 }
 
 // ==========================================

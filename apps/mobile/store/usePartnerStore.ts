@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { useAuthStore } from "./useAuthStore";
-import type { Couple, Proposal, SplitView } from "../lib/types";
+import type { Couple, Proposal, SplitView, SyncInvite } from "../lib/types";
 
 export interface CreateProposalInput {
   title: string;
@@ -24,12 +24,18 @@ interface PartnerState {
   proposals: Proposal[];
   split: SplitView | null;
   loading: boolean;
+  invitesReceived: SyncInvite[];
+  invitesSent: SyncInvite[];
 
   fetchPartner: () => Promise<void>;
-  linkPartner: (email: string) => Promise<void>;
   unlinkPartner: () => Promise<void>;
-  addCoach: (email: string) => Promise<void>;
   removeCoach: () => Promise<void>;
+
+  fetchInvites: () => Promise<void>;
+  sendPartnerInvite: (email: string) => Promise<void>;
+  sendCoachInvite: (email: string) => Promise<void>;
+  respondInvite: (id: string, action: "accept" | "decline") => Promise<void>;
+  cancelInvite: (id: string) => Promise<void>;
 
   fetchProposals: (direction?: "inbox" | "sent" | "all") => Promise<void>;
   createProposal: (input: CreateProposalInput) => Promise<void>;
@@ -45,6 +51,8 @@ export const usePartnerStore = create<PartnerState>((set, get) => ({
   proposals: [],
   split: null,
   loading: false,
+  invitesReceived: [],
+  invitesSent: [],
 
   fetchPartner: async () => {
     set({ loading: true });
@@ -56,24 +64,42 @@ export const usePartnerStore = create<PartnerState>((set, get) => ({
     }
   },
 
-  linkPartner: async (email) => {
-    const data = await api.post<{ couple: Couple }>("/partner/link", { email });
-    set({ couple: data.couple, pendingCount: 0 });
-  },
-
   unlinkPartner: async () => {
     await api.del("/partner");
     set({ couple: null, proposals: [], split: null, pendingCount: 0 });
   },
 
-  addCoach: async (email) => {
-    const data = await api.post<{ couple: Couple }>("/partner/coach", { email });
-    set({ couple: data.couple });
-  },
-
   removeCoach: async () => {
     await api.del("/partner/coach");
     await get().fetchPartner();
+  },
+
+  fetchInvites: async () => {
+    const data = await api.get<{ received: SyncInvite[]; sent: SyncInvite[] }>("/partner/invites");
+    set({ invitesReceived: data.received, invitesSent: data.sent });
+  },
+
+  sendPartnerInvite: async (email) => {
+    await api.post("/partner/invite", { email });
+    await get().fetchInvites();
+  },
+
+  sendCoachInvite: async (email) => {
+    await api.post("/partner/coach-invite", { email });
+    await get().fetchInvites();
+  },
+
+  respondInvite: async (id, action) => {
+    await api.post(`/partner/invites/${id}/${action}`, {});
+    await get().fetchInvites();
+    if (action === "accept") await get().fetchPartner();
+  },
+
+  cancelInvite: async (id) => {
+    await api.del(`/partner/invites/${id}`);
+    set((s) => ({
+      invitesSent: s.invitesSent.filter((i) => i.id !== id),
+    }));
   },
 
   fetchProposals: async (direction = "all") => {

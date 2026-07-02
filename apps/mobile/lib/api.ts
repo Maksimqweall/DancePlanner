@@ -8,25 +8,29 @@ export function setAuthToken(token: string | null) {
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
   details?: unknown;
-  constructor(status: number, message: string, details?: unknown) {
+  constructor(status: number, message: string, code?: string, details?: unknown) {
     super(message);
     this.status = status;
+    this.code = code;
     this.details = details;
   }
 }
 
 async function parseError(res: Response): Promise<ApiError> {
   let message = `Request failed (${res.status})`;
+  let code: string | undefined;
   let details: unknown;
   try {
     const body = await res.json();
     if (body?.error) message = body.error;
+    code = body?.code;
     details = body?.details;
   } catch {
     /* non-JSON error body */
   }
-  return new ApiError(res.status, message, details);
+  return new ApiError(res.status, message, code, details);
 }
 
 async function request<T>(

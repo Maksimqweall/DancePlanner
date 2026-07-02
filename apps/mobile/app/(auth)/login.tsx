@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useAuthStore } from "../../store/useAuthStore";
 import { ApiError } from "../../lib/api";
 import GradientButton from "../../components/ui/GradientButton";
 import AppBackground from "../../components/ui/AppBackground";
+import PressableScale from "../../components/ui/PressableScale";
 import type { Palette } from "../../lib/theme";
 import { useC } from "../../lib/useTheme";
 import Svg, { Path, Circle, Defs, RadialGradient, Stop, Ellipse } from "react-native-svg";
@@ -34,9 +35,12 @@ function LogoMark() {
 export default function Login() {
   const C = useC();
   const styles = useMemo(() => makeStyles(C), [C]);
+  const router = useRouter();
   const login = useAuthStore((st) => st.login);
+  const resendVerification = useAuthStore((st) => st.resendVerification);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
@@ -46,8 +50,13 @@ export default function Login() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, rememberMe);
     } catch (e) {
+      if (e instanceof ApiError && e.code === "EMAIL_NOT_VERIFIED") {
+        resendVerification(email.trim()).catch(() => {});
+        router.push({ pathname: "/verify-email", params: { email: email.trim() } });
+        return;
+      }
       setError(e instanceof ApiError ? e.message : "Something went wrong");
     } finally {
       setSubmitting(false);
@@ -100,6 +109,13 @@ export default function Login() {
             onFocus={() => setPasswordFocused(true)}
             onBlur={() => setPasswordFocused(false)}
           />
+
+          <PressableScale onPress={() => setRememberMe((v) => !v)} style={styles.rememberRow}>
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
+            </View>
+            <Text style={styles.rememberText}>Remember me for 30 days</Text>
+          </PressableScale>
 
           <GradientButton onPress={onSubmit} disabled={submitting} style={{ marginTop: 8 }}>
             {submitting ? (
@@ -189,6 +205,14 @@ function makeStyles(C: Palette) {
     borderColor: C.accentBorder,
     backgroundColor: C.elevated,
   },
+  rememberRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: C.border,
+    alignItems: "center", justifyContent: "center", marginRight: 10, backgroundColor: C.input,
+  },
+  checkboxChecked: { backgroundColor: C.accent, borderColor: C.accent },
+  checkboxMark: { color: "#fff", fontSize: 13, fontWeight: "800" },
+  rememberText: { color: C.t2, fontSize: 14, fontWeight: "500" },
   button: {
     backgroundColor: C.accent,
     borderRadius: 14,

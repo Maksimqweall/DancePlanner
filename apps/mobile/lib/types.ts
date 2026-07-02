@@ -170,6 +170,22 @@ export interface Couple {
   role?: "lead" | "follow" | "coach";
 }
 
+export type SyncInviteType = "PARTNER" | "COACH";
+export type SyncInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "CANCELLED";
+
+export interface SyncInvite {
+  id: string;
+  type: SyncInviteType;
+  senderId: string;
+  receiverId: string;
+  coupleId?: string | null;
+  status: SyncInviteStatus;
+  createdAt: string;
+  respondedAt?: string | null;
+  sender?: CouplePartner;
+  receiver?: CouplePartner;
+}
+
 export interface ChatMessageAuthor {
   id: string;
   firstName: string;

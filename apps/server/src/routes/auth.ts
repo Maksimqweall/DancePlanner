@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { signToken } from "../lib/jwt";
+import { createSession } from "../lib/session";
 import { asyncHandler, HttpError } from "../lib/http";
 import {
   signupSchema,
@@ -11,9 +12,22 @@ import {
   updateMeSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
 } from "../lib/validation";
 import { requireAuth } from "../middleware/auth";
-import { sendPasswordResetEmail } from "../lib/mailer";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/mailer";
+
+// 6-character uppercase hex code, e.g. "A3F9C2" — same shape as the
+// password-reset code so the mobile code-entry UI can be reused as-is.
+function generateCode(): string {
+  return crypto.randomBytes(3).toString("hex").toUpperCase();
+}
+
+async function issueSessionToken(userId: string, rememberMe: boolean): Promise<string> {
+  const session = await createSession(userId, rememberMe);
+  return signToken({ userId, sessionId: session.id });
+}
 
 const router = Router();
 
@@ -49,6 +63,9 @@ router.post(
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10);
+    const verificationCode = generateCode();
+    const verificationCodeExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
     let user;
     try {
       user = await prisma.user.create({
@@ -57,6 +74,8 @@ router.post(
           passwordHash,
           firstName: data.firstName,
           lastName: data.lastName,
+          verificationCode,
+          verificationCodeExpiry,
         },
       });
     } catch (err) {
@@ -69,8 +88,13 @@ router.post(
       throw err;
     }
 
-    const token = signToken({ userId: user.id });
-    res.status(201).json({ token, user: publicUser(user) });
+    // Best-effort — the account still exists if this fails; the user can hit
+    // "resend code" from the verify screen.
+    sendVerificationEmail(user.email, verificationCode).catch((err) => {
+      console.error("Verification email failed:", err);
+    });
+
+    res.status(201).json({ requiresVerification: true, email: user.email });
   })
 );
 
@@ -90,8 +114,88 @@ router.post(
       throw new HttpError(401, "Invalid email or password");
     }
 
-    const token = signToken({ userId: user.id });
+    if (!user.emailVerified) {
+      throw new HttpError(403, "Please verify your email first", "EMAIL_NOT_VERIFIED");
+    }
+
+    const token = await issueSessionToken(user.id, Boolean(data.rememberMe));
     res.json({ token, user: publicUser(user) });
+  })
+);
+
+// POST /api/auth/verify-email — confirms the signup code and performs the actual first login
+router.post(
+  "/verify-email",
+  asyncHandler(async (req, res) => {
+    const data = verifyEmailSchema.parse(req.body);
+
+    let user = await prisma.user.findUnique({ where: { email: data.email } });
+    if (!user) {
+      throw new HttpError(400, "Invalid or expired code");
+    }
+
+    if (!user.emailVerified) {
+      const code = data.code.trim().toUpperCase();
+      if (
+        !user.verificationCode ||
+        user.verificationCode !== code ||
+        !user.verificationCodeExpiry ||
+        user.verificationCodeExpiry < new Date()
+      ) {
+        throw new HttpError(400, "Invalid or expired code");
+      }
+
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true, verificationCode: null, verificationCodeExpiry: null },
+      });
+    }
+
+    const token = await issueSessionToken(user.id, Boolean(data.rememberMe));
+    res.json({ token, user: publicUser(user) });
+  })
+);
+
+// POST /api/auth/resend-verification
+router.post(
+  "/resend-verification",
+  asyncHandler(async (req, res) => {
+    const { email } = resendVerificationSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Always 200 — don't reveal whether the email is registered or already verified.
+    if (!user || user.emailVerified) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const verificationCode = generateCode();
+    const verificationCodeExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { verificationCode, verificationCodeExpiry },
+    });
+
+    try {
+      await sendVerificationEmail(email, verificationCode);
+    } catch (err) {
+      console.error("Verification email failed:", err);
+      throw new HttpError(502, "Could not send the verification email right now. Please try again later.");
+    }
+
+    res.json({ ok: true });
+  })
+);
+
+// POST /api/auth/logout — ends the current session server-side
+router.post(
+  "/logout",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (req.sessionId) {
+      await prisma.session.delete({ where: { id: req.sessionId } }).catch(() => {});
+    }
+    res.status(204).end();
   })
 );
 

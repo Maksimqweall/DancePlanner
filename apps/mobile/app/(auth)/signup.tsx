@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Modal,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -44,6 +44,7 @@ function InputField({
 export default function Signup() {
   const C = useC();
   const styles = useMemo(() => makeStyles(C), [C]);
+  const router = useRouter();
   const signup = useAuthStore((st) => st.signup);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -61,12 +62,13 @@ export default function Signup() {
     }
     setSubmitting(true);
     try {
-      await signup({
+      const { email: signedUpEmail } = await signup({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
         password,
       });
+      router.push({ pathname: "/verify-email", params: { email: signedUpEmail } });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Something went wrong");
     } finally {

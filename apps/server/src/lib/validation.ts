@@ -52,6 +52,17 @@ export const signupSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  rememberMe: z.boolean().optional(),
+});
+
+export const verifyEmailSchema = z.object({
+  email: z.string().email(),
+  code: z.string().min(1),
+  rememberMe: z.boolean().optional(),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email(),
 });
 
 // Supported display currencies (several European + US Dollar). Keep in sync with

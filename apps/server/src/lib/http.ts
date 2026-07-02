@@ -24,11 +24,14 @@ export function queryString(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-// A typed error carrying an HTTP status code.
+// A typed error carrying an HTTP status code and an optional machine-readable
+// code (e.g. "EMAIL_NOT_VERIFIED") clients can branch on without string-matching.
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }

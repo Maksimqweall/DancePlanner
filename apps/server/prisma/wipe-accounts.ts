@@ -11,6 +11,8 @@ async function main() {
     ["messageReads", () => prisma.messageRead.deleteMany()],
     ["messages", () => prisma.message.deleteMany()],
     ["pushTokens", () => prisma.pushToken.deleteMany()],
+    ["syncInvites", () => prisma.syncInvite.deleteMany()],
+    ["sessions", () => prisma.session.deleteMany()],
     ["proposals", () => prisma.proposal.deleteMany()],
     ["attachments", () => prisma.attachment.deleteMany()],
     ["checklistItems", () => prisma.checklistItem.deleteMany()],

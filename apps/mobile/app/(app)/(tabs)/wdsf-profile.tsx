@@ -32,16 +32,16 @@ import {
   type CoupleScores,
   type TournamentTier,
   type TournamentRating,
-} from "../../store/useWdsfStore";
-import PressableScale from "../../components/ui/PressableScale";
-import GradientButton from "../../components/ui/GradientButton";
-import AppBackground from "../../components/ui/AppBackground";
+} from "../../../store/useWdsfStore";
+import PressableScale from "../../../components/ui/PressableScale";
+import GradientButton from "../../../components/ui/GradientButton";
+import AppBackground from "../../../components/ui/AppBackground";
 import { LinearGradient } from "expo-linear-gradient";
-import { GRADIENTS, SHADOWS, glow, type Palette } from "../../lib/theme";
-import Hint from "../../components/ui/Hint";
-import { useC } from "../../lib/useTheme";
-import { useT } from "../../lib/i18n";
-import { useToastStore } from "../../store/useToastStore";
+import { GRADIENTS, SHADOWS, glow, type Palette } from "../../../lib/theme";
+import Hint from "../../../components/ui/Hint";
+import { useC } from "../../../lib/useTheme";
+import { useT } from "../../../lib/i18n";
+import { useToastStore } from "../../../store/useToastStore";
 
 const WDSF_SEARCH_URL = "https://www.worlddancesport.org/Athletes";
 const { width: SW } = Dimensions.get("window");
@@ -1697,7 +1697,7 @@ function Score3RoundView({ round, judgeNames, placeLabel }: {
 }
 
 function Scores3Tab({ scores3, judgeNames }: {
-  scores3: import("../../store/useWdsfStore").Scores3Result;
+  scores3: import("../../../store/useWdsfStore").Scores3Result;
   judgeNames: Record<string, string>;
 }) {
   const C = useC();

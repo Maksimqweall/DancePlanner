@@ -1,5 +1,5 @@
 import { Pressable, View, Text, StyleSheet, Platform } from "react-native";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -8,7 +8,6 @@ import type { BottomTabBarProps } from "expo-router/build/react-navigation/botto
 import { DrawerProvider, useDrawer } from "../../../lib/DrawerContext";
 import SideDrawer from "../../../components/SideDrawer";
 import { useAuthStore } from "../../../store/useAuthStore";
-import { usePartnerStore } from "../../../store/usePartnerStore";
 import { C } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
@@ -28,15 +27,6 @@ function CalendarIcon({ color, size = 22 }: { color: string; size?: number }) {
     </Svg>
   );
 }
-function WalletIcon({ color, size = 22 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M2 7C2 5.9 2.9 5 4 5H20C21.1 5 22 5.9 22 7V17C22 18.1 21.1 19 20 19H4C2.9 19 2 18.1 2 17V7Z" stroke={color} strokeWidth="1.75" />
-      <Path d="M2 10H22" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Circle cx="16.5" cy="14.5" r="1" fill={color} />
-    </Svg>
-  );
-}
 function TrophyIcon({ color, size = 22 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -45,13 +35,12 @@ function TrophyIcon({ color, size = 22 }: { color: string; size?: number }) {
     </Svg>
   );
 }
-function UsersIcon({ color, size = 22 }: { color: string; size?: number }) {
+function MedalIcon({ color, size = 22 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="9" cy="8" r="3" stroke={color} strokeWidth="1.75" />
-      <Path d="M3 19C3 16.2 5.7 14 9 14C12.3 14 15 16.2 15 19" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Path d="M16 11C17.7 11 19 9.7 19 8C19 6.3 17.7 5 16 5" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Path d="M19 14C20.7 14.8 22 16.2 22 19" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
+      <Path d="M8.5 3L11 8.5M15.5 3L13 8.5" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
+      <Circle cx="12" cy="15" r="6" stroke={color} strokeWidth="1.75" />
+      <Path d="M12 12.2L13 14.3L15.3 14.6L13.6 16.2L14 18.5L12 17.4L10 18.5L10.4 16.2L8.7 14.6L11 14.3L12 12.2Z" fill={color} />
     </Svg>
   );
 }
@@ -65,55 +54,55 @@ function GearIcon({ color, size = 22 }: { color: string; size?: number }) {
 }
 
 const TAB_META: Record<string, { label: string; accent: string }> = {
-  index:    { label: "Home",     accent: C.accent },
-  calendar: { label: "Calendar", accent: C.purple },
-  expenses: { label: "Finance",  accent: C.accent },
-  projects: { label: "Events",   accent: C.gold   },
-  partner:  { label: "Partner",  accent: C.accent },
-  about:    { label: "Settings", accent: C.t2     },
+  index:         { label: "Home",     accent: C.accent },
+  calendar:      { label: "Calendar", accent: C.purple },
+  projects:      { label: "Events",   accent: C.gold   },
+  "wdsf-profile": { label: "Profile", accent: C.gold   },
 };
+
+// Only these routes get a bottom-tab button — Finance, Partner and Settings
+// stay reachable from the side drawer / header only (fewer tabs, iOS-style).
+const VISIBLE_TABS = ["index", "calendar", "projects", "wdsf-profile"];
 
 function TabIcon({ name, color, size }: { name: string; color: string; size: number }) {
   switch (name) {
-    case "index":    return <HomeIcon color={color} size={size} />;
-    case "calendar": return <CalendarIcon color={color} size={size} />;
-    case "expenses": return <WalletIcon color={color} size={size} />;
-    case "projects": return <TrophyIcon color={color} size={size} />;
-    case "partner":  return <UsersIcon color={color} size={size} />;
-    case "about":    return <GearIcon color={color} size={size} />;
-    default:         return null;
+    case "index":         return <HomeIcon color={color} size={size} />;
+    case "calendar":      return <CalendarIcon color={color} size={size} />;
+    case "projects":      return <TrophyIcon color={color} size={size} />;
+    case "wdsf-profile":  return <MedalIcon color={color} size={size} />;
+    default:              return null;
   }
 }
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const pendingCount = usePartnerStore((s) => s.pendingCount);
   const T = useC();
   const t = useT();
   const tabLabels: Record<string, string> = {
-    index:    t.nav.dashboard,
-    calendar: t.nav.calendar,
-    expenses: t.nav.finance,
-    projects: t.nav.events,
-    partner:  t.nav.partner,
-    about:    t.settings.title,
+    index:         t.nav.dashboard,
+    calendar:      t.nav.calendar,
+    projects:      t.nav.events,
+    "wdsf-profile": t.nav.wdsfProfile,
   };
+
+  const visibleRoutes = state.routes.filter((route: { name: string }) => VISIBLE_TABS.includes(route.name));
 
   return (
     <View style={[tb.bar, { borderTopColor: "rgba(255,255,255,0.18)", paddingBottom: Math.max(insets.bottom, 10) }]}>
       <BlurView
         intensity={Platform.OS === "web" ? 0 : 55}
         tint="dark"
+        experimentalBlurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(20,14,16,0.30)" }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(20,14,16,0.55)" }]} />
       <View style={tb.inner}>
-        {state.routes.map((route: { key: string; name: string; params?: object }, index: number) => {
+        {visibleRoutes.map((route: { key: string; name: string; params?: object }) => {
+          const index = state.routes.findIndex((r: { key: string }) => r.key === route.key);
           const isFocused = state.index === index;
           const meta = TAB_META[route.name] ?? { label: route.name, accent: C.accent };
           const color = isFocused ? meta.accent : T.t3;
           const tabLabel = tabLabels[route.name] ?? meta.label;
-          const hasBadge = route.name === "partner" && pendingCount > 0;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -144,11 +133,6 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                   />
                 ) : null}
                 <TabIcon name={route.name} color={color} size={22} />
-                {hasBadge ? (
-                  <View style={[tb.badge, { backgroundColor: T.red }]}>
-                    <Text style={tb.badgeText}>{pendingCount > 9 ? "9+" : pendingCount}</Text>
-                  </View>
-                ) : null}
               </View>
               <Text style={[tb.label, { color }]}>{tabLabel}</Text>
             </Pressable>
@@ -176,6 +160,22 @@ function AvatarButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+function SettingsButton() {
+  const T = useC();
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => router.push("/about")}
+      style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.65 }]}
+      hitSlop={10}
+    >
+      <View style={[s.settingsCircle, { backgroundColor: T.elevated, borderColor: T.border }]}>
+        <GearIcon color={T.t2} size={17} />
+      </View>
+    </Pressable>
+  );
+}
+
 function TabsLayoutInner() {
   const { open } = useDrawer();
   const T = useC();
@@ -191,15 +191,17 @@ function TabsLayoutInner() {
           headerShadowVisible: false,
           headerTitleStyle:    { fontWeight: "700", fontSize: 18, color: T.t1 },
           headerLeft:          () => <AvatarButton onPress={open} />,
+          headerRight:         () => <SettingsButton />,
           sceneStyle:          { backgroundColor: T.bg },
         }}
       >
-        <Tabs.Screen name="index"    options={{ title: t.nav.dashboard }} />
-        <Tabs.Screen name="calendar" options={{ title: t.nav.calendar  }} />
-        <Tabs.Screen name="expenses" options={{ title: t.nav.finance   }} />
-        <Tabs.Screen name="projects" options={{ title: t.nav.events    }} />
-        <Tabs.Screen name="partner"  options={{ title: t.nav.partner   }} />
-        <Tabs.Screen name="about"    options={{ title: t.settings.title }} />
+        <Tabs.Screen name="index"         options={{ title: t.nav.dashboard }} />
+        <Tabs.Screen name="calendar"      options={{ title: t.nav.calendar  }} />
+        <Tabs.Screen name="projects"      options={{ title: t.nav.events    }} />
+        <Tabs.Screen name="wdsf-profile"  options={{ title: t.nav.wdsfProfile }} />
+        <Tabs.Screen name="expenses"      options={{ title: t.nav.finance, href: null }} />
+        <Tabs.Screen name="partner"       options={{ title: t.nav.partner, href: null }} />
+        <Tabs.Screen name="about"         options={{ title: t.settings.title, href: null }} />
       </Tabs>
       <SideDrawer />
     </View>
@@ -228,6 +230,15 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   avatarInitials: { color: C.accent, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
+  settingsBtn:    { marginRight: 14 },
+  settingsCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
 
 const tb = StyleSheet.create({
@@ -258,17 +269,4 @@ const tb = StyleSheet.create({
     letterSpacing: 0.1,
     marginBottom: 2,
   },
-  badge: {
-    position: "absolute",
-    top: 1,
-    right: 1,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: C.red,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  badgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
 });

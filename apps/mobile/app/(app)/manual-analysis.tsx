@@ -13,7 +13,7 @@ import { useFocusEffect } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useManualStore, type ManualCompetitionMeta, type ManualCompetition } from "../../store/useManualStore";
 import type { WdsfCompetition } from "../../store/useWdsfStore";
-import { CompetitionAnalyticsModal } from "./wdsf-profile";
+import { CompetitionAnalyticsModal } from "./(tabs)/wdsf-profile";
 import PressableScale from "../../components/ui/PressableScale";
 import GradientButton from "../../components/ui/GradientButton";
 import Hint from "../../components/ui/Hint";

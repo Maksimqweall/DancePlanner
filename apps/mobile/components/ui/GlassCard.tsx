@@ -48,6 +48,7 @@ export default function GlassCard({
       <BlurView
         intensity={Platform.OS === "web" ? 0 : intensity}
         tint="dark"
+        experimentalBlurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
       <View style={[s.tint, { borderRadius: radius }]} />
@@ -68,7 +69,7 @@ function makeStyles(C: Palette) {
     tint: {
       position: "absolute",
       top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: "rgba(20,14,16,0.32)",
+      backgroundColor: "rgba(20,14,16,0.55)",
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.24)",
     },

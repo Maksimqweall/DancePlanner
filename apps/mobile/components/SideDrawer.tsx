@@ -74,15 +74,6 @@ function InfoIcon({ color, size = 20 }: { color: string; size?: number }) {
     </Svg>
   );
 }
-function MedalIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M8.5 3L11 8.5M15.5 3L13 8.5" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Circle cx="12" cy="15" r="6" stroke={color} strokeWidth="1.75" />
-      <Path d="M12 12.2L13 14.3L15.3 14.6L13.6 16.2L14 18.5L12 17.4L10 18.5L10.4 16.2L8.7 14.6L11 14.3L12 12.2Z" fill={color} />
-    </Svg>
-  );
-}
 function RatingIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -205,6 +196,7 @@ export default function SideDrawer() {
         <BlurView
           intensity={Platform.OS === "web" ? 0 : 50}
           tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
           style={StyleSheet.absoluteFill}
         />
 
@@ -254,18 +246,10 @@ export default function SideDrawer() {
         </View>
 
         {/* ── Secondary navigation ── */}
+        {/* WDSF Profile now lives in the bottom tab bar (always visible), so it's
+            no longer duplicated here. */}
         <View style={[s.navGroup, { marginTop: 8 }]}>
           <Text style={s.navGroupLabel}>{lang.nav.moreSection}</Text>
-          {wdsfLinked ? (
-            <NavItem
-              label={lang.nav.wdsfProfile}
-              active={activeKey === "wdsf-profile"}
-              accent={C.gold}
-              badge={0}
-              icon={<MedalIcon color={activeKey === "wdsf-profile" ? "#fff" : T.t2} size={20} />}
-              onPress={() => navigate("/wdsf-profile")}
-            />
-          ) : null}
           {wdsfLinked ? (
             <NavItem
               label={lang.nav.rating}
@@ -378,7 +362,7 @@ function makeStyles(C: Palette) {
     position: "absolute",
     top: 0, left: 0, bottom: 0,
     width: DRAWER_W,
-    backgroundColor: "rgba(20,14,16,0.38)",
+    backgroundColor: "rgba(20,14,16,0.82)",
     overflow: "hidden",
     borderRightWidth: 1,
     borderRightColor: C.borderStrong,

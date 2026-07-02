@@ -170,12 +170,14 @@ export default function SessionFormModal({
         <BlurView
           intensity={Platform.OS === "web" ? 0 : 25}
           tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
           style={StyleSheet.absoluteFill}
         />
         <View style={s.sheet}>
           <BlurView
             intensity={Platform.OS === "web" ? 0 : 45}
             tint="dark"
+            experimentalBlurMethod="dimezisBlurView"
             style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}
           />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -449,7 +451,7 @@ function makeStyles(C: Palette) {
   return StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" },
   sheet: {
-    backgroundColor: "rgba(20,14,16,0.40)",
+    backgroundColor: "rgba(20,14,16,0.65)",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,

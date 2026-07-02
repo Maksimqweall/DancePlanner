@@ -51,6 +51,7 @@ export default function Hint({ id, title, text, gradient = "brand", icon = "bulb
       <BlurView
         intensity={Platform.OS === "web" ? 0 : 35}
         tint="dark"
+        experimentalBlurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
@@ -88,7 +89,7 @@ function makeStyles(C: Palette) {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 12,
-      backgroundColor: "rgba(20,14,16,0.32)",
+      backgroundColor: "rgba(20,14,16,0.55)",
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.22)",
       borderRadius: 18,

@@ -73,7 +73,7 @@ export default function Login() {
         {/* Logo / hero */}
         <Animated.View entering={FadeInDown.delay(75).springify().damping(16).stiffness(140)} style={styles.hero}>
           <LogoMark />
-          <Text style={styles.appName}>DancePlanner</Text>
+          <Text style={styles.appName}>Floorcraft</Text>
           <Text style={styles.tagline}>Manage your dancesport finances</Text>
         </Animated.View>
 

@@ -8,7 +8,7 @@ export async function notifyInvite(userId: string, body: string): Promise<void> 
   try {
     notify(userId, { type: "sync", resource: "invites" });
     await sendPushToUsers([userId], {
-      title: "Dance Planner",
+      title: "Floorcraft",
       body,
       data: { type: "invite" },
     });

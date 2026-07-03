@@ -23,7 +23,7 @@ export default function TransactionCard({ expense, onDelete, index = 0 }: Props)
 
   return (
     <Animated.View entering={index < 8 ? FadeInDown.delay(stagger(index, 90)).springify().damping(16).stiffness(140) : undefined}>
-      <View style={styles.card}>
+      <PressableScale scaleTo={0.985} style={styles.card}>
         <View style={styles.iconWrapper}>
           <View style={[styles.iconCircle, { backgroundColor: meta.hex + '22' }]}>
             <Text style={styles.icon}>{meta.icon}</Text>
@@ -63,7 +63,7 @@ export default function TransactionCard({ expense, onDelete, index = 0 }: Props)
             </PressableScale>
           ) : null}
         </View>
-      </View>
+      </PressableScale>
     </Animated.View>
   );
 }

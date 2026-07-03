@@ -110,5 +110,5 @@ const server = http.createServer(app);
 attachWsServer(server);
 
 server.listen(env.port, () => {
-  console.log(`DancePlanner API listening on http://localhost:${env.port}`);
+  console.log(`Floorcraft API listening on http://localhost:${env.port}`);
 });

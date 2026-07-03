@@ -16,7 +16,7 @@ export const useLanguageStore = create<LanguageState>()(
       setLanguage: (language) => set({ language }),
     }),
     {
-      name: "danceplanner.language",
+      name: "floorcraft.language",
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

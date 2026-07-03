@@ -117,7 +117,7 @@ function SetupScreen({
         <Text style={s.setupTitle}>Connect WDSF Profile</Text>
         <Text style={s.setupSub}>
           Link your World DanceSport Federation profile to see your competition history,
-          ranking, partners and licence status in Dance Planner.
+          ranking, partners and licence status in Floorcraft.
         </Text>
       </Animated.View>
 
@@ -240,7 +240,7 @@ function ProfileView({
 
   const handleUnlink = () => {
     if (Platform.OS === "web") { onUnlink(); return; }
-    Alert.alert("Unlink WDSF Profile", "Remove your WDSF connection from Dance Planner?", [
+    Alert.alert("Unlink WDSF Profile", "Remove your WDSF connection from Floorcraft?", [
       { text: "Cancel", style: "cancel" },
       { text: "Unlink", style: "destructive", onPress: onUnlink },
     ]);

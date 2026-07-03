@@ -24,7 +24,8 @@ import {
 } from "../../../lib/display";
 import type { Category, Expense } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
-import { SHADOWS, type Palette } from "../../../lib/theme";
+import GlassCard from "../../../components/ui/GlassCard";
+import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
 import Hint from "../../../components/ui/Hint";
@@ -241,7 +242,7 @@ export default function ExpensesScreen() {
 
         {/* ── Period selector ──────────────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)}>
-          <View style={styles.periodRow}>
+          <GlassCard radius={14} style={{ marginBottom: 16 }} contentStyle={styles.periodRow}>
             {(["3M", "6M", "1Y"] as const).map(p => (
               <PressableScale
                 key={p}
@@ -251,13 +252,13 @@ export default function ExpensesScreen() {
                 <Text style={[styles.periodBtnText, period === p && styles.periodBtnTextActive]}>{p}</Text>
               </PressableScale>
             ))}
-          </View>
+          </GlassCard>
         </Animated.View>
 
         {/* ── Category Breakdown ───────────────────────────────────────────── */}
         {categoryBreakdown.length > 0 && (
           <Animated.View entering={FadeInDown.delay(165).springify().damping(16).stiffness(140)}>
-            <View style={styles.breakdownCard}>
+            <GlassCard radius={24} style={styles.breakdownWrap} contentStyle={styles.breakdownCard}>
               <Text style={styles.sectionLabel}>{T.finance.categoryBreakdown}</Text>
               {categoryBreakdown.map((item, i) => {
                 const meta = CATEGORY_META[item.cat];
@@ -284,7 +285,7 @@ export default function ExpensesScreen() {
                   </View>
                 );
               })}
-            </View>
+            </GlassCard>
           </Animated.View>
         )}
 
@@ -315,7 +316,7 @@ export default function ExpensesScreen() {
         {/* ── Period totals + chart ────────────────────────────────────────── */}
         {filteredExpenses.length > 0 && (
           <Animated.View entering={FadeInDown.delay(225).springify().damping(16).stiffness(140)}>
-            <View style={styles.totalsRow}>
+            <GlassCard radius={18} style={styles.totalsWrap} contentStyle={styles.totalsRow}>
               <View style={styles.totalItem}>
                 <Text style={styles.totalLabel}>{T.finance.paid.toUpperCase()}</Text>
                 <Text style={styles.totalAmount}>{formatMoney(periodTotals.paid)}</Text>
@@ -329,25 +330,27 @@ export default function ExpensesScreen() {
                   </View>
                 </>
               )}
-            </View>
+            </GlassCard>
 
-            <View style={styles.chartCard}>
+            <GlassCard radius={20} shimmer style={styles.chartWrap} contentStyle={styles.chartCard}>
               <MonthlyBarChart
                 data={series}
                 selectedMonth={currentMonthKey()}
                 onSelect={m => setExpanded(prev => new Set([...prev, m]))}
                 budgetForMonth={budgetForMonth}
               />
-            </View>
+            </GlassCard>
           </Animated.View>
         )}
 
         {/* ── Month accordion ──────────────────────────────────────────────── */}
         {groups.length === 0 ? (
-          <Animated.View entering={FadeInDown.delay(300).springify().damping(16).stiffness(140)} style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>💳</Text>
-            <Text style={styles.emptyTitle}>{T.finance.noExpensesInPeriod}</Text>
-            <Text style={styles.emptyText}>{T.finance.tapToRecord}</Text>
+          <Animated.View entering={FadeInDown.delay(300).springify().damping(16).stiffness(140)}>
+            <GlassCard radius={20} contentStyle={styles.emptyCard}>
+              <Text style={styles.emptyEmoji}>💳</Text>
+              <Text style={styles.emptyTitle}>{T.finance.noExpensesInPeriod}</Text>
+              <Text style={styles.emptyText}>{T.finance.tapToRecord}</Text>
+            </GlassCard>
           </Animated.View>
         ) : (
           groups.map((g, gi) => (
@@ -412,20 +415,14 @@ function makeStyles(C: Palette) {
   heroChipText: { color: "#fff", fontSize: 11, fontWeight: "600" },
   heroBarLabel: { color: "rgba(255,255,255,0.55)", fontSize: 11, marginBottom: 8, fontWeight: "500" },
   // Period
-  periodRow: {
-    flexDirection: "row", backgroundColor: C.card, borderRadius: 14,
-    padding: 4, marginBottom: 16, borderWidth: 1, borderColor: C.border,
-  },
+  periodRow: { flexDirection: "row", padding: 4 },
   periodBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center" },
   periodBtnActive: { backgroundColor: C.elevated },
   periodBtnText: { color: C.t3, fontWeight: "600", fontSize: 14 },
   periodBtnTextActive: { color: C.t1 },
   // Category breakdown
-  breakdownCard: {
-    backgroundColor: C.card, borderRadius: 24, padding: 18,
-    marginBottom: 16, borderWidth: 1, borderColor: C.borderStrong,
-    ...SHADOWS.md,
-  },
+  breakdownWrap: { marginBottom: 16 },
+  breakdownCard: { padding: 18 },
   sectionLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: 16 },
   catRow: { flexDirection: "row", alignItems: "center", marginBottom: 14, gap: 12 },
   catIconBg: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
@@ -435,19 +432,17 @@ function makeStyles(C: Palette) {
   catName: { color: C.t2, fontSize: 13, fontWeight: "500" },
   catAmount: { fontSize: 13, fontWeight: "700" },
   // Totals
-  totalsRow: {
-    flexDirection: "row", backgroundColor: C.card, borderRadius: 18,
-    padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.borderStrong,
-    ...SHADOWS.sm,
-  },
+  totalsWrap: { marginBottom: 12 },
+  totalsRow: { flexDirection: "row", padding: 16 },
   totalItem: { flex: 1, alignItems: "center" },
   totalDivider: { width: 1, backgroundColor: C.border, marginVertical: 4 },
   totalLabel: { color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 6 },
   totalAmount: { color: C.t1, fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
   // Chart
-  chartCard: { backgroundColor: C.card, borderRadius: 20, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: C.border, ...SHADOWS.sm },
+  chartWrap: { marginBottom: 20 },
+  chartCard: { padding: 12 },
   // Empty
-  emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 24, alignItems: "center", borderWidth: 1, borderColor: C.border },
+  emptyCard: { alignItems: "center", padding: 24 },
   emptyEmoji: { fontSize: 32, textAlign: "center", marginBottom: 12 },
   emptyTitle: { color: C.t1, fontSize: 18, fontWeight: "700", marginBottom: 8 },
   emptyText: { color: C.t2, fontSize: 14, textAlign: "center" },

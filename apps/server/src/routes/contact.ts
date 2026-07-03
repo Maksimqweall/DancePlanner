@@ -21,7 +21,7 @@ router.post("/", requireAuth, async (req, res) => {
   const name  = user ? `${user.firstName} ${user.lastName}` : "Unknown user";
   const email = user?.email ?? "";
 
-  const text = `📩 *New message from Dance Planner*\n\n👤 *${name}* (${email})\n\n${message}`;
+  const text = `📩 *New message from Floorcraft*\n\n👤 *${name}* (${email})\n\n${message}`;
 
   if (env.telegramBotToken && env.telegramChatId) {
     await fetch(`https://api.telegram.org/bot${env.telegramBotToken}/sendMessage`, {

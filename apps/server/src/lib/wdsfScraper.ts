@@ -1608,7 +1608,7 @@ export function nameTokens(s: string): Set<string> {
 }
 
 /**
- * Does a Dance Planner account's name match a scraped WDSF profile?
+ * Does a Floorcraft account's name match a scraped WDSF profile?
  * The athlete's first and last name must each appear among the profile's name
  * tokens (order-independent, diacritic- and case-insensitive). This blocks a
  * user from linking someone else's WDSF profile.

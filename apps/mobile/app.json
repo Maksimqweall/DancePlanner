@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "DancePlanner",
-    "slug": "DancePlanner",
-    "scheme": "danceplanner",
+    "name": "Floorcraft",
+    "slug": "Floorcraft",
+    "scheme": "floorcraft",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,13 +12,13 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#120D10",
+        "backgroundColor": "#2D1A13",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.maksimqweall.DancePlanner"
+      "package": "com.maksimqweall.Floorcraft"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -32,7 +32,7 @@ export const de: Translations = {
     disclaimer: "Sortiert nach der experimentellen Paarbewertung (1–10). Öffne den Tab „Bewertung“, um deine mit tiefer Turnieranalyse zu verfeinern.",
   },
   hints: {
-    dashboardTitle: "Willkommen bei Dance Planner 👋",
+    dashboardTitle: "Willkommen bei Floorcraft 👋",
     dashboardText: "Finanzen, Training und Partner-Sync — alles an einem Ort. Öffne das Seitenmenü ☰, um alle Tabs zu entdecken.",
     financeTitle: "Jede Ausgabe erfassen",
     financeText: "Erfasse Kosten nach Kategorie, um zu sehen, wohin dein Saisonbudget fließt. Tippe auf +, um die erste hinzuzufügen.",
@@ -96,7 +96,7 @@ export const de: Translations = {
     supportSection: "SUPPORT",
     contactUs: "Kontakt",
     contactUsSub: "Nachricht via Telegram senden",
-    aboutApp: "Über Dance Planner",
+    aboutApp: "Über Floorcraft",
     aboutAppSub: "Version, Info & mehr",
     showTips: "Tipps erneut anzeigen",
     showTipsSub: "Kontextbezogene Hinweise erneut zeigen",
@@ -113,7 +113,7 @@ export const de: Translations = {
     de: "Deutsch",
   },
   onboarding: {
-    slide1_title: "Willkommen bei Dance Planner",
+    slide1_title: "Willkommen bei Floorcraft",
     slide1_desc: "Die All-in-One-App für Turniertänzer. Entdecke alle Funktionen.",
     slide2_title: "Budget im Blick",
     slide2_desc: "Sieh deine monatlichen Ausgaben auf einen Blick. Setze Budgets, verfolge Ausgaben nach Kategorien und prognostiziere kommende Monate.",

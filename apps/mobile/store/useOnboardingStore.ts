@@ -16,7 +16,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       resetOnboarding: () => set({ hasSeenOnboarding: false }),
     }),
     {
-      name: "danceplanner.onboarding",
+      name: "floorcraft.onboarding",
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

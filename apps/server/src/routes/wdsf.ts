@@ -121,7 +121,7 @@ router.post(
     if (!profileUrl) {
       throw new HttpError(404,
         `Could not find a WDSF profile for "${user.firstName} ${user.lastName}". ` +
-        `Make sure your name in Dance Planner matches your name on worlddancesport.org exactly.`
+        `Make sure your name in Floorcraft matches your name on worlddancesport.org exactly.`
       );
     }
 
@@ -139,7 +139,7 @@ router.post(
     if (!nameMatchesProfile(user.firstName, user.lastName, profile)) {
       throw new HttpError(403,
         `This WDSF profile (${profile.name}) does not match your account name ` +
-        `(${user.firstName} ${user.lastName}). Update your name in Dance Planner to ` +
+        `(${user.firstName} ${user.lastName}). Update your name in Floorcraft to ` +
         `exactly match your WDSF/DTV card, then try again.`
       );
     }
@@ -183,7 +183,7 @@ router.post(
     if (!nameMatchesProfile(account.firstName, account.lastName, profile)) {
       throw new HttpError(403,
         `This WDSF profile (${profile.name}) does not match your account name ` +
-        `(${account.firstName} ${account.lastName}). Update your name in Dance Planner to ` +
+        `(${account.firstName} ${account.lastName}). Update your name in Floorcraft to ` +
         `exactly match your WDSF/DTV card, then try again.`
       );
     }

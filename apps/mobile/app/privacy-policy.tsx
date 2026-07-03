@@ -20,7 +20,7 @@ const SECTIONS: { title: string; body: string }[] = [
   {
     title: "1. Information we collect",
     body:
-      "When you create an account we store your name, email address and a securely hashed password. As you use DancePlanner we also store the data you enter — expenses, budgets, calendar sessions, events and partner information — so we can sync it across your devices.",
+      "When you create an account we store your name, email address and a securely hashed password. As you use Floorcraft we also store the data you enter — expenses, budgets, calendar sessions, events and partner information — so we can sync it across your devices.",
   },
   {
     title: "2. Financial data",
@@ -55,7 +55,7 @@ const SECTIONS: { title: string; body: string }[] = [
   {
     title: "8. Contact",
     body:
-      "If you have any questions about this Privacy Policy or how your data is handled, please contact us at privacy@danceplanner.app.",
+      "If you have any questions about this Privacy Policy or how your data is handled, please contact us at craftfloorapp@gmail.com.",
   },
 ];
 
@@ -84,7 +84,7 @@ export default function PrivacyPolicyScreen() {
   const onDecline = () => {
     Alert.alert(
       "Decline Privacy Policy?",
-      "You can't use DancePlanner without accepting the Privacy Policy. You'll be signed out.",
+      "You can't use Floorcraft without accepting the Privacy Policy. You'll be signed out.",
       [
         { text: "Back", style: "cancel" },
         { text: "Sign out", style: "destructive", onPress: () => logout() },
@@ -106,7 +106,7 @@ export default function PrivacyPolicyScreen() {
         </LinearGradient>
         <Text style={s.title}>Privacy Policy</Text>
         <Text style={s.subtitle}>
-          Before you start, please review and accept how DancePlanner handles your data.
+          Before you start, please review and accept how Floorcraft handles your data.
         </Text>
       </Animated.View>
 

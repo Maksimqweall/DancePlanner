@@ -4,6 +4,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Proposal } from "../lib/types";
 import { formatMoney, formatShortDate } from "../lib/display";
 import PressableScale from "./ui/PressableScale";
+import GlassCard from "./ui/GlassCard";
 import { stagger, type Palette } from "../lib/theme";
 import { useC } from "../lib/useTheme";
 
@@ -49,7 +50,7 @@ export default function ProposalCard({
 
   return (
     <Animated.View entering={index < 8 ? FadeInDown.delay(stagger(index, 90)).springify().damping(16).stiffness(140) : undefined}>
-      <View style={styles.card}>
+      <GlassCard radius={20} intensity={20} interactive style={styles.cardWrap} contentStyle={styles.card}>
         {/* Icon + title row */}
         <View style={styles.topRow}>
           <View style={styles.iconWrapper}>
@@ -103,21 +104,15 @@ export default function ProposalCard({
             <Text style={styles.cancelBtnText}>Cancel proposal</Text>
           </PressableScale>
         ) : null}
-      </View>
+      </GlassCard>
     </Animated.View>
   );
 }
 
 function makeStyles(C: Palette) {
   return StyleSheet.create({
-  card: {
-    backgroundColor: C.card,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
+  cardWrap: { marginBottom: 12 },
+  card: { padding: 16 },
   topRow: {
     flexDirection: "row",
     alignItems: "flex-start",

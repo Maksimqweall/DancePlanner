@@ -17,6 +17,7 @@ import { useFinanceStore } from "../../../store/useFinanceStore";
 import { usePartnerStore } from "../../../store/usePartnerStore";
 import { formatMoney, CURRENCIES, CURRENCY_ORDER } from "../../../lib/display";
 import PressableScale from "../../../components/ui/PressableScale";
+import GlassCard from "../../../components/ui/GlassCard";
 import AppBackground from "../../../components/ui/AppBackground";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
@@ -82,25 +83,27 @@ export default function SettingsScreen() {
       <ScrollView style={[s.screen, { backgroundColor: "transparent" }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
       {/* Profile card */}
-      <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.profileCard}>
-        <View style={s.profileCardTopBand} />
-        <View style={s.avatarWrap}>
-          <View style={s.avatarGlow} />
-          <View style={s.avatar}>
-            <Text style={s.avatarText}>{initials || "?"}</Text>
+      <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
+        <GlassCard radius={28} shimmer style={s.profileCardWrap} contentStyle={s.profileCard}>
+          <View style={s.profileCardTopBand} />
+          <View style={s.avatarWrap}>
+            <View style={s.avatarGlow} />
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{initials || "?"}</Text>
+            </View>
           </View>
-        </View>
-        <Text style={s.userName}>{user?.firstName} {user?.lastName}</Text>
-        <Text style={s.userEmail}>{user?.email}</Text>
-        <View style={s.premiumBadge}>
-          <Text style={s.premiumBadgeText}>✦ Premium</Text>
-        </View>
+          <Text style={s.userName}>{user?.firstName} {user?.lastName}</Text>
+          <Text style={s.userEmail}>{user?.email}</Text>
+          <View style={s.premiumBadge}>
+            <Text style={s.premiumBadgeText}>✦ Premium</Text>
+          </View>
+        </GlassCard>
       </Animated.View>
 
       {/* WDSF Profile */}
       <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.wdsfSection}</Text>
-        <View style={s.settingsCard}>
+        <GlassCard radius={22} style={s.settingsCardWrap} contentStyle={s.settingsCard}>
           <PressableScale onPress={() => router.push("/wdsf-profile")} style={s.settingsRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.settingsRowTitle}>
@@ -121,13 +124,13 @@ export default function SettingsScreen() {
             ) : null}
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       {/* Finance */}
       <Animated.View entering={FadeInDown.delay(90).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.financeSection}</Text>
-        <View style={s.settingsCard}>
+        <GlassCard radius={22} style={s.settingsCardWrap} contentStyle={s.settingsCard}>
           <PressableScale onPress={() => setBudgetModal(true)} style={s.settingsRow}>
             <View>
               <Text style={s.settingsRowTitle}>{T.settings.budget}</Text>
@@ -151,13 +154,13 @@ export default function SettingsScreen() {
               <Text style={s.settingsRowChevron}>›</Text>
             </View>
           </PressableScale>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       {/* Language */}
       <Animated.View entering={FadeInDown.delay(135).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.languageSection}</Text>
-        <View style={s.settingsCard}>
+        <GlassCard radius={22} style={s.settingsCardWrap} contentStyle={s.settingsCard}>
           <View style={s.settingsRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.settingsRowTitle}>{T.settings.language}</Text>
@@ -182,13 +185,13 @@ export default function SettingsScreen() {
               );
             })}
           </View>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       {/* Partner */}
       <Animated.View entering={FadeInDown.delay(150).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.partnerSection}</Text>
-        <View style={s.settingsCard}>
+        <GlassCard radius={22} style={s.settingsCardWrap} contentStyle={s.settingsCard}>
           <View style={s.settingsRow}>
             <View>
               <Text style={s.settingsRowTitle}>{T.settings.partnerSync}</Text>
@@ -200,13 +203,13 @@ export default function SettingsScreen() {
             </View>
             <View style={[s.syncDot, { backgroundColor: couple ? C.accent : C.t3 }]} />
           </View>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       {/* Support */}
       <Animated.View entering={FadeInDown.delay(210).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.supportSection}</Text>
-        <View style={s.settingsCard}>
+        <GlassCard radius={22} style={s.settingsCardWrap} contentStyle={s.settingsCard}>
           <PressableScale onPress={() => setContactModal(true)} style={s.settingsRow}>
             <View>
               <Text style={s.settingsRowTitle}>{T.settings.contactUs}</Text>
@@ -234,18 +237,18 @@ export default function SettingsScreen() {
             </View>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       {/* Account */}
       <Animated.View entering={FadeInDown.delay(270).springify().damping(16).stiffness(140)}>
         <Text style={s.sectionLabel}>{T.settings.accountSection}</Text>
-        <View style={s.settingsCard}>
+        <GlassCard radius={22} style={s.settingsCardWrap} contentStyle={s.settingsCard}>
           <PressableScale onPress={handleLogout} style={s.settingsRow}>
             <Text style={[s.settingsRowTitle, { color: C.red }]}>{T.settings.signOut}</Text>
             <Text style={s.settingsRowChevron}>›</Text>
           </PressableScale>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       <View style={{ height: 32 }} />
@@ -494,16 +497,11 @@ function makeStyles(C: Palette) {
   themeLabel: { fontSize: 12, fontWeight: "600", color: C.t2 },
   themeLabelActive: { color: C.accent },
 
+  profileCardWrap: { marginBottom: 28 },
   profileCard: {
     alignItems: "center",
     paddingTop: 36,
     paddingBottom: 28,
-    backgroundColor: C.card,
-    borderRadius: 28,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: C.borderStrong,
-    overflow: "hidden",
   },
   profileCardTopBand: {
     position: "absolute",
@@ -543,11 +541,8 @@ function makeStyles(C: Palette) {
     color: C.t3, fontSize: 11, fontWeight: "700", letterSpacing: 1.2,
     marginBottom: 8, marginLeft: 4,
   },
-  settingsCard: {
-    backgroundColor: C.card, borderRadius: 22,
-    borderWidth: 1, borderColor: C.borderStrong,
-    marginBottom: 22, overflow: "hidden",
-  },
+  settingsCardWrap: { marginBottom: 22 },
+  settingsCard: {},
   settingsRow: {
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between",

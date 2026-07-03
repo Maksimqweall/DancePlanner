@@ -131,11 +131,11 @@ export default function AboutAppScreen() {
 
           <View style={s.logoWrap}>
             <View style={s.logo}>
-              <Text style={s.logoText}>DP</Text>
+              <Text style={s.logoText}>FC</Text>
             </View>
           </View>
 
-          <Text style={s.heroTitle}>Dance Planner</Text>
+          <Text style={s.heroTitle}>Floorcraft</Text>
           <Text style={s.heroTagline}>
             The all-in-one companion for{"\n"}competitive dancesport athletes
           </Text>
@@ -172,9 +172,9 @@ export default function AboutAppScreen() {
         </Animated.View>
       ))}
 
-      {/* ── Why Dance Planner ── */}
+      {/* ── Why Floorcraft ── */}
       <Animated.View entering={FadeInDown.delay(840).springify().damping(16).stiffness(140)}>
-        <Text style={[s.sectionLabel, { marginTop: 8 }]}>WHY DANCE PLANNER</Text>
+        <Text style={[s.sectionLabel, { marginTop: 8 }]}>WHY FLOORCRAFT</Text>
         <View style={s.whyCard}>
           {WHY_ROWS.map((row, i) => (
             <View key={row.label}>
@@ -210,10 +210,10 @@ export default function AboutAppScreen() {
       {/* ── Footer ── */}
       <Animated.View entering={FadeInDown.delay(1080).springify().damping(16).stiffness(140)} style={s.footer}>
         <View style={s.footerLogo}>
-          <Text style={s.footerLogoText}>DP</Text>
+          <Text style={s.footerLogoText}>FC</Text>
         </View>
         <Text style={s.footerLine}>Made with passion for dance</Text>
-        <Text style={s.footerCopy}>© 2025 Dance Planner. All rights reserved.</Text>
+        <Text style={s.footerCopy}>© 2025 Floorcraft. All rights reserved.</Text>
       </Animated.View>
 
       <View style={{ height: 40 }} />

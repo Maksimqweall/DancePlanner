@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../src/prisma";
 
 async function main() {
-  const email = "dev@danceplanner.test";
+  const email = "dev@floorcraft.test";
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // Idempotent dev user.

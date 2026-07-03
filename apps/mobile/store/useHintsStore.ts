@@ -21,7 +21,7 @@ export const useHintsStore = create<HintsState>()(
       resetHints: () => set({ dismissed: {} }),
     }),
     {
-      name: "danceplanner.hints",
+      name: "floorcraft.hints",
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

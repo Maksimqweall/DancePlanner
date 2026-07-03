@@ -13,10 +13,11 @@ import { useChatStore } from "../../../store/useChatStore";
 import { useAuthStore } from "../../../store/useAuthStore";
 import ProposalCard from "../../../components/ProposalCard";
 import PressableScale from "../../../components/ui/PressableScale";
+import GlassCard from "../../../components/ui/GlassCard";
 import { AnimatedBar } from "../../../components/ui/AnimatedProgress";
 import { formatMoney, monthLong } from "../../../lib/display";
 import { ApiError } from "../../../lib/api";
-import { SHADOWS, type Palette } from "../../../lib/theme";
+import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
 import Hint from "../../../components/ui/Hint";
@@ -155,7 +156,7 @@ function MonthlySplit({
         </View>
       </View>
       {rows.map((row, i) => (
-        <View key={row.month} style={styles.monthRow}>
+        <GlassCard key={row.month} radius={18} intensity={16} interactive style={styles.monthRowWrap} contentStyle={styles.monthRow}>
           <Text style={styles.monthRowLabel}>{monthLong(row.month)}</Text>
           <View style={styles.monthBarsRow}>
             <View style={styles.monthBarGroup}>
@@ -171,7 +172,7 @@ function MonthlySplit({
               <Text style={[styles.monthAmt, { color: C.purple }]}>{formatMoney(row.partnerTotal)}</Text>
             </View>
           </View>
-        </View>
+        </GlassCard>
       ))}
     </View>
   );
@@ -322,7 +323,7 @@ export default function PartnerScreen() {
             {invitesReceived.length > 0 ? (
               <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
                 {invitesReceived.map(inv => (
-                  <View key={inv.id} style={styles.inviteCard}>
+                  <GlassCard key={inv.id} radius={20} intensity={22} glowColor={C.accent} interactive style={styles.inviteCardWrap} contentStyle={styles.inviteCard}>
                     <Text style={styles.inviteTitle}>
                       {inv.type === "COACH"
                         ? `🎓 ${inv.sender?.firstName} ${inv.sender?.lastName} invited you to be their coach`
@@ -347,13 +348,13 @@ export default function PartnerScreen() {
                         <Text style={styles.disconnectText}>Decline</Text>
                       </PressableScale>
                     </View>
-                  </View>
+                  </GlassCard>
                 ))}
               </Animated.View>
             ) : null}
 
             <Animated.View entering={FadeInDown.delay(30).springify().damping(16).stiffness(140)}>
-              <View style={styles.heroCard}>
+              <GlassCard radius={24} shimmer style={styles.heroCardWrap} contentStyle={styles.heroCard}>
                 {pendingSentPartnerInvite ? (
                   <>
                     <Text style={styles.heroEmoji}>⏳</Text>
@@ -394,14 +395,14 @@ export default function PartnerScreen() {
                     </PressableScale>
                   </>
                 )}
-              </View>
+              </GlassCard>
             </Animated.View>
           </>
         ) : (
           <>
             {/* ── Partner card ──────────────────────────────────────────── */}
             <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)}>
-              <View style={styles.partnerCard}>
+              <GlassCard radius={20} style={styles.partnerCardWrap} contentStyle={styles.partnerCard}>
                 <View style={styles.partnerAvatar}>
                   <Text style={styles.partnerAvatarText}>
                     {couple.partner.firstName[0]}{couple.partner.lastName[0]}
@@ -418,12 +419,20 @@ export default function PartnerScreen() {
                 <PressableScale onPress={onDisconnect} style={styles.disconnectBtn}>
                   <Text style={styles.disconnectText}>{T.partner.disconnect}</Text>
                 </PressableScale>
-              </View>
+              </GlassCard>
             </Animated.View>
 
             {/* ── Team chat ─────────────────────────────────────────────── */}
             <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
-              <PressableScale onPress={() => router.push("/chat")} style={styles.chatBtn}>
+              <GlassCard
+                radius={18}
+                intensity={26}
+                tintColor={C.accentFade}
+                glowColor={C.accent}
+                onPress={() => router.push("/chat")}
+                style={styles.chatBtnWrap}
+                contentStyle={styles.chatBtn}
+              >
                 <Text style={styles.chatBtnIcon}>💬</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.chatBtnTitle}>Team chat</Text>
@@ -432,13 +441,13 @@ export default function PartnerScreen() {
                 {chatUnread > 0 ? (
                   <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{chatUnread > 99 ? "99+" : chatUnread}</Text></View>
                 ) : <Text style={styles.chatChevron}>›</Text>}
-              </PressableScale>
+              </GlassCard>
             </Animated.View>
 
             {/* ── Coach ─────────────────────────────────────────────────── */}
             <Animated.View entering={FadeInDown.delay(105).springify().damping(16).stiffness(140)}>
               {couple.coach ? (
-                <View style={styles.coachCard}>
+                <GlassCard radius={18} style={styles.coachCardWrap} contentStyle={styles.coachCard}>
                   <View style={styles.coachAvatar}>
                     <Text style={styles.coachAvatarText}>{couple.coach.firstName[0]}{couple.coach.lastName[0]}</Text>
                   </View>
@@ -451,9 +460,9 @@ export default function PartnerScreen() {
                       <Text style={styles.disconnectText}>Remove</Text>
                     </PressableScale>
                   ) : null}
-                </View>
+                </GlassCard>
               ) : couple.role !== "coach" && pendingSentCoachInvite ? (
-                <View style={styles.coachAddCard}>
+                <GlassCard radius={18} style={styles.coachAddCardWrap} contentStyle={styles.coachAddCard}>
                   <Text style={styles.coachAddTitle}>⏳ Coach invite sent</Text>
                   <Text style={styles.coachAddSub}>
                     Waiting for {pendingSentCoachInvite.receiver?.firstName} {pendingSentCoachInvite.receiver?.lastName} to accept.
@@ -464,9 +473,9 @@ export default function PartnerScreen() {
                   >
                     <Text style={styles.disconnectText}>Cancel invite</Text>
                   </PressableScale>
-                </View>
+                </GlassCard>
               ) : couple.role !== "coach" ? (
-                <View style={styles.coachAddCard}>
+                <GlassCard radius={18} style={styles.coachAddCardWrap} contentStyle={styles.coachAddCard}>
                   <Text style={styles.coachAddTitle}>🎓 Add a coach</Text>
                   <Text style={styles.coachAddSub}>A coach sees and can change everything, just like a partner.</Text>
                   {coachError ? <View style={styles.errorBox}><Text style={styles.errorText}>{coachError}</Text></View> : null}
@@ -484,7 +493,7 @@ export default function PartnerScreen() {
                       {coachBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.coachAddBtnText}>Invite</Text>}
                     </PressableScale>
                   </View>
-                </View>
+                </GlassCard>
               ) : null}
             </Animated.View>
 
@@ -508,13 +517,13 @@ export default function PartnerScreen() {
                 </View>
 
                 {/* Animated split bar card */}
-                <View style={styles.splitCard}>
+                <GlassCard radius={24} shimmer style={styles.splitCardWrap} contentStyle={styles.splitCard}>
                   <SplitBar
                     myTotal={filteredSplit.myTotal}
                     partnerTotal={filteredSplit.partnerTotal}
                     partnerName={couple.partner.firstName}
                   />
-                </View>
+                </GlassCard>
 
                 <BalanceBanner balance={filteredSplit.balance} partnerName={couple.partner.firstName} />
 
@@ -528,7 +537,7 @@ export default function PartnerScreen() {
 
             {/* ── Proposals ─────────────────────────────────────────────── */}
             <Animated.View entering={FadeInDown.delay(165).springify().damping(16).stiffness(140)}>
-              <View style={styles.tabRow}>
+              <GlassCard radius={14} style={styles.tabRowWrap} contentStyle={styles.tabRow}>
                 <PressableScale
                   onPress={() => setTab("inbox")}
                   style={[styles.tabBtn, tab === "inbox" && styles.tabBtnActive]}
@@ -543,16 +552,16 @@ export default function PartnerScreen() {
                 >
                   <Text style={[styles.tabBtnText, tab === "sent" && styles.tabBtnTextActive]}>{T.partner.sent}</Text>
                 </PressableScale>
-              </View>
+              </GlassCard>
             </Animated.View>
 
             {displayed.length === 0 ? (
               <Animated.View entering={FadeInDown.delay(225).springify().damping(16).stiffness(140)}>
-                <View style={styles.emptyCard}>
+                <GlassCard radius={18} contentStyle={styles.emptyCard}>
                   <Text style={styles.emptyText}>
                     {tab === "inbox" ? T.partner.noInbox : T.partner.noSent}
                   </Text>
-                </View>
+                </GlassCard>
               </Animated.View>
             ) : (
               displayed.map((p, i) => (
@@ -704,18 +713,12 @@ function makeStyles(C: Palette) {
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 20 },
   // No-partner hero
-  heroCard: {
-    backgroundColor: C.card, borderRadius: 24, padding: 24,
-    alignItems: "center", borderWidth: 1, borderColor: C.border, marginBottom: 20,
-    ...SHADOWS.md,
-  },
+  heroCardWrap: { marginBottom: 20 },
+  heroCard: { padding: 24, alignItems: "center" },
   heroEmoji: { fontSize: 48, marginBottom: 16 },
   // Received invite card
-  inviteCard: {
-    backgroundColor: C.card, borderRadius: 20, padding: 18,
-    borderWidth: 1, borderColor: C.accentBorder, marginBottom: 16,
-    ...SHADOWS.sm,
-  },
+  inviteCardWrap: { marginBottom: 16 },
+  inviteCard: { padding: 18 },
   inviteTitle: { color: C.t1, fontSize: 15, fontWeight: "700", lineHeight: 21 },
   inviteSub: { color: C.t3, fontSize: 12, marginTop: 4 },
   heroTitle: { color: C.t1, fontSize: 22, fontWeight: "800", marginBottom: 10, textAlign: "center" },
@@ -729,11 +732,8 @@ function makeStyles(C: Palette) {
   connectBtnDisabled: { opacity: 0.5 },
   connectBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   // Partner card
-  partnerCard: {
-    backgroundColor: C.card, borderRadius: 20, padding: 16,
-    flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: C.border,
-    ...SHADOWS.sm,
-  },
+  partnerCardWrap: { marginBottom: 16 },
+  partnerCard: { padding: 16, flexDirection: "row", alignItems: "center" },
   partnerAvatar: {
     width: 52, height: 52, borderRadius: 14, backgroundColor: C.accentFade,
     alignItems: "center", justifyContent: "center", marginRight: 14,
@@ -749,11 +749,8 @@ function makeStyles(C: Palette) {
   disconnectBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: C.elevated, borderWidth: 1, borderColor: C.border },
   disconnectText: { color: C.t3, fontSize: 12 },
   // Chat button
-  chatBtn: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: C.accentFade, borderRadius: 18, padding: 16,
-    borderWidth: 1, borderColor: C.accentBorder, marginBottom: 16,
-  },
+  chatBtnWrap: { marginBottom: 16 },
+  chatBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   chatBtnIcon: { fontSize: 22 },
   chatBtnTitle: { color: C.accent, fontWeight: "800", fontSize: 16 },
   chatBtnSub: { color: C.t2, fontSize: 12, marginTop: 2 },
@@ -761,10 +758,8 @@ function makeStyles(C: Palette) {
   chatBadge: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: C.red, alignItems: "center", justifyContent: "center", paddingHorizontal: 7 },
   chatBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   // Coach
-  coachCard: {
-    backgroundColor: C.card, borderRadius: 18, padding: 14,
-    flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: C.border,
-  },
+  coachCardWrap: { marginBottom: 16 },
+  coachCard: { padding: 14, flexDirection: "row", alignItems: "center" },
   coachAvatar: {
     width: 44, height: 44, borderRadius: 12, backgroundColor: C.goldFade,
     alignItems: "center", justifyContent: "center", marginRight: 12,
@@ -773,7 +768,8 @@ function makeStyles(C: Palette) {
   coachAvatarText: { color: C.gold, fontWeight: "800", fontSize: 15 },
   coachName: { color: C.t1, fontWeight: "700", fontSize: 15 },
   coachRole: { color: C.gold, fontSize: 12, fontWeight: "600", marginTop: 2 },
-  coachAddCard: { backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.border },
+  coachAddCardWrap: { marginBottom: 16 },
+  coachAddCard: { padding: 16 },
   coachAddTitle: { color: C.t1, fontWeight: "700", fontSize: 15, marginBottom: 4 },
   coachAddSub: { color: C.t3, fontSize: 12, marginBottom: 12, lineHeight: 17 },
   coachAddBtn: { backgroundColor: C.accent, borderRadius: 14, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
@@ -786,10 +782,8 @@ function makeStyles(C: Palette) {
   splitPeriodBtnActive: { backgroundColor: C.elevated },
   splitPeriodText: { color: C.t3, fontWeight: "600", fontSize: 12 },
   splitPeriodTextActive: { color: C.t1 },
-  splitCard: {
-    backgroundColor: C.card, borderRadius: 24, padding: 20,
-    borderWidth: 1, borderColor: C.borderStrong, marginBottom: 12,
-  },
+  splitCardWrap: { marginBottom: 12 },
+  splitCard: { padding: 20 },
   // Balance banner
   balanceBanner: { borderRadius: 18, padding: 18, marginBottom: 20, borderWidth: 1 },
   balanceWho: { fontSize: 12, fontWeight: "600", marginBottom: 4, opacity: 0.8 },
@@ -801,24 +795,21 @@ function makeStyles(C: Palette) {
   legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendLabel: { color: C.t2, fontSize: 12, fontWeight: "500" },
-  monthRow: {
-    backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: C.border,
-  },
+  monthRowWrap: { marginBottom: 8 },
+  monthRow: { padding: 16 },
   monthRowLabel: { color: C.t2, fontSize: 12, fontWeight: "600", marginBottom: 10 },
   monthBarsRow: { flexDirection: "row", gap: 12 },
   monthBarGroup: { flex: 1, alignItems: "center", gap: 6 },
   monthAmt: { fontSize: 14, fontWeight: "700", letterSpacing: -0.3 },
   // Tabs
-  tabRow: {
-    flexDirection: "row", backgroundColor: C.card, borderRadius: 14, padding: 4,
-    marginBottom: 16, borderWidth: 1, borderColor: C.border,
-  },
+  tabRowWrap: { marginBottom: 16 },
+  tabRow: { flexDirection: "row", padding: 4 },
   tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center" },
   tabBtnActive: { backgroundColor: C.elevated },
   tabBtnText: { color: C.t3, fontWeight: "600", fontSize: 14 },
   tabBtnTextActive: { color: C.t1 },
   // Empty
-  emptyCard: { backgroundColor: C.card, borderRadius: 18, padding: 20, borderWidth: 1, borderColor: C.border, alignItems: "center" },
+  emptyCard: { padding: 20, alignItems: "center" },
   emptyText: { color: C.t3, fontSize: 14, textAlign: "center", lineHeight: 20 },
   // Error
   errorBox: { backgroundColor: C.redFade, borderWidth: 1, borderColor: C.red, borderRadius: 12, padding: 12, marginBottom: 14, width: "100%" },

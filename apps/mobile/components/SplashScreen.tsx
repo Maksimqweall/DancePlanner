@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
+import { View, Text, Image, StyleSheet, Dimensions } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,44 +11,35 @@ import Animated, {
   Easing,
   runOnJS,
 } from "react-native-reanimated";
-import Svg, { Circle, Path } from "react-native-svg";
 
 const { width, height } = Dimensions.get("window");
-const ACCENT = "#10b981";
-const BG = "#07070a";
+const ACCENT = "#ff7a33";
+const ACCENT_HOT = "#ffb380";
+const BG = "#0b0705";
+const CARD = "#1c110c";
 
-// ── Shared logo mark (also used in About screen) ───────────────────────────
+// ── Shared logo mark (also used on the login screen) ───────────────────────
 export function LogoMark({ size = 100 }: { size?: number }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      {/* Base circle */}
-      <Circle cx="50" cy="50" r="50" fill="#0e0e14" />
-      {/* Outer emerald ring */}
-      <Circle cx="50" cy="50" r="46" fill="none" stroke={ACCENT} strokeWidth="1.8" />
-      {/* Inner subtle ring */}
-      <Circle cx="50" cy="50" r="36" fill="none" stroke="rgba(16,185,129,0.15)" strokeWidth="1" />
-
-      {/* Lead dancer arc — brighter */}
-      <Path
-        d="M50 18 C67 18 80 32 80 46 C80 60 70 67 58 67 C46 67 41 74 41 80"
-        stroke={ACCENT}
-        strokeWidth="4"
-        fill="none"
-        strokeLinecap="round"
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.28,
+        backgroundColor: CARD,
+        borderWidth: 1.5,
+        borderColor: "rgba(255,122,51,0.35)",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
+    >
+      <Image
+        source={require("../assets/android-icon-foreground.png")}
+        style={{ width: size * 0.82, height: size * 0.82 }}
+        resizeMode="contain"
       />
-      {/* Follow dancer arc — softer */}
-      <Path
-        d="M50 18 C33 18 20 32 20 46 C20 60 30 67 42 67 C54 67 59 74 59 80"
-        stroke="rgba(16,185,129,0.40)"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Center jewel */}
-      <Circle cx="50" cy="50" r="5.5" fill={ACCENT} />
-      <Circle cx="50" cy="50" r="2.5" fill="rgba(255,255,255,0.9)" />
-    </Svg>
+    </View>
   );
 }
 
@@ -183,7 +174,7 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
 
         {/* App name */}
         <Animated.Text style={[s.appName, titleStyle]}>
-          DancePlanner
+          Floorcraft
         </Animated.Text>
 
         {/* Tagline */}
@@ -225,7 +216,7 @@ const s = StyleSheet.create({
     width:  width * 1.1,
     height: width * 1.1,
     borderRadius: width * 0.55,
-    backgroundColor: "rgba(16,185,129,0.09)",
+    backgroundColor: "rgba(255,122,51,0.10)",
   },
   orb2: {
     position: "absolute",
@@ -234,7 +225,7 @@ const s = StyleSheet.create({
     width:  width * 0.85,
     height: width * 0.85,
     borderRadius: width * 0.43,
-    backgroundColor: "rgba(168,85,247,0.06)",
+    backgroundColor: "rgba(255,60,20,0.07)",
   },
   orb3: {
     position: "absolute",
@@ -243,7 +234,7 @@ const s = StyleSheet.create({
     width:  width * 0.7,
     height: width * 0.7,
     borderRadius: width * 0.35,
-    backgroundColor: "rgba(245,158,11,0.045)",
+    backgroundColor: "rgba(255,179,128,0.05)",
   },
 
   // Pulse rings
@@ -263,20 +254,20 @@ const s = StyleSheet.create({
   logoWrap: {
     marginBottom: 32,
     shadowColor: ACCENT,
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.65,
     shadowRadius: 48,
     shadowOffset: { width: 0, height: 0 },
     elevation: 24,
   },
   appName: {
-    color: "#f0f0f8",
+    color: "#f5ede8",
     fontSize: 38,
     fontWeight: "800",
     letterSpacing: -1.4,
     marginBottom: 10,
   },
   tagline: {
-    color: "rgba(142,142,160,0.85)",
+    color: "rgba(210,175,160,0.75)",
     fontSize: 14,
     fontWeight: "500",
     letterSpacing: 0.3,
@@ -292,14 +283,14 @@ const s = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: ACCENT,
+    backgroundColor: ACCENT_HOT,
   },
 
   // Bottom
   bottomLabel: {
     position: "absolute",
     bottom: 52,
-    color: "rgba(68,68,90,0.9)",
+    color: "rgba(160,120,105,0.85)",
     fontSize: 11,
     fontWeight: "500",
     letterSpacing: 1.2,

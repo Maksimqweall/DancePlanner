@@ -3,7 +3,7 @@ import * as SecureStore from "expo-secure-store";
 
 // Persists the JWT. SecureStore on native; localStorage on web (SecureStore is
 // not available there).
-const KEY = "danceplanner.token";
+const KEY = "floorcraft.token";
 
 export const tokenStorage = {
   async get(): Promise<string | null> {

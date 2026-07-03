@@ -68,7 +68,7 @@ router.post(
       notify(uid, { type: "message", coupleId: couple.id, messageId: message.id });
     }
     sendPushToUsers(recipients, {
-      title: message.author ? message.author.firstName : "Dance Planner",
+      title: message.author ? message.author.firstName : "Floorcraft",
       body,
       data: { type: "chat", coupleId: couple.id },
     });

@@ -84,7 +84,7 @@ export default function ManualAnalysisScreen() {
           name and give the same deep analysis as WDSF events — no WDSF account needed.
         </Text>
 
-        <Hint id="manual-analysis-intro" title="How it works" text="Open the competition results, copy the page link (e.g. .../index.htm) and paste it here. Make sure your Dance Planner name matches how you're listed in the results." />
+        <Hint id="manual-analysis-intro" title="How it works" text="Open the competition results, copy the page link (e.g. .../index.htm) and paste it here. Make sure your Floorcraft name matches how you're listed in the results." />
 
         {/* URL input */}
         <View style={s.inputCard}>

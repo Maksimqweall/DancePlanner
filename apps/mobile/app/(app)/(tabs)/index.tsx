@@ -34,7 +34,7 @@ import {
   monthKeyFromIso,
 } from "../../../lib/display";
 import type { ForecastMonth } from "../../../lib/types";
-import { SHADOWS, GRADIENTS, type Palette } from "../../../lib/theme";
+import { GRADIENTS, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
 import Hint from "../../../components/ui/Hint";
@@ -232,39 +232,42 @@ export default function Dashboard() {
 
       {/* Next event widget */}
       <Animated.View entering={FadeInDown.delay(300).springify().damping(16).stiffness(140)}>
-        <PressableScale
-          onPress={() => nextEvent && router.push(`/project/${nextEvent.id}`)}
-          disabled={!nextEvent}
+        <GlassCard
+          radius={22}
+          glowColor={C.gold}
+          shimmer
+          style={{ marginTop: 14 }}
+          contentStyle={s.nextEventContent}
+          onPress={nextEvent ? () => router.push(`/project/${nextEvent.id}`) : undefined}
+          interactive={!nextEvent}
         >
-          <GlassCard radius={22} glowColor={C.gold} style={{ marginTop: 14 }} contentStyle={s.nextEventContent}>
-            {nextEvent ? (
-              <>
-                <View style={[s.nextEventIcon, { backgroundColor: `${C.gold}22` }]}>
-                  <Text style={{ fontSize: 22 }}>{EVENT_TYPE_META[nextEvent.type]?.icon ?? "🏆"}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.nextEventLabel}>{T.dashboard.nextEvent}</Text>
-                  <Text style={s.nextEventTitle} numberOfLines={1}>{nextEvent.title}</Text>
-                </View>
-                <View style={s.nextEventDaysWrap}>
-                  <Text style={[s.nextEventDays, { color: C.gold }]}>
-                    {daysUntilDate(nextEvent.date)}
-                  </Text>
-                  <Text style={s.nextEventDaysLabel}>
-                    {daysUntilDate(nextEvent.date) === 0 ? T.dashboard.today : T.dashboard.daysToGo}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <Text style={s.nextEventEmpty}>{T.dashboard.noNextEvent}</Text>
-            )}
-          </GlassCard>
-        </PressableScale>
+          {nextEvent ? (
+            <>
+              <View style={[s.nextEventIcon, { backgroundColor: `${C.gold}22` }]}>
+                <Text style={{ fontSize: 22 }}>{EVENT_TYPE_META[nextEvent.type]?.icon ?? "🏆"}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.nextEventLabel}>{T.dashboard.nextEvent}</Text>
+                <Text style={s.nextEventTitle} numberOfLines={1}>{nextEvent.title}</Text>
+              </View>
+              <View style={s.nextEventDaysWrap}>
+                <Text style={[s.nextEventDays, { color: C.gold }]}>
+                  {daysUntilDate(nextEvent.date)}
+                </Text>
+                <Text style={s.nextEventDaysLabel}>
+                  {daysUntilDate(nextEvent.date) === 0 ? T.dashboard.today : T.dashboard.daysToGo}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <Text style={s.nextEventEmpty}>{T.dashboard.noNextEvent}</Text>
+          )}
+        </GlassCard>
       </Animated.View>
 
       {/* Weekly spend chart */}
       <Animated.View entering={FadeInDown.delay(330).springify().damping(16).stiffness(140)}>
-        <View style={s.card}>
+        <GlassCard radius={22} glowColor={C.accent} shimmer interactive style={s.cardWrap} contentStyle={s.cardContent}>
           <View style={s.cardHeadRow}>
             <Text style={s.cardTitle}>{T.dashboard.weeklySpend}</Text>
             <Text style={s.cardHint}>{T.dashboard.lastDays}</Text>
@@ -285,7 +288,7 @@ export default function Dashboard() {
               </View>
             ))}
           </View>
-        </View>
+        </GlassCard>
       </Animated.View>
 
       {/* Upcoming forecast */}
@@ -306,7 +309,7 @@ export default function Dashboard() {
       {categories.length > 0 ? (
         <Animated.View entering={FadeInDown.delay(450).springify().damping(16).stiffness(140)}>
           <Text style={s.sectionTitle}>{T.dashboard.spendingByCategory}</Text>
-          <View style={s.card}>
+          <GlassCard radius={22} glowColor={C.purple} style={s.cardWrap} contentStyle={s.cardContent} onPress={() => router.push("/expenses")}>
             {categories.map((row, i) => {
               const meta = CATEGORY_META[row.c];
               return (
@@ -332,7 +335,7 @@ export default function Dashboard() {
                 </View>
               );
             })}
-          </View>
+          </GlassCard>
         </Animated.View>
       ) : null}
 
@@ -371,7 +374,7 @@ function StatChip({ label, value, tint, icon }: { label: string; value: string; 
   const s = useMemo(() => makeStyles(C), [C]);
   const dots = icon === "wallet" ? [0.5, 0.3, 0.8, 0.6, 0.95] : icon === "clock" ? [0.3, 0.55, 0.45, 0.7, 0.6] : [0.4, 0.7, 0.55, 0.9, 0.75];
   return (
-    <View style={s.statChip}>
+    <GlassCard intensity={16} radius={18} glowColor={tint} interactive style={s.statChipWrap} contentStyle={s.statChip}>
       <View style={[s.statDot, { backgroundColor: tint + "22" }]}>
         <View style={[s.statDotInner, { backgroundColor: tint }]} />
       </View>
@@ -382,7 +385,7 @@ function StatChip({ label, value, tint, icon }: { label: string; value: string; 
           <View key={i} style={{ width: 3, height: 16 * h, borderRadius: 2, backgroundColor: tint, opacity: 0.5 }} />
         ))}
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -390,28 +393,29 @@ function StatChip({ label, value, tint, icon }: { label: string; value: string; 
 function BalanceCard({ split, partnerName }: { split: { balance: number }; partnerName: string }) {
   const C = useC();
   const T = useT();
+  const router = useRouter();
   const s = useMemo(() => makeStyles(C), [C]);
   const { balance } = split;
   const abs = Math.abs(balance);
 
   if (abs < 0.01) {
     return (
-      <View style={[s.balanceCard, { backgroundColor: C.accentFade, borderColor: C.accentBorder }]}>
+      <PressableScale onPress={() => router.push("/partner")} style={[s.balanceCard, { backgroundColor: C.accentFade, borderColor: C.accentBorder }]}>
         <Text style={[s.balanceSquared, { color: C.accent }]}>{T.partner.you} & {partnerName} — {T.partner.balanced} ✓</Text>
-      </View>
+      </PressableScale>
     );
   }
   const positive = balance > 0;
   const color = positive ? C.accent : C.gold;
   const label = positive ? `${partnerName} ${T.partner.theyOwe}` : `${T.partner.youOwe} ${partnerName}`;
   return (
-    <View style={[s.balanceCard, { backgroundColor: positive ? C.accentFade : C.goldFade, borderColor: positive ? C.accentBorder : C.goldBorder }]}>
+    <PressableScale onPress={() => router.push("/partner")} style={[s.balanceCard, { backgroundColor: positive ? C.accentFade : C.goldFade, borderColor: positive ? C.accentBorder : C.goldBorder }]}>
       <View style={s.balanceLeft}>
         <View style={[s.balanceDot, { backgroundColor: color }]} />
         <Text style={s.balanceLabel}>{label}</Text>
       </View>
       <Text style={[s.balanceAmount, { color }]}>{formatMoney(abs)}</Text>
-    </View>
+    </PressableScale>
   );
 }
 
@@ -421,7 +425,7 @@ function ForecastCard({ month, onPressProject, index = 0 }: { month: ForecastMon
   const T = useT();
   const s = useMemo(() => makeStyles(C), [C]);
   return (
-    <View style={s.forecastCard}>
+    <GlassCard intensity={16} radius={18} interactive style={s.forecastCardWrap} contentStyle={s.forecastCard}>
       <View style={s.forecastHeader}>
         <Text style={s.forecastMonth}>{month.label}</Text>
         <Text style={s.forecastAmount}>~{formatMoney(month.expected)}</Text>
@@ -437,7 +441,7 @@ function ForecastCard({ month, onPressProject, index = 0 }: { month: ForecastMon
       ) : (
         <Text style={{ color: C.t3, fontSize: 13 }}>{T.finance.planned}</Text>
       )}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -532,7 +536,8 @@ function makeStyles(C: Palette) {
     heroLeft: { color: "rgba(255,255,255,0.92)", fontSize: 12, fontWeight: "600", marginTop: 10 },
 
     statsRow: { flexDirection: "row", gap: 10, marginTop: 16 },
-    statChip: { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 13, borderWidth: 1, borderColor: C.border, ...SHADOWS.sm },
+    statChipWrap: { flex: 1 },
+    statChip: { padding: 13 },
     statDot: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center", marginBottom: 10 },
     statDotInner: { width: 12, height: 12, borderRadius: 4 },
     statValue: { color: C.t1, fontSize: 17, fontWeight: "800", letterSpacing: -0.4 },
@@ -548,7 +553,8 @@ function makeStyles(C: Palette) {
     nextEventDaysLabel: { color: C.t3, fontSize: 10, fontWeight: "600", marginTop: 1 },
     nextEventEmpty: { color: C.t3, fontSize: 13, fontWeight: "500", textAlign: "center", flex: 1 },
 
-    card: { backgroundColor: C.card, borderRadius: 22, padding: 16, marginTop: 16, borderWidth: 1, borderColor: C.border, ...SHADOWS.md },
+    cardWrap: { marginTop: 16 },
+    cardContent: { padding: 16 },
     cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     cardTitle: { color: C.t1, fontSize: 15, fontWeight: "800" },
     cardHint: { color: C.t3, fontSize: 12 },
@@ -565,7 +571,8 @@ function makeStyles(C: Palette) {
     emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: C.border },
     emptyText: { color: C.t3, fontSize: 14, lineHeight: 20 },
 
-    forecastCard: { backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: C.border, ...SHADOWS.sm },
+    forecastCardWrap: { marginBottom: 10 },
+    forecastCard: { padding: 16 },
     forecastHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
     forecastMonth: { color: C.t1, fontWeight: "700", fontSize: 15 },
     forecastAmount: { color: C.gold, fontWeight: "800", fontSize: 15 },

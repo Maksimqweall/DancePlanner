@@ -35,7 +35,7 @@ export const useTemplateStore = create<TemplateState>()(
         })),
     }),
     {
-      name: "danceplanner.templates",
+      name: "floorcraft.templates",
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

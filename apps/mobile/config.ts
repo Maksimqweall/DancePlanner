@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-// Resolves the base URL of the DancePlanner API for the current runtime.
+// Resolves the base URL of the Floorcraft API for the current runtime.
 //
 // - Web (expo start --web): the browser runs on the dev machine, so localhost works.
 // - Device / emulator: reuse the Metro bundler host (your machine's LAN IP) and

@@ -30,7 +30,7 @@ export const en = {
     disclaimer: "Ranked by the experimental couple rating (1–10). Open the Rating tab to refine yours with deep event analysis.",
   },
   hints: {
-    dashboardTitle: "Welcome to Dance Planner 👋",
+    dashboardTitle: "Welcome to Floorcraft 👋",
     dashboardText: "Track finances, plan training and sync with your partner — all in one place. Open the side menu ☰ to explore every tab.",
     financeTitle: "Track every expense",
     financeText: "Log costs by category to see where your season budget really goes. Tap + to add your first one.",
@@ -94,7 +94,7 @@ export const en = {
     supportSection: "SUPPORT",
     contactUs: "Contact us",
     contactUsSub: "Send us a message via Telegram",
-    aboutApp: "About Dance Planner",
+    aboutApp: "About Floorcraft",
     aboutAppSub: "Version, info & more",
     showTips: "Show tips again",
     showTipsSub: "Replay the contextual hints",
@@ -111,7 +111,7 @@ export const en = {
     de: "Deutsch",
   },
   onboarding: {
-    slide1_title: "Welcome to Dance Planner",
+    slide1_title: "Welcome to Floorcraft",
     slide1_desc: "Your all-in-one app for competitive dancesport. Let's show you what you can do.",
     slide2_title: "Track Your Budget",
     slide2_desc: "See your monthly spending at a glance. Set budgets, track all expenses by category, and forecast upcoming months.",

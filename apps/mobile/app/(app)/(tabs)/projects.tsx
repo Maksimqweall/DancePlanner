@@ -12,6 +12,7 @@ import type { EventType, Project } from "../../../lib/types";
 import { ApiError } from "../../../lib/api";
 import { DateField } from "../../../components/DateTimeField";
 import PressableScale from "../../../components/ui/PressableScale";
+import GlassCard from "../../../components/ui/GlassCard";
 import { AnimatedProgress } from "../../../components/ui/AnimatedProgress";
 import { stagger, type Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
@@ -70,7 +71,7 @@ export default function ProjectsScreen() {
         {/* ── Summary strip ────────────────────────────────────────────────── */}
         {projects.length > 0 && (
           <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
-            <View style={styles.summaryCard}>
+            <GlassCard radius={22} style={styles.summaryWrap} contentStyle={styles.summaryCard}>
               <SummaryChip label={T.events.total} value={String(stats.total)} color={C.t1} icon="🏆" />
               <View style={styles.summaryDivider} />
               {stats.active > 0 ? (
@@ -86,16 +87,18 @@ export default function ProjectsScreen() {
                   <SummaryChip label={T.events.budget} value={formatMoney(stats.totalBudget)} color={C.gold} icon="💰" />
                 </>
               ) : null}
-            </View>
+            </GlassCard>
           </Animated.View>
         )}
 
         {/* ── Project list ──────────────────────────────────────────────────── */}
         {projects.length === 0 ? (
-          <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)} style={styles.emptyCard}>
-            <Text style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🏆</Text>
-            <Text style={styles.emptyTitle}>{T.events.noEvents}</Text>
-            <Text style={styles.emptyText}>{T.events.noEventsDesc}</Text>
+          <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)}>
+            <GlassCard radius={20} contentStyle={styles.emptyCard}>
+              <Text style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🏆</Text>
+              <Text style={styles.emptyTitle}>{T.events.noEvents}</Text>
+              <Text style={styles.emptyText}>{T.events.noEventsDesc}</Text>
+            </GlassCard>
           </Animated.View>
         ) : (
           projects.map((p, i) => (
@@ -153,7 +156,14 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
       entering={index < 8 ? FadeInDown.delay(stagger(index, 90) + 80).springify().damping(16).stiffness(140) : undefined}
       style={{ opacity: status === "past" ? 0.6 : 1 }}
     >
-      <PressableScale onPress={onPress} style={[styles.projectCard, status === "active" && styles.projectCardActive]}>
+      <GlassCard
+        radius={24}
+        intensity={22}
+        glowColor={status === "active" ? C.gold : undefined}
+        onPress={onPress}
+        style={styles.projectCardWrap}
+        contentStyle={styles.projectCard}
+      >
         {/* Colored top band for active */}
         {status === "active" && <View style={[styles.activeBand, { backgroundColor: C.goldFade }]} />}
 
@@ -209,7 +219,7 @@ function ProjectRow({ project, onPress, index = 0 }: { project: Project; onPress
             {counts.expenses > 0 && <StatChip label={`${counts.expenses} ${T.events.expensesLabel}`} />}
           </View>
         ) : null}
-      </PressableScale>
+      </GlassCard>
     </Animated.View>
   );
 }
@@ -365,21 +375,16 @@ function makeStyles(C: Palette) {
   addBtn: { backgroundColor: C.accent, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14 },
   addBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   // Summary
-  summaryCard: {
-    flexDirection: "row", backgroundColor: C.card, borderRadius: 22,
-    padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.borderStrong, alignItems: "center",
-  },
+  summaryWrap: { marginBottom: 16 },
+  summaryCard: { flexDirection: "row", padding: 16, alignItems: "center" },
   summaryChip: { flex: 1, alignItems: "center", gap: 2 },
   summaryChipIcon: { fontSize: 18, marginBottom: 2 },
   summaryValue: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
   summaryLabel: { color: C.t3, fontSize: 11, fontWeight: "500" },
   summaryDivider: { width: 1, backgroundColor: C.border, height: 36, marginHorizontal: 4 },
   // Project card
-  projectCard: {
-    backgroundColor: C.card, borderRadius: 24, padding: 18,
-    marginBottom: 12, borderWidth: 1, borderColor: C.borderStrong, overflow: "hidden",
-  },
-  projectCardActive: { borderColor: C.goldBorder },
+  projectCardWrap: { marginBottom: 12 },
+  projectCard: { padding: 18 },
   activeBand: { position: "absolute", top: 0, left: 0, right: 0, height: 3 },
   projectHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   projectLeft: { flexDirection: "row", flex: 1, marginRight: 12 },
@@ -402,7 +407,7 @@ function makeStyles(C: Palette) {
   statChip: { backgroundColor: C.elevated, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: C.border },
   statChipText: { color: C.t3, fontSize: 12 },
   // Empty
-  emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 24, alignItems: "center", borderWidth: 1, borderColor: C.border },
+  emptyCard: { padding: 24, alignItems: "center" },
   emptyTitle: { color: C.t1, fontSize: 18, fontWeight: "700", marginBottom: 8 },
   emptyText: { color: C.t2, fontSize: 14, textAlign: "center", lineHeight: 20 },
   // Modal

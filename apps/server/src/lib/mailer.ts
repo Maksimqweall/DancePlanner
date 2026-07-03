@@ -22,9 +22,9 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
   await createTransport().sendMail({
     from: env.smtp.from || env.smtp.user,
     to,
-    subject: "DancePlanner — Reset your password",
+    subject: "Floorcraft — Reset your password",
     text: [
-      "Your DancePlanner password reset code:",
+      "Your Floorcraft password reset code:",
       "",
       `  ${token}`,
       "",
@@ -35,7 +35,7 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
     ].join("\n"),
     html: `
       <div style="font-family:sans-serif;max-width:420px;margin:auto;padding:24px">
-        <h2 style="margin-bottom:8px">Reset your DancePlanner password</h2>
+        <h2 style="margin-bottom:8px">Reset your Floorcraft password</h2>
         <p style="color:#555">Enter the code below in the app to set a new password.</p>
         <div style="font-size:34px;font-weight:700;letter-spacing:8px;padding:20px;
                     background:#f0f0f0;border-radius:10px;text-align:center;
@@ -57,28 +57,28 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
   await createTransport().sendMail({
     from: env.smtp.from || env.smtp.user,
     to,
-    subject: "Dance Planner — Verify your email",
+    subject: "Floorcraft — Verify your email",
     text: [
-      "Your Dance Planner email verification code:",
+      "Your Floorcraft email verification code:",
       "",
       `  ${code}`,
       "",
       "Enter this code in the app to activate your account.",
       "The code expires in 1 hour.",
       "",
-      "If you didn't create a Dance Planner account, ignore this email.",
+      "If you didn't create a Floorcraft account, ignore this email.",
     ].join("\n"),
     html: `
       <div style="font-family:sans-serif;max-width:420px;margin:auto;padding:24px">
         <h2 style="margin-bottom:8px">Verify your email</h2>
-        <p style="color:#555">Enter the code below in the app to activate your Dance Planner account.</p>
+        <p style="color:#555">Enter the code below in the app to activate your Floorcraft account.</p>
         <div style="font-size:34px;font-weight:700;letter-spacing:8px;padding:20px;
                     background:#f0f0f0;border-radius:10px;text-align:center;
                     margin:24px 0;color:#111">
           ${code}
         </div>
         <p style="color:#555">This code expires in <strong>1 hour</strong>.</p>
-        <p style="color:#999;font-size:13px">If you didn't create a Dance Planner account, you can safely ignore this email.</p>
+        <p style="color:#999;font-size:13px">If you didn't create a Floorcraft account, you can safely ignore this email.</p>
       </div>
     `,
   });

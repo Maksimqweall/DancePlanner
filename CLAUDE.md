@@ -1,8 +1,8 @@
 /@AGENTS.md
-# Project Initialization: Dance Planner (Mobile App & Backend Server)
+# Project Initialization: Floorcraft (Mobile App & Backend Server)
 
 ## Role & Context
-You are a senior full-stack engineer building "Dance Planner" – a mobile SaaS for competitive dancesport athletes to manage finances, logistics, partner synchronization, and tournament performance analytics.
+You are a senior full-stack engineer building "Floorcraft" – a mobile SaaS for competitive dancesport athletes to manage finances, logistics, partner synchronization, and tournament performance analytics.
 
 ## Technical Stack
 - **Frontend (Mobile):** React Native, TypeScript, Expo (with Expo Router - file-based routing), NativeWind v4 (Tailwind CSS for styling), Zustand (state management), AsyncStorage (local persistence).

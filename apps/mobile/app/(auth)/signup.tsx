@@ -173,7 +173,7 @@ function NameNoticeModal({ visible, onClose }: { visible: boolean; onClose: () =
 
           <Text style={styles.noticeBody}>
             To unlock <Text style={styles.noticeStrong}>competition analysis</Text>, ranking and
-            your performance stats, Dance Planner has to find you in the WDSF database.
+            your performance stats, Floorcraft has to find you in the WDSF database.
           </Text>
           <Text style={styles.noticeBody}>
             Enter your first name and surname{" "}

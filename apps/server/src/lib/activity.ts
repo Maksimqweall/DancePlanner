@@ -58,7 +58,7 @@ export async function logActivity(actorId: string, input: ActivityInput): Promis
       notify(uid, { type: "sync", resource: input.resource });
     }
     await sendPushToUsers(recipients, {
-      title: "Dance Planner",
+      title: "Floorcraft",
       body,
       data: { type: "chat", coupleId: couple.id },
     });

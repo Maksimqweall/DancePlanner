@@ -13,8 +13,9 @@ import {
 } from "../../../lib/display";
 import type { Project, ScheduleEntry } from "../../../lib/types";
 import PressableScale from "../../../components/ui/PressableScale";
+import GlassCard from "../../../components/ui/GlassCard";
 import { AnimatedBar } from "../../../components/ui/AnimatedProgress";
-import { C, SHADOWS, stagger } from "../../../lib/theme";
+import { C, stagger } from "../../../lib/theme";
 import type { Palette } from "../../../lib/theme";
 import { useC } from "../../../lib/useTheme";
 import { useT } from "../../../lib/i18n";
@@ -211,7 +212,7 @@ export default function CalendarScreen() {
 
           {/* ── Month stat chips ─────────────────────────────────────────── */}
           <Animated.View entering={FadeInDown.delay(60).springify().damping(16).stiffness(140)}>
-            <View style={styles.statsCard}>
+            <GlassCard radius={22} style={styles.statsWrap} contentStyle={styles.statsCard}>
               <StatChip label="Sessions" value={String(totals.trainings)} color={C.accent} icon="🏋️" />
               <View style={styles.statDivider} />
               <StatChip label="Spent" value={formatMoney(totals.paid)} color={C.t1} icon="💸" />
@@ -221,12 +222,12 @@ export default function CalendarScreen() {
                   <StatChip label="Planned" value={formatMoney(totals.planned)} color={C.gold} icon="📋" />
                 </>
               )}
-            </View>
+            </GlassCard>
           </Animated.View>
 
           {/* ── Week training load strip ──────────────────────────────────── */}
           <Animated.View entering={FadeInDown.delay(120).springify().damping(16).stiffness(140)}>
-            <View style={styles.weekCard}>
+            <GlassCard radius={22} shimmer style={styles.weekWrap} contentStyle={styles.weekCard}>
               <Text style={styles.weekLabel}>THIS WEEK · TRAINING LOAD</Text>
               <View style={styles.weekBars}>
                 {weekStrip.map((day, i) => (
@@ -261,7 +262,7 @@ export default function CalendarScreen() {
                   </PressableScale>
                 ))}
               </View>
-            </View>
+            </GlassCard>
           </Animated.View>
 
         </View>
@@ -318,14 +319,22 @@ export default function CalendarScreen() {
             const meta = EVENT_TYPE_META[p.type] ?? EVENT_TYPE_META.TOURNAMENT;
             return (
               <Animated.View key={p.id} entering={i < 4 ? FadeInDown.delay(stagger(i, 90)).springify().damping(16).stiffness(140) : undefined}>
-                <PressableScale onPress={() => router.push(`/project/${p.id}`)} style={styles.projectRow}>
+                <GlassCard
+                  radius={20}
+                  intensity={20}
+                  tintColor={C.purpleFade}
+                  glowColor={C.purple}
+                  onPress={() => router.push(`/project/${p.id}`)}
+                  style={styles.projectRowWrap}
+                  contentStyle={styles.projectRow}
+                >
                   <Text style={styles.projectRowIcon}>{meta.icon}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.projectRowTitle} numberOfLines={1}>{p.title}</Text>
                     <Text style={styles.projectRowMeta}>{meta.label}{p.location ? ` · ${p.location}` : ""}</Text>
                   </View>
                   <Text style={{ color: C.purple, fontSize: 16 }}>›</Text>
-                </PressableScale>
+                </GlassCard>
               </Animated.View>
             );
           })}
@@ -339,13 +348,13 @@ export default function CalendarScreen() {
           {standaloneExpenses.map(x => {
             const meta = CATEGORY_META[x.category] ?? CATEGORY_META.OTHER;
             return (
-              <View key={x.id} style={styles.expenseRow}>
+              <GlassCard key={x.id} radius={14} intensity={16} interactive style={styles.expenseRowWrap} contentStyle={styles.expenseRow}>
                 <Text style={styles.expenseIcon}>{meta.icon}</Text>
                 <Text style={styles.expenseLabel} numberOfLines={1}>{x.title || meta.label}</Text>
                 <Text style={[styles.expenseAmount, x.status === "PLANNED" && { color: C.gold }]}>
                   {formatMoney(x.amount)}
                 </Text>
-              </View>
+              </GlassCard>
             );
           })}
 
@@ -373,9 +382,17 @@ function ZoomBtn({ label, onPress, disabled }: { label: string; onPress: () => v
   const C = useC();
   const styles = useMemo(() => makeStyles(C), [C]);
   return (
-    <PressableScale onPress={onPress} disabled={disabled} style={[styles.zoomBtn, disabled && styles.zoomBtnDisabled]}>
+    <GlassCard
+      radius={10}
+      intensity={22}
+      glowColor={C.accent}
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.zoomBtn, disabled && styles.zoomBtnDisabled]}
+      contentStyle={styles.zoomBtnContent}
+    >
       <Text style={[styles.zoomBtnText, disabled && { color: C.t3 }]}>{label}</Text>
-    </PressableScale>
+    </GlassCard>
   );
 }
 
@@ -458,10 +475,14 @@ function SessionRow({ entry, onPress, myId, partnerName }: { entry: ScheduleEntr
     ? entry.expense.userId === myId ? "you paid" : `${partnerName} paid` : null;
 
   return (
-    <PressableScale
+    <GlassCard
+      radius={20}
+      intensity={20}
+      tintColor={isPartner ? C.accentFade : undefined}
+      glowColor={isPartner ? C.accent : undefined}
       onPress={onPress}
-      scaleTo={isPartner ? 1 : 0.97}
-      style={[styles.sessionRow, isPartner && styles.sessionRowPartner]}
+      style={styles.sessionRowWrap}
+      contentStyle={styles.sessionRow}
     >
       <View style={[styles.sessionIcon, { backgroundColor: meta.dot ? `${meta.dot}22` : C.elevated }]}>
         <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
@@ -485,7 +506,7 @@ function SessionRow({ entry, onPress, myId, partnerName }: { entry: ScheduleEntr
           {paidByLabel && <Text style={styles.paidByLabel}>{paidByLabel}</Text>}
         </View>
       )}
-    </PressableScale>
+    </GlassCard>
   );
 }
 
@@ -497,26 +518,21 @@ function makeStyles(C: Palette) {
   calHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
   monthTitle: { color: C.t1, fontSize: 24, fontWeight: "900", letterSpacing: -0.6, flex: 1 },
   zoomRow: { flexDirection: "row", gap: 8 },
-  zoomBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
+  zoomBtn: { width: 36, height: 36 },
+  zoomBtnContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 0 },
   zoomBtnDisabled: { opacity: 0.4 },
   zoomBtnText: { color: C.t1, fontSize: 18, fontWeight: "500" },
   // Stat chips card
-  statsCard: {
-    flexDirection: "row", backgroundColor: C.card, borderRadius: 22,
-    padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.borderStrong, alignItems: "center",
-    ...SHADOWS.sm,
-  },
+  statsWrap: { marginBottom: 12 },
+  statsCard: { flexDirection: "row", padding: 16, alignItems: "center" },
   statChip: { flex: 1, alignItems: "center", gap: 2 },
   statChipIcon: { fontSize: 18, marginBottom: 2 },
   statLabel: { color: C.t3, fontSize: 11, fontWeight: "500", letterSpacing: 0.3 },
   statValue: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
   statDivider: { width: 1, backgroundColor: C.border, height: 36, marginHorizontal: 4 },
   // Week strip
-  weekCard: {
-    backgroundColor: C.card, borderRadius: 22, padding: 16,
-    marginBottom: 10, borderWidth: 1, borderColor: C.borderStrong,
-    ...SHADOWS.sm,
-  },
+  weekWrap: { marginBottom: 10 },
+  weekCard: { padding: 16 },
   weekLabel: { color: C.t3, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginBottom: 12 },
   weekBars: { flexDirection: "row", justifyContent: "space-around", alignItems: "flex-end" },
   weekDay: { alignItems: "center", gap: 4, flex: 1 },
@@ -533,28 +549,21 @@ function makeStyles(C: Palette) {
   clearBtn: { backgroundColor: `${C.red}18`, borderWidth: 1, borderColor: `${C.red}40`, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   clearBtnText: { color: C.red, fontWeight: "600", fontSize: 13 },
   emptyDay: { color: C.t3, fontSize: 14, marginBottom: 16, lineHeight: 20 },
-  projectRow: {
-    flexDirection: "row", alignItems: "center", backgroundColor: C.purpleFade,
-    borderWidth: 1, borderColor: C.purpleBorder, borderRadius: 20, padding: 14, marginBottom: 10, gap: 10,
-  },
+  projectRowWrap: { marginBottom: 10 },
+  projectRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 10 },
   projectRowIcon: { fontSize: 20 },
   projectRowTitle: { color: C.t1, fontWeight: "600", fontSize: 15 },
   projectRowMeta: { color: C.purple, fontSize: 13, opacity: 0.8 },
-  sessionRow: {
-    flexDirection: "row", alignItems: "center", backgroundColor: C.card,
-    borderRadius: 20, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.borderStrong,
-  },
-  sessionRowPartner: { borderColor: C.accentBorder, backgroundColor: C.accentFade },
+  sessionRowWrap: { marginBottom: 10 },
+  sessionRow: { flexDirection: "row", alignItems: "center", padding: 14 },
   partnerChip: { backgroundColor: C.accentBorder, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   partnerChipText: { color: C.accent, fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
   sessionIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   sessionTitle: { color: C.t1, fontWeight: "600", fontSize: 15 },
   sessionMeta: { color: C.t2, fontSize: 13, marginTop: 2 },
   paidByLabel: { color: C.t3, fontSize: 11, marginTop: 2 },
-  expenseRow: {
-    flexDirection: "row", alignItems: "center", backgroundColor: C.card,
-    borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.border, gap: 10,
-  },
+  expenseRowWrap: { marginBottom: 8 },
+  expenseRow: { flexDirection: "row", alignItems: "center", padding: 12, gap: 10 },
   expenseIcon: { fontSize: 18 },
   expenseLabel: { flex: 1, color: C.t2, fontSize: 14 },
   expenseAmount: { color: C.t1, fontWeight: "600", fontSize: 14 },

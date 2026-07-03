@@ -392,7 +392,7 @@ export async function topTurnierAnalytics(
   if (!row) {
     throw new CoupleNotFoundError(
       `No couple at this competition has a partner named "${firstName} ${lastName}". ` +
-      `Check that your Dance Planner name matches how you're listed in the results.`,
+      `Check that your Floorcraft name matches how you're listed in the results.`,
     );
   }
 

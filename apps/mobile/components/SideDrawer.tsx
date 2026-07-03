@@ -193,12 +193,9 @@ export default function SideDrawer() {
         panelStyle,
         { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
       ]}>
-        <BlurView
-          intensity={Platform.OS === "web" ? 0 : 50}
-          tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
-          style={StyleSheet.absoluteFill}
-        />
+        {Platform.OS === "ios" ? (
+          <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+        ) : null}
 
         {/* ── User card ── */}
         <View style={s.userCard}>
@@ -362,7 +359,7 @@ function makeStyles(C: Palette) {
     position: "absolute",
     top: 0, left: 0, bottom: 0,
     width: DRAWER_W,
-    backgroundColor: "rgba(20,14,16,0.82)",
+    backgroundColor: "rgba(17,12,13,0.97)",
     overflow: "hidden",
     borderRightWidth: 1,
     borderRightColor: C.borderStrong,

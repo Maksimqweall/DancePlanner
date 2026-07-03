@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Floorcraft",
-    "slug": "Floorcraft",
+    "slug": "DancePlanner",
     "scheme": "floorcraft",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -34,6 +34,7 @@
       "eas": {
         "projectId": "9b52e2a4-7db3-481c-b6f5-662140a84e52"
       }
-    }
+    },
+    "owner": "maksimqweall"
   }
 }

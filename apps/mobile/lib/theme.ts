@@ -62,7 +62,7 @@ export const DARK: Palette = {
 
   t1: '#FFF3EC',
   t2: '#B09C98',
-  t3: '#5C4E4C',
+  t3: '#8C7975',
 };
 
 // App is dark-only — the warm neon palette is designed against a near-black

@@ -65,13 +65,21 @@ export function installTypography(): void {
       const flat = (StyleSheet.flatten(el.props.style) || {}) as TextStyle;
       if (flat.fontFamily) return el; // explicit family wins
       const fontFamily = familyFor(flat.fontWeight);
+      // Once we've resolved a concrete weighted face, the original numeric
+      // fontWeight must be neutralised. Otherwise Android's native text layer sees
+      // a custom family + e.g. fontWeight:'800' and synthesises an extra fake-bold
+      // on top of the already-bold face, which on-device renders as visibly
+      // sheared/crooked glyphs (web's CSS font matching never does this, so the
+      // bug is invisible there).
+      const override = { fontFamily, fontWeight: "normal" as const };
       // On web, RN-web has already produced a DOM element whose `style` must be a
       // plain object — passing an array makes React DOM try to set indexed props on
       // CSSStyleDeclaration and throw. So merge into one object there; arrays are
-      // fine (and cheaper) on native.
+      // fine (and cheaper) on native. Override must come after the original style
+      // in the merge order so it wins over any fontWeight already present.
       const style = Platform.OS === "web"
-        ? { ...flat, fontFamily }
-        : [{ fontFamily }, el.props.style];
+        ? { ...flat, ...override }
+        : [el.props.style, override];
       return React.cloneElement(el, { style });
     };
   }

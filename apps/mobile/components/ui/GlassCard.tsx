@@ -96,49 +96,58 @@ export default function GlassCard({
   }));
 
   const body = (
+    // Elevation (shadow/glow) lives on this outer node, un-clipped. Rounded-rect
+    // clipping lives on the inner node below. Putting `overflow: hidden` and
+    // `elevation` on the SAME native view on Android — especially one Reanimated
+    // is also driving a `scale` transform on every frame — makes the OS's
+    // shadow-casting outline and its rounded clip path fight each other, which
+    // renders as warped/skewed card edges and content on-device (fine on web,
+    // since RN-web has no elevation/outline-clip conflict to begin with).
     <Animated.View
       style={[
-        { borderRadius: radius, overflow: "hidden" },
+        { borderRadius: radius },
         shadow ? SHADOWS[shadow] : null,
         glowColor ? glowStyle(glowColor) : null,
         pressable ? scaleStyle : null,
         style,
       ]}
     >
-      {intensity > 0 ? (
-        <BlurView
-          intensity={Platform.OS === "web" ? 0 : intensity}
-          tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
-      <View style={[s.tint, { borderRadius: radius }, tintColor ? { backgroundColor: tintColor } : null]} />
-      <Animated.View style={[s.sheen, pressable ? sheenStyle : null]} pointerEvents="none">
-        <LinearGradient
-          colors={["rgba(255,255,255,0.32)", "rgba(255,255,255,0)"]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-      {shimmer ? (
-        <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]} pointerEvents="none">
+      <View style={{ flex: 1, borderRadius: radius, overflow: "hidden" }}>
+        {intensity > 0 ? (
+          <BlurView
+            intensity={Platform.OS === "web" ? 0 : intensity}
+            tint="dark"
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
+        <View style={[s.tint, { borderRadius: radius }, tintColor ? { backgroundColor: tintColor } : null]} />
+        <Animated.View style={[s.sheen, pressable ? sheenStyle : null]} pointerEvents="none">
           <LinearGradient
-            colors={["transparent", "rgba(255,255,255,0.16)", "transparent"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={["rgba(255,255,255,0.32)", "rgba(255,255,255,0)"]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
-      ) : null}
-      {glowColor && pressable ? (
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1.5, borderColor: glowColor }, glowFlareStyle]}
-          pointerEvents="none"
-        />
-      ) : null}
-      <View style={[s.content, contentStyle]}>{children}</View>
+        {shimmer ? (
+          <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]} pointerEvents="none">
+            <LinearGradient
+              colors={["transparent", "rgba(255,255,255,0.16)", "transparent"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+        ) : null}
+        {glowColor && pressable ? (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1.5, borderColor: glowColor }, glowFlareStyle]}
+            pointerEvents="none"
+          />
+        ) : null}
+        <View style={[s.content, contentStyle]}>{children}</View>
+      </View>
     </Animated.View>
   );
 

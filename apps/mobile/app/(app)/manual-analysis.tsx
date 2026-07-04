@@ -73,6 +73,14 @@ export default function ManualAnalysisScreen() {
     );
   };
 
+  // Stable reference: an inline arrow here would change identity on every render,
+  // which retriggers CompareTab's effect (keyed on this prop) in an infinite loop
+  // since fetchCoupleScores' own store update causes this screen to re-render.
+  const fetchRivalForOpen = useCallback(
+    (coupleNumber: string) => fetchCoupleScores(open!.id, coupleNumber),
+    [fetchCoupleScores, open?.id]
+  );
+
   return (
     <>
       <View style={{ flex: 1 }}>
@@ -156,7 +164,7 @@ export default function ManualAnalysisScreen() {
           comp={toComp(open)}
           analyticsOverride={open.analytics}
           tournamentRating={open.rating}
-          fetchRival={(coupleNumber) => fetchCoupleScores(open.id, coupleNumber)}
+          fetchRival={fetchRivalForOpen}
           onClose={() => setOpen(null)}
         />
       ) : null}

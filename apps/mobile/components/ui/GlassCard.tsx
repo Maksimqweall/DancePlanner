@@ -113,11 +113,14 @@ export default function GlassCard({
       ]}
     >
       <View style={{ flex: 1, borderRadius: radius, overflow: "hidden" }}>
-        {intensity > 0 ? (
+        {/* Real blur only on iOS. On Android the `dimezisBlurView` method silently
+            falls back to "none" (needs a blurTarget) and just spams deprecation
+            warnings, and on web BlurView does nothing — both rely on the `s.tint`
+            wash below for the glass look instead. */}
+        {intensity > 0 && Platform.OS === "ios" ? (
           <BlurView
-            intensity={Platform.OS === "web" ? 0 : intensity}
+            intensity={intensity}
             tint="dark"
-            experimentalBlurMethod="dimezisBlurView"
             style={StyleSheet.absoluteFill}
           />
         ) : null}

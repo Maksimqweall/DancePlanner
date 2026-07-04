@@ -9,7 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useSegments } from "expo-router";
-import Svg, { Path, Rect, Circle, Line } from "react-native-svg";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { C, GRADIENTS } from "../lib/theme";
 import type { Palette } from "../lib/theme";
@@ -24,90 +24,38 @@ import type { Href } from "expo-router";
 const DRAWER_W = 290;
 
 // ── Icons ────────────────────────────────────────────────────────────────────
+// Font-glyph icons (not react-native-svg): on Android's Fabric renderer, a raw
+// <Svg> as a flex sibling of <Text> makes the sibling label render blank. A
+// font glyph is itself a <Text>, so it can never break the row's layout.
 function HomeIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 12L12 3L21 12V21H15V15H9V21H3V12Z" stroke={color} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
-    </Svg>
-  );
+  return <Ionicons name="home-outline" size={size} color={color} />;
 }
 function CalendarIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Rect x="3" y="4" width="18" height="18" rx="2.5" stroke={color} strokeWidth="1.75" />
-      <Path d="M16 2V6M8 2V6M3 10H21" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-    </Svg>
-  );
+  return <Ionicons name="calendar-outline" size={size} color={color} />;
 }
 function WalletIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M2 7C2 5.9 2.9 5 4 5H20C21.1 5 22 5.9 22 7V17C22 18.1 21.1 19 20 19H4C2.9 19 2 18.1 2 17V7Z" stroke={color} strokeWidth="1.75" />
-      <Path d="M2 10H22" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Circle cx="16.5" cy="14.5" r="1" fill={color} />
-    </Svg>
-  );
+  return <Ionicons name="wallet-outline" size={size} color={color} />;
 }
 function TrophyIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M8 21H16M12 17V21M8.5 4H15.5L14 12C14 14.2 13.1 17 12 17C10.9 17 10 14.2 10 12L8.5 4Z" stroke={color} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
-      <Path d="M8.5 5H5V9C5 10.7 6.3 12 8 12M15.5 5H19V9C19 10.7 17.7 12 16 12" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
+  return <Ionicons name="trophy-outline" size={size} color={color} />;
 }
 function UsersIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="9" cy="8" r="3" stroke={color} strokeWidth="1.75" />
-      <Path d="M3 19C3 16.2 5.7 14 9 14C12.3 14 15 16.2 15 19" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Path d="M16 11C17.7 11 19 9.7 19 8C19 6.3 17.7 5 16 5" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Path d="M19 14C20.7 14.8 22 16.2 22 19" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-    </Svg>
-  );
+  return <Ionicons name="people-outline" size={size} color={color} />;
 }
 function InfoIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.75" />
-      <Path d="M12 8V8.5M12 11V16" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-    </Svg>
-  );
+  return <Ionicons name="information-circle-outline" size={size} color={color} />;
 }
 function RatingIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M12 3L14.5 8.6L20.5 9.3L16 13.3L17.3 19.2L12 16.1L6.7 19.2L8 13.3L3.5 9.3L9.5 8.6L12 3Z" stroke={color} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
-    </Svg>
-  );
+  return <Ionicons name="star-outline" size={size} color={color} />;
 }
 function LeaderboardIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Rect x="9.5" y="7" width="5" height="14" rx="1" stroke={color} strokeWidth="1.75" strokeLinejoin="round" />
-      <Rect x="3" y="12" width="5" height="9" rx="1" stroke={color} strokeWidth="1.75" strokeLinejoin="round" />
-      <Rect x="16" y="14" width="5" height="7" rx="1" stroke={color} strokeWidth="1.75" strokeLinejoin="round" />
-      <Path d="M12 2L12.7 3.5L14.3 3.7L13.1 4.8L13.4 6.4L12 5.6L10.6 6.4L10.9 4.8L9.7 3.7L11.3 3.5L12 2Z" fill={color} />
-    </Svg>
-  );
+  return <Ionicons name="podium-outline" size={size} color={color} />;
 }
 function AnalyzeIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Rect x="4" y="3" width="16" height="18" rx="2.5" stroke={color} strokeWidth="1.75" />
-      <Path d="M8 8H16M8 12H13" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-      <Path d="M14.5 15.5L16 17L19 14" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
+  return <Ionicons name="clipboard-outline" size={size} color={color} />;
 }
 function LogoutIcon({ color, size = 20 }: { color: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M9 21H5C4.47 21 3.96 20.79 3.59 20.41C3.21 20.04 3 19.53 3 19V5C3 4.47 3.21 3.96 3.59 3.59C3.96 3.21 4.47 3 5 3H9" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M16 17L21 12L16 7" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-      <Line x1="21" y1="12" x2="9" y2="12" stroke={color} strokeWidth="1.75" strokeLinecap="round" />
-    </Svg>
-  );
+  return <Ionicons name="log-out-outline" size={size} color={color} />;
 }
 
 // ── Nav items ────────────────────────────────────────────────────────────────
@@ -136,6 +84,7 @@ export default function SideDrawer() {
   const logout    = useAuthStore((st) => st.logout);
   const pending   = usePartnerStore((st) => st.pendingCount);
   const wdsfLinked = useWdsfStore((st) => !!st.profile);
+  const [logoutPressed, setLogoutPressed] = React.useState(false);
 
   const navLabels: Record<string, string> = {
     index:     lang.nav.dashboard,
@@ -235,7 +184,7 @@ export default function SideDrawer() {
                 active={active}
                 accent={accent}
                 badge={badge ? pending : 0}
-                icon={<Icon color={active ? "#fff" : T.t2} size={20} />}
+                icon={<Icon color={active ? "#fff" : T.t2} size={26} />}
                 onPress={() => navigate(href)}
               />
             );
@@ -243,8 +192,6 @@ export default function SideDrawer() {
         </View>
 
         {/* ── Secondary navigation ── */}
-        {/* WDSF Profile now lives in the bottom tab bar (always visible), so it's
-            no longer duplicated here. */}
         <View style={[s.navGroup, { marginTop: 8 }]}>
           <Text style={s.navGroupLabel}>{lang.nav.moreSection}</Text>
           {wdsfLinked ? (
@@ -253,7 +200,7 @@ export default function SideDrawer() {
               active={activeKey === "rating"}
               accent={C.accent}
               badge={0}
-              icon={<RatingIcon color={activeKey === "rating" ? "#fff" : T.t2} size={20} />}
+              icon={<RatingIcon color={activeKey === "rating" ? "#fff" : T.t2} size={26} />}
               onPress={() => navigate("/rating")}
             />
           ) : null}
@@ -262,7 +209,7 @@ export default function SideDrawer() {
             active={activeKey === "leaderboard"}
             accent={C.purple}
             badge={0}
-            icon={<LeaderboardIcon color={activeKey === "leaderboard" ? "#fff" : T.t2} size={20} />}
+            icon={<LeaderboardIcon color={activeKey === "leaderboard" ? "#fff" : T.t2} size={26} />}
             onPress={() => navigate("/leaderboard")}
           />
           <NavItem
@@ -270,7 +217,7 @@ export default function SideDrawer() {
             active={activeKey === "manual-analysis"}
             accent={C.gold}
             badge={0}
-            icon={<AnalyzeIcon color={activeKey === "manual-analysis" ? "#fff" : T.t2} size={20} />}
+            icon={<AnalyzeIcon color={activeKey === "manual-analysis" ? "#fff" : T.t2} size={26} />}
             onPress={() => navigate("/manual-analysis")}
           />
           {NAV_SECONDARY.map(({ key, href, icon: Icon, accent }) => {
@@ -282,7 +229,7 @@ export default function SideDrawer() {
                 active={active}
                 accent={accent}
                 badge={0}
-                icon={<Icon color={active ? "#fff" : T.t2} size={20} />}
+                icon={<Icon color={active ? "#fff" : T.t2} size={26} />}
                 onPress={() => navigate(href)}
               />
             );
@@ -294,10 +241,14 @@ export default function SideDrawer() {
         {/* ── Sign out ── */}
         <Pressable
           onPress={handleLogout}
-          style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.7 }]}
+          onPressIn={() => setLogoutPressed(true)}
+          onPressOut={() => setLogoutPressed(false)}
+          style={[s.logoutBtn, logoutPressed && { opacity: 0.7 }]}
         >
-          <LogoutIcon color={T.red} size={20} />
-          <Text style={s.logoutText}>{lang.nav.signOut}</Text>
+          <View style={s.navIconWrapper}><LogoutIcon color={T.red} size={26} /></View>
+          <View style={s.navTextWrapper}>
+            <Text style={s.logoutText}>{lang.nav.signOut}</Text>
+          </View>
         </Pressable>
 
       </Animated.View>
@@ -305,15 +256,12 @@ export default function SideDrawer() {
   );
 }
 
-// Map an item's accent to its matching gradient so each active pill keeps its
-// identity (gold for Events/WDSF, purple for Calendar/About, brand otherwise).
 function gradientFor(accent: string): readonly [string, string, ...string[]] {
   if (accent === C.gold)   return GRADIENTS.gold;
   if (accent === C.purple) return GRADIENTS.purple;
   return GRADIENTS.brand;
 }
 
-// ── Reusable nav item ────────────────────────────────────────────────────────
 function NavItem({
   label, active, accent, badge, icon, onPress,
 }: {
@@ -321,25 +269,37 @@ function NavItem({
 }) {
   const T = useC();
   const s = useMemo(() => makeStyles(T), [T]);
+  const [pressed, setPressed] = React.useState(false);
+  // Pressable's function-as-style prop (`style={({pressed}) => [...]}`) makes this
+  // row's children (icon/label Text) render blank on Android — confirmed via a
+  // side-by-side debug matrix (a plain View with a static style renders fine; every
+  // Pressable variant using the function form, with or without the LinearGradient
+  // sibling, collapsed). Tracking `pressed` via state and passing a static style
+  // array avoids the function form entirely.
+  const itemStyle = [
+    s.navItem,
+    active && { backgroundColor: accent, shadowColor: accent, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+    !active && pressed && s.navItemPressed,
+  ];
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        s.navItem,
-        active && { backgroundColor: accent, shadowColor: accent, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-        !active && pressed && s.navItemPressed,
-      ]}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={itemStyle}
     >
       {active ? (
         <LinearGradient
           colors={gradientFor(accent)}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={[StyleSheet.absoluteFill, { borderRadius: 15 }]}
+          style={s.navItemGradient}
         />
       ) : null}
-      {icon}
-      <Text style={[s.navLabel, active && s.navLabelActive]}>{label}</Text>
+      <View style={s.navIconWrapper}>{icon}</View>
+      <View style={s.navTextWrapper}>
+        <Text style={[s.navLabel, active && s.navLabelActive]}>{label}</Text>
+      </View>
       {badge > 0 ? (
         <View style={s.badge}>
           <Text style={s.badgeText}>{badge > 9 ? "9+" : badge}</Text>
@@ -360,7 +320,6 @@ function makeStyles(C: Palette) {
     top: 0, left: 0, bottom: 0,
     width: DRAWER_W,
     backgroundColor: "rgba(17,12,13,0.97)",
-    overflow: "hidden",
     borderRightWidth: 1,
     borderRightColor: C.borderStrong,
     paddingHorizontal: 16,
@@ -431,35 +390,59 @@ function makeStyles(C: Palette) {
   },
 
   // Nav groups
-  navGroup: { gap: 2, marginBottom: 4 },
+  navGroup: { gap: 6, marginBottom: 8 },
   navGroupLabel: {
     color: C.t3,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.4,
-    paddingHorizontal: 14,
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: "bold",
+    letterSpacing: 1.5,
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "stretch",
-    gap: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    borderRadius: 15,
+    height: 56,
+    paddingLeft: 16,
+    paddingRight: 16,
+    marginBottom: 4,
+    borderRadius: 16,
+  },
+  navItemGradient: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 16,
   },
   navItemPressed: {
     backgroundColor: C.elevated,
   },
-  navLabel: {
+  navIconWrapper: {
+    width: 40,
+    height: 40,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.01)",
+    zIndex: 1,
+  },
+  navTextWrapper: {
     flex: 1,
+    justifyContent: "center",
+    minWidth: 0,
+    backgroundColor: "rgba(255,255,255,0.01)",
+    zIndex: 1,
+  },
+  navLabel: {
     color: C.t2,
     fontSize: 15,
     fontWeight: "600",
-    letterSpacing: -0.2,
+    includeFontPadding: false,
   },
-  navLabelActive: { color: "#fff" },
+  navLabelActive: { 
+    color: "#fff" 
+  },
 
   badge: {
     minWidth: 22,
@@ -469,6 +452,8 @@ function makeStyles(C: Palette) {
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
+    marginLeft: 8,
+    zIndex: 1,
   },
   badgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
 
@@ -477,18 +462,18 @@ function makeStyles(C: Palette) {
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    borderRadius: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderRadius: 16,
     backgroundColor: C.redFade,
     borderWidth: 1,
     borderColor: C.redBorder,
+    minHeight: 56,
   },
   logoutText: {
     color: C.red,
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
   },
   });
 }

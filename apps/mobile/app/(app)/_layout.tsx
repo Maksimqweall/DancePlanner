@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { Stack, router } from "expo-router";
-import * as Notifications from "expo-notifications";
 import { connectSync, disconnectSync } from "../../lib/syncSocket";
-import { registerForPush } from "../../lib/pushNotifications";
+import { registerForPush, addChatNotificationListener } from "../../lib/pushNotifications";
 import { useChatStore } from "../../store/useChatStore";
 import { useWdsfStore } from "../../store/useWdsfStore";
 import Toast from "../../components/Toast";
@@ -21,15 +20,12 @@ export default function AppLayout() {
     // Prime WDSF link state so the side-menu shortcut shows on app start.
     useWdsfStore.getState().fetchProfile();
 
-    // Tapping a push notification opens the couple chat.
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string } | undefined;
-      if (data?.type === "chat") router.push("/chat");
-    });
+    // Tapping a push notification opens the couple chat. No-ops in Expo Go / web.
+    const removeChatListener = addChatNotificationListener(() => router.push("/chat"));
 
     return () => {
       disconnectSync();
-      sub.remove();
+      removeChatListener();
     };
   }, []);
 

@@ -438,7 +438,13 @@ export function CompetitionAnalyticsModal({
   const [loadedOnce, setLoadedOnce] = useState(false);
 
   // Default rival fetcher (WDSF) pulls from the store keyed by the competition URL.
-  const fetchRival = fetchRivalProp ?? ((coupleNumber: string) => fetchCoupleScores(url, coupleNumber));
+  // Memoized so CompareTab's effect (keyed on this reference) doesn't refire on every
+  // render — without this, fetchCoupleScores' own store update re-renders this modal,
+  // creating a new function identity and looping forever ("Maximum update depth exceeded").
+  const fetchRival = useCallback(
+    (coupleNumber: string) => fetchRivalProp ? fetchRivalProp(coupleNumber) : fetchCoupleScores(url, coupleNumber),
+    [fetchRivalProp, fetchCoupleScores, url]
+  );
 
   // Auto-load on open (store-backed mode only).
   useEffect(() => {

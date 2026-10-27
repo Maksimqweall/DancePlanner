@@ -136,7 +136,7 @@ export default function GlassCard({
         {shimmer ? (
           <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]} pointerEvents="none">
             <LinearGradient
-              colors={["transparent", "rgba(255,255,255,0.16)", "transparent"]}
+              colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.16)", "rgba(255,255,255,0)"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}

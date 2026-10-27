@@ -228,7 +228,7 @@ function RatingView({
       {/* Hero — circular rating gauge */}
       <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.heroCard}>
         <LinearGradient
-          colors={[`${color}28`, `${color}10`, "transparent"]}
+          colors={[`${color}28`, `${color}10`, `${color}00`]}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 24 }]}
         />

@@ -198,7 +198,7 @@ function LeaderboardView({
       {/* Hero header */}
       <Animated.View entering={FadeInDown.duration(420)} style={s.hero}>
         <LinearGradient
-          colors={[`${C.accent}22`, "transparent"]}
+          colors={[`${C.accent}22`, `${C.accent}00`]}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 24 }]}
         />

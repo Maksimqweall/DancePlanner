@@ -113,11 +113,11 @@ export const GLOW_BLOBS = {
 // Very-low-alpha sweeps for tinting card surfaces behind content (premium "frosted"
 // depth without overpowering the text). Pair with a matching solid card under them.
 export const SURFACE_TINTS = {
-  brand:  ["rgba(255,122,24,0.10)", "rgba(199,36,177,0.04)", "transparent"],
-  gold:   ["rgba(255,176,32,0.10)", "rgba(255,106,0,0.04)", "transparent"],
-  purple: ["rgba(255,45,149,0.10)", "rgba(123,47,247,0.04)", "transparent"],
-  ocean:  ["rgba(14,165,233,0.10)", "rgba(34,211,238,0.04)", "transparent"],
-  rose:   ["rgba(255,0,128,0.10)", "rgba(255,95,109,0.04)", "transparent"],
+  brand:  ["rgba(255,122,24,0.10)", "rgba(199,36,177,0.04)", "rgba(199,36,177,0)"],
+  gold:   ["rgba(255,176,32,0.10)", "rgba(255,106,0,0.04)", "rgba(255,106,0,0)"],
+  purple: ["rgba(255,45,149,0.10)", "rgba(123,47,247,0.04)", "rgba(123,47,247,0)"],
+  ocean:  ["rgba(14,165,233,0.10)", "rgba(34,211,238,0.04)", "rgba(34,211,238,0)"],
+  rose:   ["rgba(255,0,128,0.10)", "rgba(255,95,109,0.04)", "rgba(255,95,109,0)"],
 } as const;
 
 // ── Staircase stagger ────────────────────────────────────────────────────────

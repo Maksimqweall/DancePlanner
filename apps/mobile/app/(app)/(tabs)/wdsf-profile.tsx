@@ -255,7 +255,7 @@ function ProfileView({
         {/* Hero card */}
         <Animated.View entering={FadeInDown.delay(0).springify().damping(16).stiffness(140)} style={s.heroCard}>
           <LinearGradient
-            colors={["rgba(99,102,241,0.20)", "rgba(168,85,247,0.10)", "transparent"]}
+            colors={["rgba(99,102,241,0.20)", "rgba(168,85,247,0.10)", "rgba(168,85,247,0)"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[StyleSheet.absoluteFill, { borderRadius: 24 }]}

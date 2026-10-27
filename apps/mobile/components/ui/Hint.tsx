@@ -48,14 +48,11 @@ export default function Hint({ id, title, text, gradient = "brand", icon = "bulb
       exiting={FadeOut.duration(220)}
       style={[s.card, glow(colors[0], 16, 0.28), style]}
     >
-      <BlurView
-        intensity={Platform.OS === "web" ? 0 : 35}
-        tint="dark"
-        experimentalBlurMethod="dimezisBlurView"
-        style={StyleSheet.absoluteFill}
-      />
+      {Platform.OS === "ios" ? (
+        <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+      ) : null}
       <LinearGradient
-        colors={[`${colors[0]}1F`, "transparent"]}
+        colors={[`${colors[0]}1F`, `${colors[0]}00`]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}

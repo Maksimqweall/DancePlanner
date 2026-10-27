@@ -89,12 +89,9 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[tb.bar, { borderTopColor: "rgba(255,255,255,0.18)", paddingBottom: Math.max(insets.bottom, 10) }]}>
-      <BlurView
-        intensity={Platform.OS === "web" ? 0 : 55}
-        tint="dark"
-        experimentalBlurMethod="dimezisBlurView"
-        style={StyleSheet.absoluteFill}
-      />
+      {Platform.OS === "ios" ? (
+        <BlurView intensity={55} tint="dark" style={StyleSheet.absoluteFill} />
+      ) : null}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(20,14,16,0.55)" }]} />
       <View style={tb.inner}>
         {visibleRoutes.map((route: { key: string; name: string; params?: object }) => {

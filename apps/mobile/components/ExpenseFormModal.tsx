@@ -174,19 +174,17 @@ export default function ExpenseFormModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={s.overlay}>
-        <BlurView
-          intensity={Platform.OS === "web" ? 0 : 25}
-          tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
-          style={StyleSheet.absoluteFill}
-        />
+        {Platform.OS === "ios" ? (
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+        ) : null}
         <View style={s.sheet}>
-          <BlurView
-            intensity={Platform.OS === "web" ? 0 : 45}
-            tint="dark"
-            experimentalBlurMethod="dimezisBlurView"
-            style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}
-          />
+          {Platform.OS === "ios" ? (
+            <BlurView
+              intensity={45}
+              tint="dark"
+              style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}
+            />
+          ) : null}
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={s.handle} />
 
